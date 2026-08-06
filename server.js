@@ -57,7 +57,7 @@ app.post('/api/sincronizar-selecionados', async (req, res) => {
   try {
     const { produtos } = req.body;
     if (!Array.isArray(produtos) || produtos.length === 0) {
-      return.status(400).json({ sucesso: false, erro: 'Nenhum produto selecionado.' });
+      return res.status(400).json({ sucesso: false, erro: 'Nenhum produto selecionado.' });
     }
 
     let sucessos = 0;
