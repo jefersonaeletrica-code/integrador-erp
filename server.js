@@ -48,7 +48,8 @@ app.get('/api/auth/bling', (req, res) => {
   if (!appConfig.CLIENT_ID || !appConfig.REDIRECT_URI) {
     return res.status(400).json({ sucesso: false, erro: 'Preencha e salve o Client ID e a URL de Redirecionamento primeiro.' });
   }
-  const authUrl = `https://www.bling.com.br/Api/v3/oauth/authorize?response_type=code&client_id=${appConfig.CLIENT_ID}&redirect_uri=${encodeURIComponent(appConfig.REDIRECT_URI)}`;
+  const stateRandom = Math.random().toString(36).substring(7);
+  const authUrl = `https://www.bling.com.br/Api/v3/oauth/authorize?response_type=code&client_id=${appConfig.CLIENT_ID}&redirect_uri=${encodeURIComponent(appConfig.REDIRECT_URI)}&state=${stateRandom}`;
   res.json({ sucesso: true, url: authUrl });
 });
 
