@@ -32,17 +32,17 @@ async function refreshAccessToken() {
 }
 
 // Rotas de Configuração
-app.get('/api/config', (req, res) => res.json({
-    ...config,
-    BLING_CLIENT_SECRET: config.BLING_CLIENT_SECRET ? '******' : '',
-    LOJA_API_KEY: config.LOJA_API_KEY ? '******' : '',
-    temTokenBling: !!tokens.access_token
-}));
-
 app.post('/api/config', (req, res) => {
     const data = req.body;
-    if (data.BLING_CLIENT_SECRET === '******') delete data.BLING_CLIENT_SECRET;
-    if (data.LOJA_API_KEY === '******') delete data.LOJA_API_KEY;
+    
+    // Se o usuário não alterou e mandou os asteriscos, mantemos o que já estava salvo
+    if (data.BLING_CLIENT_SECRET === '******' || !data.BLING_CLIENT_SECRET) {
+        data.BLING_CLIENT_SECRET = config.BLING_CLIENT_SECRET;
+    }
+    if (data.LOJA_API_KEY === '******' || !data.LOJA_API_KEY) {
+        data.LOJA_API_KEY = config.LOJA_API_KEY;
+    }
+
     saveConfig(data);
     res.json({ sucesso: true, mensagem: 'Configurações salvas com sucesso!' });
 });
