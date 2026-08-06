@@ -3,8 +3,9 @@ const express = require('express');
 const axios = require('axios');
 
 const app = express();
-app.use(express.json());
 
+app.use(express.json());
+app.use(express.static('public')); // Adicione esta linha
 const PORT = process.env.PORT || 3000;
 
 // Rota de Teste para ver se o app está no ar

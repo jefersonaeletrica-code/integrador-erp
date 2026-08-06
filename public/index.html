@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Painel Integrador A Elétrica</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-md mx-auto bg-white p-6 rounded-lg shadow-md">
+        <h1 class="text-xl font-bold mb-4">Painel de Integração</h1>
+        <button onclick="sincronizar()" id="btnSync" class="w-full bg-blue-600 text-white py-2 rounded">
+            Sincronizar Produtos Agora
+        </button>
+        <div id="resultado" class="mt-4 p-2 text-sm"></div>
+    </div>
+
+    <script>
+        async function sincronizar() {
+            const btn = document.getElementById('btnSync');
+            btn.innerText = 'Processando...';
+            const res = await fetch('/sincronizar', { method: 'POST' });
+            const data = await res.json();
+            document.getElementById('resultado').innerText = JSON.stringify(data);
+            btn.innerText = 'Sincronizar Produtos Agora';
+        }
+    </script>
+</body>
+</html>
