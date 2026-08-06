@@ -8,40 +8,92 @@ app.use(express.static('public'));
 
 const PORT = process.env.PORT || 3000;
 
-// Armazenamento temporário em memória para as chaves configuradas na tela
+// Configurações e tokens em memória
 let appConfig = {
-  BLING_API_KEY: process.env.BLING_API_KEY || '',
-  BLING_BASE_URL: process.env.BLING_BASE_URL || 'https://api.bling.com.br/Api/v3',
+  CLIENT_ID: process.env.CLIENT_ID || '',
+  CLIENT_SECRET: process.env.CLIENT_SECRET || '',
+  REDIRECT_URI: process.env.REDIRECT_URI || '', // Ex: https://seu-app.hostingerpsite.com/callback
+  ACCESS_TOKEN: '',
+  REFRESH_TOKEN: '',
   LOJA_API_URL: process.env.LOJA_API_URL || '',
   LOJA_API_KEY: process.env.LOJA_API_KEY || ''
 };
 
 // Rota para Buscar Configurações
 app.get('/api/config', (req, res) => {
-  res.json(appConfig);
+  res.json({
+    CLIENT_ID: appConfig.CLIENT_ID,
+    CLIENT_SECRET: appConfig.CLIENT_SECRET ? '******' : '',
+    REDIRECT_URI: appConfig.REDIRECT_URI,
+    temToken: !!appConfig.ACCESS_TOKEN,
+    LOJA_API_URL: appConfig.LOJA_API_URL,
+    LOJA_API_KEY: appConfig.LOJA_API_KEY ? '******' : ''
+  });
 });
 
-// Rota para Salvar Configurações
+// Rota para Salvar Credenciais
 app.post('/api/config', (req, res) => {
-  const { BLING_API_KEY, BLING_BASE_URL, LOJA_API_URL, LOJA_API_KEY } = req.body;
-  appConfig = {
-    BLING_API_KEY: BLING_API_KEY || '',
-    BLING_BASE_URL: BLING_BASE_URL || 'https://api.bling.com.br/Api/v3',
-    LOJA_API_URL: LOJA_API_URL || '',
-    LOJA_API_KEY: LOJA_API_KEY || ''
-  };
-  res.json({ sucesso: true, mensagem: 'Configurações salvas com sucesso!' });
+  const { CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, LOJA_API_URL, LOJA_API_KEY } = req.body;
+  if (CLIENT_ID) appConfig.CLIENT_ID = CLIENT_ID;
+  if (CLIENT_SECRET && CLIENT_SECRET !== '******') appConfig.CLIENT_SECRET = CLIENT_SECRET;
+  if (REDIRECT_URI) appConfig.REDIRECT_URI = REDIRECT_URI;
+  if (LOJA_API_URL) appConfig.LOJA_API_URL = LOJA_API_URL;
+  if (LOJA_API_KEY && LOJA_API_KEY !== '******') appConfig.LOJA_API_KEY = LOJA_API_KEY;
+
+  res.json({ sucesso: true, mensagem: 'Credenciais salvas com sucesso!' });
 });
 
-// Rota para listar produtos diretamente do Bling
+// Passo 1: Redireciona o usuário para a tela de login/autorização do Bling
+app.get('/api/auth/bling', (req, res) => {
+  if (!appConfig.CLIENT_ID || !appConfig.REDIRECT_URI) {
+    return res.status(400).json({ sucesso: false, erro: 'Preencha o Client ID e a URL de Redirecionamento primeiro.' });
+  }
+  const authUrl = `https://www.bling.com.br/Api/v3/oauth/authorize?response_type=code&client_id=${appConfig.CLIENT_ID}&redirect_uri=${encodeURIComponent(appConfig.REDIRECT_URI)}`;
+  res.json({ sucesso: true, url: authUrl });
+});
+
+// Passo 2: Callback que recebe o código do Bling e troca por Token de Acesso
+app.get('/callback', async (req, res) => {
+  const { code } = req.query;
+  if (!code) {
+    return res.status(400).send('Código de autorização não encontrado.');
+  }
+
+  try {
+    const credentials = Buffer.from(`${appConfig.CLIENT_ID}:${appConfig.CLIENT_SECRET}`).toString('base64');
+    
+    const tokenResponse = await axios.post('https://www.bling.com.br/Api/v3/oauth/token', 
+      new URLSearchParams({
+        grant_type: 'authorization_code',
+        code: code
+      }), {
+        headers: {
+          'Authorization': `Basic ${credentials}`,
+          'Content-Type': 'application/x-www-form-urlencoded'
+        }
+      }
+    );
+
+    appConfig.ACCESS_TOKEN = tokenResponse.data.access_token;
+    appConfig.REFRESH_TOKEN = tokenResponse.data.refresh_token;
+
+    // Redireciona de volta para o painel principal com sucesso
+    res.redirect('/?autorizado=true');
+  } catch (error) {
+    console.error('Erro ao obter token OAuth:', error.response?.data || error.message);
+    res.status(500).send('Erro na autenticação com o Bling: ' + JSON.stringify(error.response?.data || error.message));
+  }
+});
+
+// Rota para listar produtos diretamente do Bling usando o Token OAuth
 app.get('/api/produtos-bling', async (req, res) => {
   try {
-    if (!appConfig.BLING_API_KEY) {
-      return res.status(400).json({ sucesso: false, erro: 'Chave API do Bling não configurada.' });
+    if (!appConfig.ACCESS_TOKEN) {
+      return res.status(400).json({ sucesso: false, erro: 'Sistema não autorizado no Bling. Clique em "Conectar com Bling".' });
     }
 
-    const response = await axios.get(`${appConfig.BLING_BASE_URL}/produtos`, {
-      headers: { 'Authorization': `Bearer ${appConfig.BLING_API_KEY}` }
+    const response = await axios.get('https://api.bling.com.br/Api/v3/produtos', {
+      headers: { 'Authorization': `Bearer ${appConfig.ACCESS_TOKEN}` }
     });
 
     const produtos = response.data.data || [];
@@ -52,7 +104,7 @@ app.get('/api/produtos-bling', async (req, res) => {
   }
 });
 
-// Rota para enviar os selecionados
+// Rota para enviar os selecionados para a loja
 app.post('/api/sincronizar-selecionados', async (req, res) => {
   try {
     const { produtos } = req.body;
