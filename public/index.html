@@ -2,26 +2,201 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Painel Integrador A Elétrica</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel Integrador Bling</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 p-8">
-    <div class="max-w-md mx-auto bg-white p-6 rounded-lg shadow-md">
-        <h1 class="text-xl font-bold mb-4">Painel de Integração</h1>
-        <button onclick="sincronizar()" id="btnSync" class="w-full bg-blue-600 text-white py-2 rounded">
-            Sincronizar Produtos Agora
-        </button>
-        <div id="resultado" class="mt-4 p-2 text-sm"></div>
+<body class="bg-gray-50 text-gray-800 p-4 md:p-8">
+    <div class="max-w-5xl mx-auto space-y-6">
+        
+        <!-- Cabeçalho -->
+        <div class="flex justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Gerenciador de Integração ERP</h1>
+                <p class="text-sm text-gray-500">Importe produtos do Bling e envie para o seu site</p>
+            </div>
+            <span class="px-3 py-1 bg-green-100 text-green-700 text-xs font-semibold rounded-full">Sistema Ativo</span>
+        </div>
+
+        <!-- Seção 1: Configurações de API -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
+            <h2 class="text-lg font-semibold text-gray-800 border-b pb-2">1. Configurações de Conexão (Chaves de API)</h2>
+            <form id="formConfig" onsubmit="salvarConfig(event)" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Bling API Key (JWT / Token)</label>
+                    <input type="password" id="BLING_API_KEY" class="w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white" placeholder="Sua chave Bling">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Bling Base URL</label>
+                    <input type="text" id="BLING_BASE_URL" class="w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white" value="https://api.bling.com.br/Api/v3">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">URL da API da Sua Loja Virtual</label>
+                    <input type="text" id="LOJA_API_URL" class="w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white" placeholder="https://sualoja.com/api/v1">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-600 mb-1">Chave/Token da Sua Loja</label>
+                    <input type="password" id="LOJA_API_KEY" class="w-full p-2.5 border rounded-lg text-sm bg-gray-50 focus:bg-white" placeholder="Chave da API da loja">
+                </div>
+                <div class="md:col-span-2 flex justify-end">
+                    <button type="submit" class="bg-gray-900 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-gray-800 transition">
+                        Salvar Configurações
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Seção 2: Tabela de Produtos do Bling -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 space-y-4">
+            <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b pb-4">
+                <h2 class="text-lg font-semibold text-gray-800">2. Selecionar Produtos para Importação</h2>
+                <div class="flex gap-2">
+                    <button onclick="carregarProdutosBling()" id="btnCarregar" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition">
+                        Carregar Produtos do Bling
+                    </button>
+                    <button onclick="enviarSelecionados()" id="btnEnviar" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 transition hidden">
+                        Enviar Selecionados (<span id="qtdSelecionados">0</span>)
+                    </button>
+                </div>
+            </div>
+
+            <!-- Tabela -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm">
+                    <thead class="bg-gray-50 text-gray-600 border-b">
+                        <tr>
+                            <th class="p-3"><input type="checkbox" id="selectAll" onclick="toggleTodos(this)"></th>
+                            <th class="p-3">Código/SKU</th>
+                            <th class="p-3">Nome do Produto</th>
+                            <th class="p-3">Preço</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tabelaProdutos" class="divide-y">
+                        <tr>
+                            <td colspan="4" class="p-4 text-center text-gray-400">Clique em "Carregar Produtos do Bling" para listar os itens.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Mensagens de Status -->
+            <div id="statusBox" class="p-4 rounded-lg text-sm hidden"></div>
+        </div>
+
     </div>
 
     <script>
-        async function sincronizar() {
-            const btn = document.getElementById('btnSync');
-            btn.innerText = 'Processando...';
-            const res = await fetch('/sincronizar', { method: 'POST' });
+        let listaProdutosBling = [];
+
+        // Carrega configurações salvas ao abrir a página
+        window.onload = async () => {
+            const res = await fetch('/api/config');
             const data = await res.json();
-            document.getElementById('resultado').innerText = JSON.stringify(data);
-            btn.innerText = 'Sincronizar Produtos Agora';
+            document.getElementById('BLING_API_KEY').value = data.BLING_API_KEY || '';
+            document.getElementById('BLING_BASE_URL').value = data.BLING_BASE_URL || 'https://api.bling.com.br/Api/v3';
+            document.getElementById('LOJA_API_URL').value = data.LOJA_API_URL || '';
+            document.getElementById('LOJA_API_KEY').value = data.LOJA_API_KEY || '';
+        };
+
+        // Salva as configurações
+        async function salvarConfig(e) {
+            e.preventDefault();
+            const config = {
+                BLING_API_KEY: document.getElementById('BLING_API_KEY').value,
+                BLING_BASE_URL: document.getElementById('BLING_BASE_URL').value,
+                LOJA_API_URL: document.getElementById('LOJA_API_URL').value,
+                LOJA_API_KEY: document.getElementById('LOJA_API_KEY').value,
+            };
+
+            const res = await fetch('/api/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(config)
+            });
+            const data = await res.json();
+            mostrarStatus(data.mensagem, 'bg-green-100 text-green-800');
+        }
+
+        // Busca produtos do Bling
+        async function carregarProdutosBling() {
+            const btn = document.getElementById('btnCarregar');
+            btn.innerText = 'Carregando...';
+            
+            const res = await fetch('/api/produtos-bling');
+            const data = await res.json();
+            btn.innerText = 'Carregar Produtos do Bling';
+
+            if (!data.sucesso) {
+                mostrarStatus('Erro: ' + (data.erro || 'Falha ao buscar produtos'), 'bg-red-100 text-red-800');
+                return;
+            }
+
+            listaProdutosBling = data.produtos;
+            renderTabela(listaProdutosBling);
+            document.getElementById('btnEnviar').classList.remove('hidden');
+        }
+
+        // Renderiza os produtos na tabela com checkboxes
+        function renderTabela(produtos) {
+            const tbody = document.getElementById('tabelaProdutos');
+            if(produtos.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-400">Nenhum produto encontrado na conta Bling.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = produtos.map((p, index) => `
+                <tr class="hover:bg-gray-50">
+                    <td class="p-3"><input type="checkbox" class="chkProduto" value="${index}" onchange="atualizarContador()"></td>
+                    <td class="p-3 font-mono text-xs">${p.codigo || 'S/N'}</td>
+                    <td class="p-3 font-medium text-gray-800">${p.nome}</td>
+                    <td class="p-3">R$ ${p.preco ? Number(p.preco).toFixed(2) : '0.00'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function toggleTodos(master) {
+            document.querySelectorAll('.chkProduto').forEach(chk => chk.checked = master.checked);
+            atualizarContador();
+        }
+
+        function atualizarContador() {
+            const selecionados = document.querySelectorAll('.chkProduto:checked').length;
+            document.getElementById('qtdSelecionados').innerText = selecionados;
+        }
+
+        // Envia apenas os marcados
+        async function enviarSelecionados() {
+            const selecionadosIndexes = Array.from(document.querySelectorAll('.chkProduto:checked')).map(c => parseInt(c.value));
+            if (selecionadosIndexes.length === 0) {
+                alert('Selecione pelo menos um produto!');
+                return;
+            }
+
+            const produtosParaEnviar = selecionadosIndexes.map(idx => listaProdutosBling[idx]);
+            const btn = document.getElementById('btnEnviar');
+            btn.innerText = 'Enviando...';
+
+            const res = await fetch('/api/sincronizar-selecionados', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ produtos: produtosParaEnviar })
+            });
+
+            const data = await res.json();
+            btn.innerText = `Enviar Selecionados (${selecionadosIndexes.length})`;
+
+            if (data.sucesso) {
+                mostrarStatus(`Sucesso! ${data.estatisticas.sucessos} produtos enviados. (Erros: ${data.estatisticas.erros})`, 'bg-green-100 text-green-800');
+            } else {
+                mostrarStatus('Erro no envio: ' + data.erro, 'bg-red-100 text-red-800');
+            }
+        }
+
+        function mostrarStatus(texto, classe) {
+            const box = document.getElementById('statusBox');
+            box.className = `p-4 rounded-lg text-sm ${classe}`;
+            box.innerText = texto;
+            box.classList.remove('hidden');
         }
     </script>
 </body>
