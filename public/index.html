@@ -127,7 +127,9 @@
             btn.innerText = 'Carregar Produtos do Bling';
 
             if (!data.sucesso) {
-                mostrarStatus('Erro: ' + (data.erro || 'Falha ao buscar produtos'), 'bg-red-100 text-red-800');
+                // Garante que o erro seja exibido como texto legível
+                const erroTexto = typeof data.erro === 'object' ? JSON.stringify(data.erro) : data.erro;
+                mostrarStatus('Erro: ' + erroTexto, 'bg-red-100 text-red-800');
                 return;
             }
 

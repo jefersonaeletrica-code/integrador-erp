@@ -52,7 +52,7 @@ app.get('/api/produtos-bling', async (req, res) => {
   try {
     const config = getConfig();
     if (!config.BLING_API_KEY) {
-      return res.status(400).json({ erro: 'Chave API do Bling não configurada. Configure no painel abaixo.' });
+      return.status(400).json({ sucesso: false, erro: 'Chave API do Bling não configurada.' });
     }
 
     const response = await axios.get(`${config.BLING_BASE_URL}/produtos`, {
@@ -62,8 +62,10 @@ app.get('/api/produtos-bling', async (req, res) => {
     const produtos = response.data.data || [];
     res.json({ sucesso: true, produtos });
   } catch (error) {
-    console.error('Erro Bling:', error.response?.data || error.message);
-    res.status(500).json({ sucesso: false, erro: error.response?.data || error.message });
+    // Pega a mensagem detalhada do erro que vem do Bling ou do Axios
+    const errorMsg = error.response?.data?.error?.message || error.response?.data || error.message;
+    console.error('Erro Bling detalhado:', errorMsg);
+    res.status(500).json({ sucesso: false, erro: typeof errorMsg === 'object' ? JSON.stringify(errorMsg) : errorMsg });
   }
 });
 
