@@ -53,10 +53,19 @@ app.get('/api/auth/bling', (req, res) => {
 });
 
 // Passo 2: Callback que recebe o código do Bling e troca por Token de Acesso
+// Rota de Callback aprimorada para capturar erros e parâmetros do Bling
 app.get('/callback', async (req, res) => {
-  const { code } = req.query;
+  const { code, error, error_description } = req.query;
+
+  // Se o Bling retornou algum erro na URL
+  if (error) {
+    return res.status(400).send(`Erro retornado pelo Bling: ${error} - ${error_description || ''}`);
+  }
+
+  // Se o código não veio
   if (!code) {
-    return res.status(400).send('Código de autorização não encontrado.');
+    console.log('Query recebida no callback:', req.query);
+    return res.status(400).send(`Código de autorização não encontrado. Parâmetros recebidos: ${JSON.stringify(req.query)}`);
   }
 
   try {
@@ -77,7 +86,6 @@ app.get('/callback', async (req, res) => {
     appConfig.ACCESS_TOKEN = tokenResponse.data.access_token;
     appConfig.REFRESH_TOKEN = tokenResponse.data.refresh_token;
 
-    // Redireciona de volta para o painel principal com sucesso
     res.redirect('/?autorizado=true');
   } catch (error) {
     console.error('Erro ao obter token OAuth:', error.response?.data || error.message);
