@@ -46,7 +46,7 @@ app.post('/api/config', (req, res) => {
 // Passo 1: Redireciona o usuário para a tela de login/autorização do Bling
 app.get('/api/auth/bling', (req, res) => {
   if (!appConfig.CLIENT_ID || !appConfig.REDIRECT_URI) {
-    return res.status(400).json({ sucesso: false, erro: 'Preencha o Client ID e a URL de Redirecionamento primeiro.' });
+    return res.status(400).json({ sucesso: false, erro: 'Preencha e salve o Client ID e a URL de Redirecionamento primeiro.' });
   }
   const authUrl = `https://www.bling.com.br/Api/v3/oauth/authorize?response_type=code&client_id=${appConfig.CLIENT_ID}&redirect_uri=${encodeURIComponent(appConfig.REDIRECT_URI)}`;
   res.json({ sucesso: true, url: authUrl });
