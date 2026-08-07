@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const express = require('express');
 const axios = require('axios');
 const fs = require('fs');
@@ -12,13 +14,41 @@ const CONFIG_FILE = path.join(__dirname, 'config.json');
 const TOKEN_FILE = path.join(__dirname, 'tokens.json');
 const PRODUCTS_FILE = path.join(__dirname, 'produtos.json');
 
-// Carrega configurações, tokens e produtos importados
-let config = fs.existsSync(CONFIG_FILE) ? JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) : { 
-    BLING_CLIENT_ID: '', BLING_CLIENT_SECRET: '', BLING_REDIRECT_URI: '', 
-    LOJA_API_URL: '', LOJA_API_KEY: '' 
+const DEFAULT_CONFIG = {
+    BLING_CLIENT_ID: '',
+    BLING_CLIENT_SECRET: '',
+    BLING_REDIRECT_URI: '',
+    LOJA_API_URL: '',
+    LOJA_API_KEY: ''
 };
-let tokens = fs.existsSync(TOKEN_FILE) ? JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8')) : { access_token: '', refresh_token: '' };
-let produtosImportados = fs.existsSync(PRODUCTS_FILE) ? JSON.parse(fs.readFileSync(PRODUCTS_FILE, 'utf8')) : []; 
+
+const DEFAULT_TOKENS = { access_token: '', refresh_token: '' };
+const DEFAULT_PRODUCTS = [];
+
+const envConfig = {
+    BLING_CLIENT_ID: process.env.BLING_CLIENT_ID || '',
+    BLING_CLIENT_SECRET: process.env.BLING_CLIENT_SECRET || '',
+    BLING_REDIRECT_URI: process.env.BLING_REDIRECT_URI || '',
+    LOJA_API_URL: process.env.LOJA_API_URL || '',
+    LOJA_API_KEY: process.env.LOJA_API_KEY || ''
+};
+
+const ensureFileExists = (filePath, defaultValue) => {
+    if (!fs.existsSync(filePath)) {
+        fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2), 'utf8');
+    }
+};
+
+ensureFileExists(CONFIG_FILE, DEFAULT_CONFIG);
+ensureFileExists(TOKEN_FILE, DEFAULT_TOKENS);
+ensureFileExists(PRODUCTS_FILE, DEFAULT_PRODUCTS);
+
+const fileConfig = fs.existsSync(CONFIG_FILE) ? JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) : {};
+let config = { ...envConfig, ...DEFAULT_CONFIG, ...fileConfig };
+
+// Carrega tokens e produtos importados
+let tokens = fs.existsSync(TOKEN_FILE) ? JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8')) : DEFAULT_TOKENS;
+let produtosImportados = fs.existsSync(PRODUCTS_FILE) ? JSON.parse(fs.readFileSync(PRODUCTS_FILE, 'utf8')) : DEFAULT_PRODUCTS;
 
 const saveConfig = (newConfig) => { 
     const mergedConfig = { ...config, ...newConfig };
