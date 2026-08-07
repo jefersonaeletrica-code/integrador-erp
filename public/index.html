@@ -205,8 +205,9 @@
                 return;
             }
 
-            document.getElementById('buscaProdutoBling').value = '';
-            renderizarProdutos(produtosGlobais);
+            const termo = document.getElementById('buscaProdutoBling').value.trim().toLowerCase();
+            const produtosFiltrados = termo ? filterProdutos(produtosGlobais, termo) : produtosGlobais;
+            renderizarProdutos(produtosFiltrados);
         }
 
         function renderizarProdutos(lista) {
@@ -226,6 +227,14 @@
             `).join('');
         }
 
+        function filterProdutos(lista, termo) {
+            return lista.filter(p => {
+                const codigo = (p.codigo || '').toLowerCase();
+                const nome = (p.nome || '').toLowerCase();
+                return codigo.includes(termo) || nome.includes(termo);
+            });
+        }
+
         function filtrarProdutos() {
             const termo = document.getElementById('buscaProdutoBling').value.trim().toLowerCase();
             if(!termo) {
@@ -233,12 +242,7 @@
                 return;
             }
 
-            const filtrados = produtosGlobais.filter(p => {
-                const codigo = (p.codigo || '').toLowerCase();
-                const nome = (p.nome || '').toLowerCase();
-                return codigo.includes(termo) || nome.includes(termo);
-            });
-
+            const filtrados = filterProdutos(produtosGlobais, termo);
             renderizarProdutos(filtrados);
         }
 
