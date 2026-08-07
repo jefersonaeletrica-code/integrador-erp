@@ -80,6 +80,15 @@
                         </tbody>
                     </table>
                 </div>
+                <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
+                    <div class="flex items-center justify-between border-b pb-3">
+                        <h3 class="text-lg font-semibold text-gray-700">Produtos importados localmente</h3>
+                        <span id="contadorImportados" class="text-sm text-gray-500">0 produtos</span>
+                    </div>
+                    <div id="listaImportados" class="space-y-2 text-sm text-gray-600">
+                        <p class="text-gray-500">Nenhum produto importado salvo.</p>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -87,6 +96,7 @@
 
     <script>
         let produtosGlobais = [];
+        let produtosImportadosGlobais = [];
 
         // Controle de Abas
         function mudarAba(aba) {
@@ -118,7 +128,7 @@
                 badge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700';
                 badge.innerText = 'Conectado ao Bling';
             }
-        });
+        }).finally(carregarProdutosImportados);
 
         async function salvarConfigBling() {
             const payload = {
@@ -149,6 +159,32 @@
             } else {
                 alert('Erro ao gerar URL de autorização.');
             }
+        }
+
+        async function carregarProdutosImportados() {
+            const res = await fetch('/api/produtos-importados');
+            const data = await res.json();
+            if(data.sucesso) {
+                produtosImportadosGlobais = data.produtos || [];
+                renderizarImportados();
+            }
+        }
+
+        function renderizarImportados() {
+            const lista = document.getElementById('listaImportados');
+            const contador = document.getElementById('contadorImportados');
+            if(!produtosImportadosGlobais || produtosImportadosGlobais.length === 0) {
+                contador.innerText = '0 produtos';
+                lista.innerHTML = '<p class="text-gray-500">Nenhum produto importado salvo.</p>';
+                return;
+            }
+
+            contador.innerText = `${produtosImportadosGlobais.length} produtos`;
+            lista.innerHTML = produtosImportadosGlobais.map(p => `
+                <div class="py-2 border-b border-gray-100">
+                    <span class="font-medium">${p.codigo || 'S/N'}</span> - ${p.nome}
+                </div>
+            `).join('');
         }
 
         async function carregarProdutos() {
@@ -220,8 +256,25 @@
             }
 
             const selecionados = indices.map(i => produtosGlobais[i]);
-            alert(`Preparando para enviar ${selecionados.length} produtos selecionados.`);
-            // Aqui você poderá disparar a rota de envio para a loja caso necessário.
+            const produtosParaSalvar = [
+                ...produtosImportadosGlobais,
+                ...selecionados.filter(p => !produtosImportadosGlobais.some(item => item.codigo === p.codigo))
+            ];
+
+            const res = await fetch('/api/produtos-importados', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ produtos: produtosParaSalvar })
+            });
+            const data = await res.json();
+
+            if(data.sucesso) {
+                produtosImportadosGlobais = produtosParaSalvar;
+                renderizarImportados();
+                alert(data.mensagem);
+            } else {
+                alert('Erro ao salvar produtos importados: ' + (data.erro || 'Erro desconhecido.'));
+            }
         }
     </script>
 </body>

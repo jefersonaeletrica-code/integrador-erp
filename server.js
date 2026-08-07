@@ -10,26 +10,40 @@ app.use(express.static('public'));
 const PORT = process.env.PORT || 3000;
 const CONFIG_FILE = path.join(__dirname, 'config.json');
 const TOKEN_FILE = path.join(__dirname, 'tokens.json');
+const PRODUCTS_FILE = path.join(__dirname, 'produtos.json');
 
-// Carrega configurações e tokens de forma independente
+// Carrega configurações, tokens e produtos importados
 let config = fs.existsSync(CONFIG_FILE) ? JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) : { 
     BLING_CLIENT_ID: '', BLING_CLIENT_SECRET: '', BLING_REDIRECT_URI: '', 
     LOJA_API_URL: '', LOJA_API_KEY: '' 
 };
 let tokens = fs.existsSync(TOKEN_FILE) ? JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8')) : { access_token: '', refresh_token: '' };
+let produtosImportados = fs.existsSync(PRODUCTS_FILE) ? JSON.parse(fs.readFileSync(PRODUCTS_FILE, 'utf8')) : []; 
 
 const saveConfig = (newConfig) => { 
-    // Garante que não sobrescreve com asteriscos
-    if (newConfig.BLING_CLIENT_SECRET === '******' || !newConfig.BLING_CLIENT_SECRET) newConfig.BLING_CLIENT_SECRET = config.BLING_CLIENT_SECRET;
-    if (newConfig.LOJA_API_KEY === '******' || !newConfig.LOJA_API_KEY) newConfig.LOJA_API_KEY = config.LOJA_API_KEY;
-    
-    config = { ...config, ...newConfig }; 
+    const mergedConfig = { ...config, ...newConfig };
+
+    if (newConfig.BLING_CLIENT_SECRET === '******' || !newConfig.BLING_CLIENT_SECRET) mergedConfig.BLING_CLIENT_SECRET = config.BLING_CLIENT_SECRET;
+    if (newConfig.LOJA_API_KEY === '******' || !newConfig.LOJA_API_KEY) mergedConfig.LOJA_API_KEY = config.LOJA_API_KEY;
+
+    Object.keys(config).forEach(key => {
+        if (mergedConfig[key] === '' || mergedConfig[key] === undefined || mergedConfig[key] === null) {
+            mergedConfig[key] = config[key];
+        }
+    });
+
+    config = mergedConfig;
     fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2)); 
 };
 
 const saveTokens = (data) => { 
     tokens = { access_token: data.access_token, refresh_token: data.refresh_token }; 
     fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokens)); 
+};
+
+const saveProdutosImportados = (items) => {
+    produtosImportados = items;
+    fs.writeFileSync(PRODUCTS_FILE, JSON.stringify(produtosImportados, null, 2));
 };
 
 async function refreshAccessToken() {
@@ -89,6 +103,24 @@ app.get('/api/produtos-bling', async (req, res) => {
         });
         res.json({ sucesso: true, produtos: response.data.data });
     } catch (e) { res.status(500).json({ sucesso: false, erro: e.message }); }
+});
+
+app.get('/api/produtos-importados', (req, res) => {
+    res.json({ sucesso: true, produtos: produtosImportados });
+});
+
+app.post('/api/produtos-importados', (req, res) => {
+    const novosProdutos = Array.isArray(req.body.produtos) ? req.body.produtos : [];
+    const mergedProdutos = [...produtosImportados];
+
+    novosProdutos.forEach(produto => {
+        if (!mergedProdutos.some(item => item.codigo === produto.codigo)) {
+            mergedProdutos.push(produto);
+        }
+    });
+
+    saveProdutosImportados(mergedProdutos);
+    res.json({ sucesso: true, mensagem: 'Produtos importados salvos com sucesso!' });
 });
 
 app.listen(PORT, '0.0.0.0', () => console.log(`Servidor rodando na porta ${PORT}`));
