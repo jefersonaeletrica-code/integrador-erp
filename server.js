@@ -86,6 +86,33 @@ async function refreshAccessToken() {
     saveTokens(response.data);
 }
 
+const fetchProductPage = async (page, pageParam = 'pagina') => {
+    const url = `https://api.bling.com.br/Api/v3/produtos?${pageParam}=${page}&limit=100`;
+    const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${tokens.access_token}` } });
+    return response.data?.data || [];
+};
+
+const fetchAllProducts = async () => {
+    const productPages = [];
+    let pageParam = 'pagina';
+    let currentPage = 1;
+    let pageProducts = await fetchProductPage(currentPage, pageParam);
+
+    if (!Array.isArray(pageProducts)) {
+        pageParam = 'page';
+        currentPage = 1;
+        pageProducts = await fetchProductPage(currentPage, pageParam);
+    }
+
+    while (Array.isArray(pageProducts) && pageProducts.length > 0) {
+        productPages.push(...pageProducts);
+        currentPage += 1;
+        pageProducts = await fetchProductPage(currentPage, pageParam);
+    }
+
+    return productPages;
+};
+
 // Rotas de Configuração
 app.get('/api/config', (req, res) => res.json({
     ...config,
@@ -128,10 +155,8 @@ app.get('/callback', async (req, res) => {
 app.get('/api/produtos-bling', async (req, res) => {
     try {
         await refreshAccessToken();
-        const response = await axios.get('https://api.bling.com.br/Api/v3/produtos', { 
-            headers: { 'Authorization': `Bearer ${tokens.access_token}` } 
-        });
-        res.json({ sucesso: true, produtos: response.data.data });
+        const produtos = await fetchAllProducts();
+        res.json({ sucesso: true, produtos });
     } catch (e) { res.status(500).json({ sucesso: false, erro: e.message }); }
 });
 
