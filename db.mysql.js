@@ -41,7 +41,8 @@ const getPool = () => {
         port: PORT ? parseInt(PORT, 10) : 3306, // Usa a porta definida ou a padrão 3306
         waitForConnections: true,
         connectionLimit: 10,
-        queueLimit: 0
+        queueLimit: 0,
+        ssl: { rejectUnauthorized: false } // Adicionado para compatibilidade com Hostinger
       };
       if (SOCKET_PATH) {
         connectionConfig.socketPath = SOCKET_PATH;
