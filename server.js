@@ -73,30 +73,35 @@ async function refreshAccessToken() {
     saveTokens(response.data);
 }
 
-const fetchProductPage = async (page, searchParams = {}) => {
+const buildProductUrl = (page, searchParams = {}) => {
     const criterio = searchParams.criterio || '';
     const tipo = typeof searchParams.tipo === 'string' ? searchParams.tipo.trim() : '';
-
-    let url;
 
     if (tipo.toUpperCase().startsWith('NOME=')) {
         const rawName = tipo.replace(/^NOME=/i, '').trim();
         const nome = rawName ? encodeURIComponent(rawName) : '';
         const rawQuery = `criterio=${encodeURIComponent(criterio)}&tipo=NOME=${nome}&pagina=${encodeURIComponent(page)}&limite=100`;
-        url = `https://api.bling.com.br/Api/v3/produtos?${rawQuery}`;
-    } else if (tipo.toUpperCase().startsWith('T&CODIGO=')) {
+        return `https://api.bling.com.br/Api/v3/produtos?${rawQuery}`;
+    }
+
+    if (tipo.toUpperCase().startsWith('T&CODIGO=')) {
         const codigo = tipo.replace(/^T&codigo=/i, '').trim();
         const rawQuery = `criterio=${encodeURIComponent(criterio)}&tipo=T&codigo=${encodeURIComponent(codigo)}&pagina=${encodeURIComponent(page)}&limite=100`;
-        url = `https://api.bling.com.br/Api/v3/produtos?${rawQuery}`;
-    } else {
-        const params = new URLSearchParams();
-        if (criterio) params.set('criterio', String(criterio));
-        if (tipo) params.set('tipo', String(tipo));
-        params.set('pagina', String(page));
-        params.set('limite', '100');
-
-        url = `https://api.bling.com.br/Api/v3/produtos?${params.toString()}`;
+        return `https://api.bling.com.br/Api/v3/produtos?${rawQuery}`;
     }
+
+    const params = new URLSearchParams();
+    if (criterio) params.set('criterio', String(criterio));
+    if (tipo) params.set('tipo', String(tipo));
+    params.set('pagina', String(page));
+    params.set('limite', '100');
+
+    return `https://api.bling.com.br/Api/v3/produtos?${params.toString()}`;
+};
+
+const fetchProductPage = async (page, searchParams = {}) => {
+    const url = buildProductUrl(page, searchParams);
+    console.log('[BlingURL]', url);
 
     const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${tokens.access_token}` } });
     return response.data?.data || [];
