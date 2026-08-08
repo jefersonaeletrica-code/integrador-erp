@@ -91,6 +91,9 @@ const initializeDatabase = async () => {
 };
 
 const readDb = async () => {
+  // Garante que o banco de dados esteja inicializado antes de qualquer leitura.
+  await initializeDatabase();
+
   const connection = await getPool().getConnection();
   try {
     // Inicia as transações para garantir a consistência
