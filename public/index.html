@@ -96,7 +96,7 @@
                         <span id="paginaAtual" class="text-sm font-semibold text-gray-700">Página 1</span>
                         <button id="btnPaginaProxima" onclick="paginaProxima()" class="px-3 py-2 rounded-lg text-sm font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">Próxima</button>
                     </div>
-                    <span id="infoPaginacao" class="text-xs text-gray-500">Página 1</span>
+                    <span id="infoPaginacao" class="text-xs text-gray-500"></span>
                 </div>
 
                 <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
@@ -261,10 +261,16 @@
             btnAnterior.disabled = paginaAtual <= 1;
             btnProxima.disabled = produtosGlobais.length < 100;
 
+            const infoPaginacao = document.getElementById('infoPaginacao');
             document.getElementById('paginaAtual').innerText = `Página ${paginaAtual}`;
-            document.getElementById('infoPaginacao').innerText = `Página ${paginaAtual}`;
+            
+            if (data.total !== undefined) {
+                infoPaginacao.innerText = `Exibindo ${produtosGlobais.length} de ${data.total} produtos`;
+            } else {
+                infoPaginacao.innerText = `Página ${paginaAtual}`;
+            }
 
-            if(produtosGlobais.length === 0) {
+            if (produtosGlobais.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">Nenhum produto encontrado no Bling.</td></tr>';
                 return;
             }

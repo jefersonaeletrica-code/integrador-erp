@@ -96,7 +96,7 @@ const fetchProductPage = async (page, searchParams = {}) => {
     console.log('[BlingURL]', url);
 
     const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${tokens.access_token}` } });
-    return response.data?.data || [];
+    return response.data;
 };
 
 const normalizeNameForBling = (name) => {
@@ -177,23 +177,26 @@ app.get('/api/produtos-bling', async (req, res) => {
         const page = Number.isNaN(requestedPage) || requestedPage < 1 ? 1 : requestedPage;
 
         const { nome, codigo, tipo } = req.query;
-        let produtos;
+        let responseData;
 
         if (typeof nome === 'string' && nome.trim()) {
-            produtos = await fetchProductsByName(nome.trim(), page);
+            responseData = await fetchProductsByName(nome.trim(), page);
         } else if (typeof codigo === 'string' && codigo.trim()) {
-            produtos = await fetchProductsByCode(codigo.trim(), page);
+            responseData = await fetchProductsByCode(codigo.trim(), page);
         } else if (typeof tipo === 'string' && tipo.trim().toUpperCase().startsWith('NOME=')) {
             const nomeValido = normalizeNameForBling(tipo.replace(/^NOME=/i, '').trim());
-            produtos = await fetchProductsByName(nomeValido, page);
+            responseData = await fetchProductsByName(nomeValido, page);
         } else if (typeof tipo === 'string' && tipo.trim().toUpperCase().startsWith('T&CODIGO=')) {
             const codigoValido = tipo.replace(/^T&CODIGO=/i, '').trim();
-            produtos = await fetchProductsByCode(codigoValido, page);
+            responseData = await fetchProductsByCode(codigoValido, page);
         } else {
-            produtos = await fetchAllProductsPaginated(page);
+            responseData = await fetchAllProductsPaginated(page);
         }
 
-        res.json({ sucesso: true, produtos, pagina: page });
+        const produtos = responseData?.data || [];
+        const total = responseData?.total; // Captura o total da resposta da API
+
+        res.json({ sucesso: true, produtos, pagina: page, total });
     } catch (e) { res.status(500).json({ sucesso: false, erro: e.message }); }
 });
 
