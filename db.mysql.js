@@ -17,7 +17,7 @@ const DEFAULT_DB = {
 };
 
 let pool;
-let initialized = false;
+let initializationPromise = null;
 
 const getPool = () => {
   if (!pool) {
@@ -40,9 +40,7 @@ const getPool = () => {
 };
 
 const initializeDatabase = async () => {
-  if (initialized) return;
-
-  const connection = await getPool().getConnection();
+  const connection = await getPool().getConnection(); // Pega uma conexão do pool
   try {
     console.log('Verificando e inicializando o banco de dados MySQL...');
 
@@ -82,18 +80,22 @@ const initializeDatabase = async () => {
     await connection.query("INSERT INTO app_config (id) VALUES (1) ON DUPLICATE KEY UPDATE id=1;");
     await connection.query("INSERT INTO app_tokens (id) VALUES (1) ON DUPLICATE KEY UPDATE id=1;");
 
-
-    initialized = true;
     console.log('Banco de dados MySQL pronto.');
   } finally {
     connection.release();
   }
 };
 
-const readDb = async () => {
-  // Garante que o banco de dados esteja inicializado antes de qualquer leitura.
-  await initializeDatabase();
+// Função que garante que a inicialização ocorra apenas uma vez.
+const ensureInitialized = () => {
+  if (!initializationPromise) {
+    initializationPromise = initializeDatabase();
+  }
+  return initializationPromise;
+};
 
+const readDb = async () => {
+  await ensureInitialized(); // Garante que a inicialização terminou
   const connection = await getPool().getConnection();
   try {
     // Inicia as transações para garantir a consistência
@@ -127,6 +129,7 @@ const readDb = async () => {
 };
 
 const updateDb = async (partial) => {
+  await ensureInitialized(); // Garante que a inicialização terminou
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
@@ -169,7 +172,7 @@ const updateDb = async (partial) => {
 
 module.exports = {
   DEFAULT_DB,
-  initialize: initializeDatabase,
+  initialize: ensureInitialized, // Exporta a função de controle
   readDb,
   updateDb,
 };

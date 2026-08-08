@@ -221,11 +221,8 @@ app.post('/api/produtos-importados', (req, res) => {
 const startServer = async () => {
     try {
         db = require('./db'); // Carrega o driver de DB
-
-        if (typeof db.initialize === 'function') {
-            await db.initialize();
-        }
-
+        
+        // A primeira chamada a uma função do DB (como readDb) vai disparar e aguardar a inicialização.
         const currentDb = await db.readDb(); // readDb pode ser assíncrono
 
         config = { ...envConfig, ...db.DEFAULT_DB.config, ...currentDb.config };
