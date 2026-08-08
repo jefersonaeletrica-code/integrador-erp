@@ -10,54 +10,8 @@ app.use(express.static('public'));
 
 const PORT = process.env.PORT || 3000;
 
-const envConfig = {
-    BLING_CLIENT_ID: process.env.BLING_CLIENT_ID || '',
-    BLING_CLIENT_SECRET: process.env.BLING_CLIENT_SECRET || '',
-    BLING_REDIRECT_URI: process.env.BLING_REDIRECT_URI || '',
-    LOJA_API_URL: process.env.LOJA_API_URL || '',
-    LOJA_API_KEY: process.env.LOJA_API_KEY || ''
-};
-
-let config;
-let tokens;
+let erpConnections = [];
 let produtosImportados;
-
-const saveConfig = (newConfig = {}) => {
-    if (!db) return; // Garante que o DB está inicializado
-    const incoming = newConfig && typeof newConfig === 'object' ? newConfig : {};
-    const mergedConfig = { ...config, ...incoming };
-
-    if (incoming.BLING_CLIENT_SECRET === '******' || !incoming.BLING_CLIENT_SECRET) {
-        mergedConfig.BLING_CLIENT_SECRET = config.BLING_CLIENT_SECRET || '';
-    }
-
-    if (incoming.LOJA_API_KEY === '******' || !incoming.LOJA_API_KEY) {
-        mergedConfig.LOJA_API_KEY = config.LOJA_API_KEY || '';
-    }
-
-    Object.keys(db.DEFAULT_DB.config).forEach(key => {
-        if (mergedConfig[key] === '' || mergedConfig[key] === undefined || mergedConfig[key] === null) {
-            mergedConfig[key] = config[key] || '';
-        }
-    });
-
-    config = { ...db.DEFAULT_DB.config, ...mergedConfig };
-    db.updateDb({ config });
-    return config;
-};
-
-const saveTokens = (data = {}) => {
-    if (!db) return;
-    const payload = data && typeof data === 'object' ? data : {};
-    const nextTokens = {
-        access_token: payload.access_token || tokens.access_token || '',
-        refresh_token: payload.refresh_token || tokens.refresh_token || ''
-    };
-
-    tokens = nextTokens;
-    db.updateDb({ tokens });
-    return tokens;
-};
 
 const saveProdutosImportados = (items) => {
     if (!db) return;
@@ -65,14 +19,21 @@ const saveProdutosImportados = (items) => {
     db.updateDb({ produtos: produtosImportados });
 };
 
-async function refreshAccessToken() {
-    if (!tokens.refresh_token) throw new Error('Refresh token não encontrado.');
-    const credentials = Buffer.from(`${config.BLING_CLIENT_ID}:${config.BLING_CLIENT_SECRET}`).toString('base64');
+async function refreshAccessToken(connection) {
+    if (connection.type !== 'bling' || !connection.credentials.refresh_token) {
+        throw new Error('Apenas conexões Bling com refresh token podem ser atualizadas.');
+    }
+    const { client_id, client_secret, refresh_token } = connection.credentials;
+    const basicAuth = Buffer.from(`${client_id}:${client_secret}`).toString('base64');
     const response = await axios.post('https://www.bling.com.br/Api/v3/oauth/token', 
-        new URLSearchParams({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token }), 
-        { headers: { 'Authorization': `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
+        new URLSearchParams({ grant_type: 'refresh_token', refresh_token }), 
+        { headers: { 'Authorization': `Basic ${basicAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
     );
-    saveTokens(response.data);
+
+    // Atualiza as credenciais da conexão na memória e no banco
+    connection.credentials.access_token = response.data.access_token;
+    connection.credentials.refresh_token = response.data.refresh_token;
+    await db.updateDb({ connection: { id: connection.id, credentials: connection.credentials } });
 }
 
 const buildProductUrl = (page, searchParams = {}) => {
@@ -91,11 +52,11 @@ const buildProductUrl = (page, searchParams = {}) => {
 };
 
 
-const fetchProductPage = async (page, searchParams = {}) => {
+const fetchProductPage = async (connection, page, searchParams = {}) => {
     const url = buildProductUrl(page, searchParams);
     console.log('[BlingURL]', url);
 
-    const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${tokens.access_token}` } });
+    const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${connection.credentials.access_token}` } });
     return response.data;
 };
 
@@ -105,63 +66,104 @@ const normalizeNameForBling = (name) => {
     return cleanName;
 };
 
-const fetchProductsByName = async (name, pagina = 1) => {
+const fetchProductsByName = async (connection, name, pagina = 1) => {
     const searchTerm = normalizeNameForBling(name);
     const searchParams = {
         criterio: '5', // Critério para "Contém"
         tipo: 'T', // Tipo para "Termo"
         nome: searchTerm
     };
-
-    return fetchProductPage(pagina, searchParams);
+    return fetchProductPage(connection, pagina, searchParams);
 };
 
-const fetchProductsByCode = async (code, pagina = 1) => {
+const fetchProductsByCode = async (connection, code, pagina = 1) => {
     const searchParams = {
         criterio: '5',
         tipo: 'T&codigo',
         codigo: code
     };
-
-    return fetchProductPage(pagina, searchParams);
+    return fetchProductPage(connection, pagina, searchParams);
 };
 
-const fetchAllProductsPaginated = async (pagina = 1) => {
-    return fetchProductPage(pagina);
+const fetchAllProductsPaginated = async (connection, pagina = 1) => {
+    return fetchProductPage(connection, pagina);
 };
 
-// Rotas de Configuração
-app.get('/api/config', (req, res) => res.json({
-    ...config,
-    BLING_CLIENT_SECRET: config.BLING_CLIENT_SECRET ? '******' : '',
-    LOJA_API_KEY: config.LOJA_API_KEY ? '******' : '',
-    temTokenBling: !!tokens.access_token
-}));
+// --- NOVAS ROTAS DE GERENCIAMENTO DE CONEXÕES ---
 
-app.post('/api/config', (req, res) => {
-    saveConfig(req.body);
-    res.json({ sucesso: true, mensagem: 'Configurações salvas com sucesso!' });
+app.get('/api/erp-connections', (req, res) => {
+    // Retorna as conexões, mas oculta segredos
+    const safeConnections = erpConnections.map(conn => {
+        const safeCreds = { ...conn.credentials };
+        if (safeCreds.client_secret) safeCreds.client_secret = '******';
+        if (safeCreds.access_token) safeCreds.access_token = safeCreds.access_token.substring(0, 8) + '...';
+        if (safeCreds.refresh_token) safeCreds.refresh_token = '******';
+        return { ...conn, credentials: safeCreds };
+    });
+    res.json({ sucesso: true, connections: safeConnections });
+});
+
+app.post('/api/erp-connections', async (req, res) => {
+    const { name, type, credentials } = req.body;
+    if (!name || !type || !credentials) {
+        return res.status(400).json({ sucesso: false, erro: 'Nome, tipo e credenciais são obrigatórios.' });
+    }
+
+    try {
+        const pool = db.getPool();
+        const [result] = await pool.execute(
+            'INSERT INTO erp_connections (name, type, credentials) VALUES (?, ?, ?)',
+            [name, type, JSON.stringify(credentials)]
+        );
+        const newConnection = { id: result.insertId, name, type, credentials };
+        erpConnections.push(newConnection);
+        res.status(201).json({ sucesso: true, connection: newConnection });
+    } catch (e) {
+        res.status(500).json({ sucesso: false, erro: e.message });
+    }
 });
 
 // OAuth Bling
-app.get('/api/auth/bling', (req, res) => {
-    const state = Math.random().toString(36).substring(7);
-    const authUrl = `https://www.bling.com.br/Api/v3/oauth/authorize?response_type=code&client_id=${config.BLING_CLIENT_ID}&redirect_uri=${encodeURIComponent(config.BLING_REDIRECT_URI)}&state=${state}`;
+app.get('/api/auth/:connectionId/bling', (req, res) => {
+    const { connectionId } = req.params;
+    const connection = erpConnections.find(c => c.id == connectionId);
+
+    if (!connection || connection.type !== 'bling') {
+        return res.status(404).json({ sucesso: false, erro: 'Conexão Bling não encontrada.' });
+    }
+
+    const { client_id, redirect_uri } = connection.credentials;
+    const state = `connId=${connectionId}`; // Passa o ID da conexão no state
+    const authUrl = `https://www.bling.com.br/Api/v3/oauth/authorize?response_type=code&client_id=${client_id}&redirect_uri=${encodeURIComponent(redirect_uri)}&state=${state}`;
     res.json({ sucesso: true, url: authUrl });
 });
 
 app.get('/callback', async (req, res) => {
-    const { code, error } = req.query;
+    const { code, error, state } = req.query;
     if (error) return res.status(400).send('Erro retornado pelo Bling: ' + error);
     if (!code) return res.status(400).send('Código de autorização não encontrado.');
 
+    const stateParams = new URLSearchParams(state);
+    const connectionId = stateParams.get('connId');
+    const connection = erpConnections.find(c => c.id == connectionId);
+
+    if (!connection) {
+        return res.status(400).send('Conexão inválida ou não encontrada a partir do state.');
+    }
+
     try {
-        const credentials = Buffer.from(`${config.BLING_CLIENT_ID}:${config.BLING_CLIENT_SECRET}`).toString('base64');
+        const { client_id, client_secret } = connection.credentials;
+        const basicAuth = Buffer.from(`${client_id}:${client_secret}`).toString('base64');
         const response = await axios.post('https://www.bling.com.br/Api/v3/oauth/token', 
             new URLSearchParams({ grant_type: 'authorization_code', code }), 
-            { headers: { 'Authorization': `Basic ${credentials}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
+            { headers: { 'Authorization': `Basic ${basicAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
         );
-        saveTokens(response.data);
+        
+        // Atualiza as credenciais da conexão
+        connection.credentials.access_token = response.data.access_token;
+        connection.credentials.refresh_token = response.data.refresh_token;
+        await db.updateDb({ connection: { id: connection.id, credentials: connection.credentials } });
+
         res.redirect('/?autorizado=true');
     } catch (e) { 
         res.status(500).send('Erro na autorização: ' + (e.response?.data ? JSON.stringify(e.response.data) : e.message)); 
@@ -169,9 +171,18 @@ app.get('/callback', async (req, res) => {
 });
 
 // Rota de produtos
-app.get('/api/produtos-bling', async (req, res) => {
+app.get('/api/produtos/:connectionId', async (req, res) => {
+    const { connectionId } = req.params;
+    const connection = erpConnections.find(c => c.id == connectionId);
+
+    if (!connection) {
+        return res.status(404).json({ sucesso: false, erro: 'Conexão não encontrada.' });
+    }
+
     try {
-        await refreshAccessToken();
+        if (connection.type === 'bling') {
+            await refreshAccessToken(connection);
+        }
 
         const requestedPage = parseInt(req.query.pagina || req.query.page || '1', 10);
         const page = Number.isNaN(requestedPage) || requestedPage < 1 ? 1 : requestedPage;
@@ -180,17 +191,17 @@ app.get('/api/produtos-bling', async (req, res) => {
         let responseData;
 
         if (typeof nome === 'string' && nome.trim()) {
-            responseData = await fetchProductsByName(nome.trim(), page);
+            responseData = await fetchProductsByName(connection, nome.trim(), page);
         } else if (typeof codigo === 'string' && codigo.trim()) {
-            responseData = await fetchProductsByCode(codigo.trim(), page);
+            responseData = await fetchProductsByCode(connection, codigo.trim(), page);
         } else if (typeof tipo === 'string' && tipo.trim().toUpperCase().startsWith('NOME=')) {
             const nomeValido = normalizeNameForBling(tipo.replace(/^NOME=/i, '').trim());
-            responseData = await fetchProductsByName(nomeValido, page);
+            responseData = await fetchProductsByName(connection, nomeValido, page);
         } else if (typeof tipo === 'string' && tipo.trim().toUpperCase().startsWith('T&CODIGO=')) {
             const codigoValido = tipo.replace(/^T&CODIGO=/i, '').trim();
-            responseData = await fetchProductsByCode(codigoValido, page);
+            responseData = await fetchProductsByCode(connection, codigoValido, page);
         } else {
-            responseData = await fetchAllProductsPaginated(page);
+            responseData = await fetchAllProductsPaginated(connection, page);
         }
 
         const produtos = responseData?.data || [];
@@ -221,15 +232,7 @@ app.post('/api/produtos-importados', (req, res) => {
 const startServer = async () => {
     try {
         console.log('Verificando variáveis de ambiente para conexão com DB...');
-        const dbVars = {
-            DRIVER: process.env.DB_DRIVER,
-            HOST: process.env.MYSQL_HOST || process.env.DB_HOST,
-            USER: process.env.MYSQL_USER || process.env.DB_USER,
-            DATABASE: process.env.MYSQL_DATABASE || process.env.DB_NAME,
-            PORT: process.env.MYSQL_PORT || process.env.DB_PORT,
-            PASSWORD: (process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD) ? '****** (definida)' : '(não definida)'
-        };
-        console.log('Variáveis de DB utilizadas:', dbVars);
+        // O log de variáveis já está dentro do db.mysql.js, não precisa mais aqui.
         console.log('----------------------------------------------------');
 
         db = require('./db'); // Carrega o driver de DB
@@ -237,9 +240,12 @@ const startServer = async () => {
         // A primeira chamada a uma função do DB (como readDb) vai disparar e aguardar a inicialização.
         const currentDb = await db.readDb(); // readDb pode ser assíncrono
 
-        config = { ...envConfig, ...db.DEFAULT_DB.config, ...currentDb.config };
-        tokens = { ...db.DEFAULT_DB.tokens, ...currentDb.tokens };
+        // Carrega as conexões e produtos na memória
+        erpConnections = Array.isArray(currentDb.connections) ? currentDb.connections : [];
         produtosImportados = Array.isArray(currentDb.produtos) ? currentDb.produtos : [];
+
+        console.log(`${erpConnections.length} conexões ERP carregadas.`);
+        console.log(`${produtosImportados.length} produtos importados carregados.`);
 
         app.listen(PORT, '0.0.0.0', () => console.log(`Servidor rodando na porta ${PORT}`));
     } catch (error) {

@@ -1,21 +1,10 @@
 const mysql = require('mysql2/promise');
 
 // Estrutura de dados padrão para consistência
+// Removido, pois a nova estrutura é mais dinâmica.
 const DEFAULT_DB = {
-  config: {
-    BLING_CLIENT_ID: '',
-    BLING_CLIENT_SECRET: '',
-    BLING_REDIRECT_URI: '',
-    LOJA_API_URL: '',
-    LOJA_API_KEY: ''
-  },
-  tokens: {
-    access_token: '',
-    refresh_token: ''
-  },
   produtos: []
 };
-
 let pool;
 let initializationPromise = null;
 
@@ -28,7 +17,6 @@ const getPool = () => {
     const DATABASE = process.env.MYSQL_DATABASE || process.env.DB_NAME;
     const PORT = process.env.MYSQL_PORT || process.env.DB_PORT;
     const SOCKET_PATH = process.env.MYSQL_SOCKET_PATH;
-
     if (!HOST || !USER || !PASSWORD || !DATABASE) {
       throw new Error('As variáveis de ambiente para conexão com o banco de dados (DB_HOST, DB_USER, DB_PASSWORD, DB_NAME) não estão configuradas.');
     }
@@ -42,7 +30,7 @@ const getPool = () => {
         waitForConnections: true,
         connectionLimit: 10,
         queueLimit: 0,
-        ssl: { rejectUnauthorized: false } // Adicionado para compatibilidade com Hostinger
+        ssl: { rejectUnauthorized: false }
       };
       if (SOCKET_PATH) {
         connectionConfig.socketPath = SOCKET_PATH;
@@ -63,40 +51,25 @@ const initializeDatabase = async () => {
     console.log('Verificando e inicializando o banco de dados MySQL...');
 
     await connection.query(`
-        CREATE TABLE IF NOT EXISTS app_config (
-          id int NOT NULL DEFAULT '1',
-          BLING_CLIENT_ID varchar(255) DEFAULT '',
-          BLING_CLIENT_SECRET varchar(255) DEFAULT '',
-          BLING_REDIRECT_URI varchar(255) DEFAULT '',
-          LOJA_API_URL varchar(255) DEFAULT '',
-          LOJA_API_KEY varchar(255) DEFAULT '',
-          PRIMARY KEY (id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-    `);
-
-    await connection.query(`
-        CREATE TABLE IF NOT EXISTS app_tokens (
-          id int NOT NULL DEFAULT '1',
-          access_token text,
-          refresh_token text,
-          PRIMARY KEY (id)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+      CREATE TABLE IF NOT EXISTS erp_connections (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        type VARCHAR(50) NOT NULL, -- 'bling' ou 'cisspoder'
+        credentials JSON NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
     await connection.query(`
         CREATE TABLE IF NOT EXISTS produtos_importados (
-          id int NOT NULL AUTO_INCREMENT,
-          codigo varchar(100) NOT NULL,
-          nome varchar(255) DEFAULT NULL,
-          preco decimal(10,2) DEFAULT '0.00',
+          id INT NOT NULL AUTO_INCREMENT,
+          codigo VARCHAR(100) NOT NULL,
+          nome VARCHAR(255) DEFAULT NULL,
+          preco DECIMAL(10,2) DEFAULT '0.00',
           PRIMARY KEY (id),
           UNIQUE KEY codigo (codigo)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
-
-    // Garante que os registros de configuração e tokens existam
-    await connection.query("INSERT INTO app_config (id) VALUES (1) ON DUPLICATE KEY UPDATE id=1;");
-    await connection.query("INSERT INTO app_tokens (id) VALUES (1) ON DUPLICATE KEY UPDATE id=1;");
 
     console.log('Banco de dados MySQL pronto.');
   } finally {
@@ -117,24 +90,15 @@ const readDb = async () => {
   const connection = await getPool().getConnection();
   try {
     // Inicia as transações para garantir a consistência
-    await connection.beginTransaction();
+    // await connection.beginTransaction(); // Não é mais necessário para leituras simples
 
-    // Lê a configuração
-    let [configRows] = await connection.query('SELECT * FROM app_config WHERE id = 1');
-    let config = configRows[0];
-
-    // Lê os tokens
-    let [tokenRows] = await connection.query('SELECT * FROM app_tokens WHERE id = 1');
-    let tokens = tokenRows[0];
+    const [connections] = await connection.query('SELECT * FROM erp_connections');
 
     // Lê os produtos
     const [produtos] = await connection.query('SELECT * FROM produtos_importados');
 
-    await connection.commit();
-
     return {
-      config: { ...DEFAULT_DB.config, ...config },
-      tokens: { ...DEFAULT_DB.tokens, ...tokens },
+      connections: connections.map(c => ({...c, credentials: JSON.parse(c.credentials)})),
       produtos: produtos.map(p => ({ ...p, preco: parseFloat(p.preco) })) // Garante que o preço seja número
     };
   } catch (error) {
@@ -147,34 +111,31 @@ const readDb = async () => {
 };
 
 const updateDb = async (partial) => {
+  // Esta função agora será mais específica para cada tipo de atualização
+  // A lógica principal de CRUD será movida para o server.js
   await ensureInitialized(); // Garante que a inicialização terminou
   const connection = await getPool().getConnection();
   try {
     await connection.beginTransaction();
-
-    if (partial.config) {
-      const fields = Object.keys(partial.config).filter(k => k in DEFAULT_DB.config);
-      const values = fields.map(k => partial.config[k]);
-      const setClause = fields.map(k => `${k} = ?`).join(', ');
-      if (setClause) {
-        await connection.execute(`UPDATE app_config SET ${setClause} WHERE id = 1`, values);
-      }
-    }
-
-    if (partial.tokens) {
-      const fields = Object.keys(partial.tokens).filter(k => k in DEFAULT_DB.tokens);
-      const values = fields.map(k => partial.tokens[k]);
-      const setClause = fields.map(k => `${k} = ?`).join(', ');
-      if (setClause) {
-        await connection.execute(`UPDATE app_tokens SET ${setClause} WHERE id = 1`, values);
-      }
-    }
 
     if (Array.isArray(partial.produtos)) {
       await connection.query('TRUNCATE TABLE produtos_importados');
       if (partial.produtos.length > 0) {
         const productValues = partial.produtos.map(p => [p.codigo, p.nome, p.preco]);
         await connection.query('INSERT INTO produtos_importados (codigo, nome, preco) VALUES ?', [productValues]);
+      }
+    } else if (partial.connection) {
+      // Lógica para atualizar uma conexão específica
+      const { id, ...dataToUpdate } = partial.connection;
+      if (dataToUpdate.credentials) {
+        dataToUpdate.credentials = JSON.stringify(dataToUpdate.credentials);
+      }
+      const fields = Object.keys(dataToUpdate);
+      const setClause = fields.map(field => `${field} = ?`).join(', ');
+      const values = fields.map(field => dataToUpdate[field]);
+
+      if (fields.length > 0) {
+        await connection.execute(`UPDATE erp_connections SET ${setClause} WHERE id = ?`, [...values, id]);
       }
     }
 
@@ -189,6 +150,7 @@ const updateDb = async (partial) => {
 };
 
 module.exports = {
+  getPool,
   DEFAULT_DB,
   initialize: ensureInitialized, // Exporta a função de controle
   readDb,
