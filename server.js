@@ -74,30 +74,20 @@ async function refreshAccessToken() {
 }
 
 const buildProductUrl = (page, searchParams = {}) => {
-    const criterio = searchParams.criterio || '';
-    const tipo = typeof searchParams.tipo === 'string' ? searchParams.tipo.trim() : '';
-
-    if (tipo.toUpperCase().startsWith('NOME=')) {
-        const rawName = tipo.replace(/^NOME=/i, '').trim();
-        // O Bling V3 para NOME com critério=5 usa o termo sem encodeURIComponent extra no `=` ou com formato limpo
-        const rawQuery = `criterio=${encodeURIComponent(criterio)}&tipo=NOME=${encodeURIComponent(rawName)}&pagina=${encodeURIComponent(page)}&limite=100`;
-        return `https://api.bling.com.br/Api/v3/produtos?${rawQuery}`;
-    }
-
-    if (tipo.toUpperCase().startsWith('T&CODIGO=')) {
-        const codigo = tipo.replace(/^T&codigo=/i, '').trim();
-        const rawQuery = `criterio=${encodeURIComponent(criterio)}&tipo=T&codigo=${encodeURIComponent(codigo)}&pagina=${encodeURIComponent(page)}&limite=100`;
-        return `https://api.bling.com.br/Api/v3/produtos?${rawQuery}`;
-    }
-
     const params = new URLSearchParams();
-    if (criterio) params.set('criterio', String(criterio));
-    if (tipo) params.set('tipo', String(tipo));
     params.set('pagina', String(page));
     params.set('limite', '100');
 
+    // Adiciona todos os outros parâmetros de busca (criterio, tipo, nome, codigo)
+    for (const key in searchParams) {
+        if (searchParams[key]) {
+            params.set(key, searchParams[key]);
+        }
+    }
+
     return `https://api.bling.com.br/Api/v3/produtos?${params.toString()}`;
 };
+
 
 const fetchProductPage = async (page, searchParams = {}) => {
     const url = buildProductUrl(page, searchParams);
@@ -116,8 +106,9 @@ const normalizeNameForBling = (name) => {
 const fetchProductsByName = async (name, pagina = 1) => {
     const searchTerm = normalizeNameForBling(name);
     const searchParams = {
-        criterio: '5',
-        tipo: `NOME=${searchTerm}`
+        criterio: '5', // Critério para "Contém"
+        tipo: 'T', // Tipo para "Termo"
+        nome: searchTerm
     };
 
     return fetchProductPage(pagina, searchParams);
@@ -126,7 +117,8 @@ const fetchProductsByName = async (name, pagina = 1) => {
 const fetchProductsByCode = async (code, pagina = 1) => {
     const searchParams = {
         criterio: '5',
-        tipo: `T&codigo=${code}`
+        tipo: 'T&codigo',
+        codigo: code
     };
 
     return fetchProductPage(pagina, searchParams);
