@@ -59,28 +59,59 @@ async function refreshAccessToken() {
     saveTokens(response.data);
 }
 
-const fetchProductPage = async (page, pageParam = 'pagina') => {
-    const url = `https://api.bling.com.br/Api/v3/produtos?${pageParam}=${page}&limit=100`;
+const fetchProductPage = async (page, searchParams = {}) => {
+    const params = new URLSearchParams();
+
+    if (searchParams.criterio && searchParams.tipo) {
+        params.set('criterio', searchParams.criterio);
+        params.set('tipo', searchParams.tipo);
+    }
+
+    params.set('pagina', String(page));
+    params.set('limite', '100');
+
+    const url = `https://api.bling.com.br/Api/v3/produtos?${params.toString()}`;
     const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${tokens.access_token}` } });
     return response.data?.data || [];
 };
 
-const fetchAllProducts = async () => {
-    const productPages = [];
-    let pageParam = 'pagina';
-    let currentPage = 1;
-    let pageProducts = await fetchProductPage(currentPage, pageParam);
+const normalizeNameForBling = (name) => {
+    const words = (name || '').trim().split(/\s+/);
+    return words.length > 1 ? words.join('%20') : words.join('');
+};
 
-    if (!Array.isArray(pageProducts)) {
-        pageParam = 'page';
-        currentPage = 1;
-        pageProducts = await fetchProductPage(currentPage, pageParam);
-    }
+const fetchProductsByName = async (name) => {
+    const searchTerm = normalizeNameForBling(name);
+    const searchParams = {
+        criterio: '5',
+        tipo: `NOME=${searchTerm}`
+    };
+
+    return fetchAllProducts(searchParams);
+};
+
+const fetchProductsByCode = async (code) => {
+    const searchParams = {
+        criterio: '5',
+        tipo: `T&codigo=${code}`
+    };
+
+    return fetchAllProducts(searchParams);
+};
+
+const fetchAllProductsPaginated = async () => {
+    return fetchAllProducts();
+};
+
+const fetchAllProducts = async (searchParams = {}) => {
+    const productPages = [];
+    let currentPage = 1;
+    let pageProducts = await fetchProductPage(currentPage, searchParams);
 
     while (Array.isArray(pageProducts) && pageProducts.length > 0) {
         productPages.push(...pageProducts);
         currentPage += 1;
-        pageProducts = await fetchProductPage(currentPage, pageParam);
+        pageProducts = await fetchProductPage(currentPage, searchParams);
     }
 
     return productPages;
@@ -128,7 +159,22 @@ app.get('/callback', async (req, res) => {
 app.get('/api/produtos-bling', async (req, res) => {
     try {
         await refreshAccessToken();
-        const produtos = await fetchAllProducts();
+
+        const searchType = typeof req.query.tipo === 'string' ? req.query.tipo.trim() : '';
+        const nomeDigitado = searchType.startsWith('NOME=') ? searchType.replace(/^NOME=/i, '').trim() : '';
+        const codigoDigitado = searchType.startsWith('T&codigo=') ? searchType.replace(/^T&codigo=/i, '').trim() : '';
+
+        if (nomeDigitado) {
+            const produtos = await fetchProductsByName(nomeDigitado);
+            return res.json({ sucesso: true, produtos });
+        }
+
+        if (codigoDigitado) {
+            const produtos = await fetchProductsByCode(codigoDigitado);
+            return res.json({ sucesso: true, produtos });
+        }
+
+        const produtos = await fetchAllProductsPaginated();
         res.json({ sucesso: true, produtos });
     } catch (e) { res.status(500).json({ sucesso: false, erro: e.message }); }
 });

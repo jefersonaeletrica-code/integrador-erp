@@ -61,7 +61,7 @@
                 <div class="flex flex-col sm:flex-row justify-between items-center gap-3 mb-4">
                     <input type="text" id="buscaProdutoBling" placeholder="Buscar por nome ou código" class="w-full sm:w-80 p-2.5 border rounded-lg text-sm" />
                     <div class="flex gap-3">
-                        <button onclick="carregarProdutos()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">Buscar Produtos</button>
+                        <button onclick="buscarPorCodigo()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">Buscar Produtos</button>
                         <button onclick="enviarSelecionados()" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700">Enviar Selecionados</button>
                     </div>
                 </div>
@@ -190,8 +190,17 @@
         async function carregarProdutos() {
             const tbody = document.getElementById('tabelaProdutos');
             tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">Carregando produtos do Bling...</td></tr>';
-            
-            const res = await fetch('/api/produtos-bling');
+
+            const termo = document.getElementById('buscaProdutoBling').value.trim();
+            const params = new URLSearchParams();
+
+            if (termo) {
+                params.set('criterio', '5');
+                params.set('tipo', `NOME=${termo}`);
+            }
+
+            const query = params.toString();
+            const res = await fetch(`/api/produtos-bling${query ? '?' + query : ''}`);
             const data = await res.json();
             
             if(!data.sucesso) {
@@ -205,9 +214,37 @@
                 return;
             }
 
-            const termo = document.getElementById('buscaProdutoBling').value.trim().toLowerCase();
-            const produtosFiltrados = termo ? filterProdutos(produtosGlobais, termo) : produtosGlobais;
-            renderizarProdutos(produtosFiltrados);
+            renderizarProdutos(produtosGlobais);
+        }
+
+        async function buscarPorCodigo() {
+            const termo = document.getElementById('buscaProdutoBling').value.trim();
+            if (!termo) {
+                return carregarProdutos();
+            }
+
+            const tbody = document.getElementById('tabelaProdutos');
+            tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">Carregando produtos do Bling por código...</td></tr>';
+
+            const params = new URLSearchParams();
+            params.set('criterio', '5');
+            params.set('tipo', `T&codigo=${termo}`);
+
+            const res = await fetch(`/api/produtos-bling?${params.toString()}`);
+            const data = await res.json();
+
+            if(!data.sucesso) {
+                tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Erro: ${data.erro}</td></tr>`;
+                return;
+            }
+
+            produtosGlobais = data.produtos || [];
+            if(produtosGlobais.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">Nenhum produto encontrado no Bling.</td></tr>';
+                return;
+            }
+
+            renderizarProdutos(produtosGlobais);
         }
 
         function renderizarProdutos(lista) {
@@ -225,25 +262,6 @@
                     <td class="p-3">R$ ${p.preco ? Number(p.preco).toFixed(2) : '0.00'}</td>
                 </tr>
             `).join('');
-        }
-
-        function filterProdutos(lista, termo) {
-            return lista.filter(p => {
-                const codigo = (p.codigo || '').toLowerCase();
-                const nome = (p.nome || '').toLowerCase();
-                return codigo.includes(termo) || nome.includes(termo);
-            });
-        }
-
-        function filtrarProdutos() {
-            const termo = document.getElementById('buscaProdutoBling').value.trim().toLowerCase();
-            if(!termo) {
-                renderizarProdutos(produtosGlobais);
-                return;
-            }
-
-            const filtrados = filterProdutos(produtosGlobais, termo);
-            renderizarProdutos(filtrados);
         }
 
         function toggleTodos(master) {
