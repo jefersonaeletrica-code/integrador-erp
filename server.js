@@ -85,41 +85,27 @@ const normalizeNameForBling = (name) => {
     return words.length > 1 ? words.join('%20') : words.join('');
 };
 
-const fetchProductsByName = async (name) => {
+const fetchProductsByName = async (name, pagina = 1) => {
     const searchTerm = normalizeNameForBling(name);
     const searchParams = {
         criterio: '5',
         tipo: `NOME=${searchTerm}`
     };
 
-    return fetchAllProducts(searchParams);
+    return fetchProductPage(pagina, searchParams);
 };
 
-const fetchProductsByCode = async (code) => {
+const fetchProductsByCode = async (code, pagina = 1) => {
     const searchParams = {
         criterio: '5',
         tipo: `T&codigo=${code}`
     };
 
-    return fetchAllProducts(searchParams);
+    return fetchProductPage(pagina, searchParams);
 };
 
-const fetchAllProductsPaginated = async () => {
-    return fetchAllProducts();
-};
-
-const fetchAllProducts = async (searchParams = {}) => {
-    const productPages = [];
-    let currentPage = 1;
-    let pageProducts = await fetchProductPage(currentPage, searchParams);
-
-    while (Array.isArray(pageProducts) && pageProducts.length > 0) {
-        productPages.push(...pageProducts);
-        currentPage += 1;
-        pageProducts = await fetchProductPage(currentPage, searchParams);
-    }
-
-    return productPages;
+const fetchAllProductsPaginated = async (pagina = 1) => {
+    return fetchProductPage(pagina);
 };
 
 // Rotas de Configuração
@@ -165,22 +151,25 @@ app.get('/api/produtos-bling', async (req, res) => {
     try {
         await refreshAccessToken();
 
+        const requestedPage = parseInt(req.query.pagina || req.query.page || '1', 10);
+        const page = Number.isNaN(requestedPage) || requestedPage < 1 ? 1 : requestedPage;
+
         const searchType = typeof req.query.tipo === 'string' ? req.query.tipo.trim() : '';
         const nomeDigitado = searchType.startsWith('NOME=') ? searchType.replace(/^NOME=/i, '').trim() : '';
         const codigoDigitado = searchType.startsWith('T&codigo=') ? searchType.replace(/^T&codigo=/i, '').trim() : '';
 
         if (nomeDigitado) {
-            const produtos = await fetchProductsByName(nomeDigitado);
-            return res.json({ sucesso: true, produtos });
+            const produtos = await fetchProductsByName(nomeDigitado, page);
+            return res.json({ sucesso: true, produtos, pagina: page });
         }
 
         if (codigoDigitado) {
-            const produtos = await fetchProductsByCode(codigoDigitado);
-            return res.json({ sucesso: true, produtos });
+            const produtos = await fetchProductsByCode(codigoDigitado, page);
+            return res.json({ sucesso: true, produtos, pagina: page });
         }
 
-        const produtos = await fetchAllProductsPaginated();
-        res.json({ sucesso: true, produtos });
+        const produtos = await fetchAllProductsPaginated(page);
+        res.json({ sucesso: true, produtos, pagina: page });
     } catch (e) { res.status(500).json({ sucesso: false, erro: e.message }); }
 });
 
