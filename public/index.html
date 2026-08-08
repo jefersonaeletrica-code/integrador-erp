@@ -212,12 +212,11 @@
             const nome = document.getElementById('buscaNomeProdutoBling').value.trim();
             const codigo = document.getElementById('buscaCodigoProdutoBling').value.trim();
 
+            filtroAtual = null;
             if (codigo) {
                 filtroAtual = { tipo: 'codigo', termo: codigo };
             } else if (nome) {
                 filtroAtual = { tipo: 'nome', termo: nome };
-            } else {
-                filtroAtual = null;
             }
 
             await carregarPagina(1);
@@ -235,13 +234,11 @@
             const params = new URLSearchParams();
 
             if (filtroAtual?.tipo === 'nome' && filtroAtual.termo) {
-                params.set('criterio', '5');
-                params.set('tipo', `NOME=${filtroAtual.termo}`);
+                params.set('nome', filtroAtual.termo);
             }
 
             if (filtroAtual?.tipo === 'codigo' && filtroAtual.termo) {
-                params.set('criterio', '5');
-                params.set('tipo', `T&codigo=${filtroAtual.termo}`);
+                params.set('codigo', filtroAtual.termo);
             }
 
             params.set('pagina', String(pagina));

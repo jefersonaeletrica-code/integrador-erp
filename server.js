@@ -164,19 +164,32 @@ app.get('/api/produtos-bling', async (req, res) => {
         const requestedPage = parseInt(req.query.pagina || req.query.page || '1', 10);
         const page = Number.isNaN(requestedPage) || requestedPage < 1 ? 1 : requestedPage;
 
+        const nomeDigitado = typeof req.query.nome === 'string' ? req.query.nome.trim() : '';
+        const codigoDigitado = typeof req.query.codigo === 'string' ? req.query.codigo.trim() : '';
+
+        if (nomeDigitado) {
+            const produtos = await fetchProductsByName(nomeDigitado, page);
+            return res.json({ sucesso: true, produtos, pagina: page });
+        }
+
+        if (codigoDigitado) {
+            const produtos = await fetchProductsByCode(codigoDigitado, page);
+            return res.json({ sucesso: true, produtos, pagina: page });
+        }
+
         const searchType = typeof req.query.tipo === 'string' ? req.query.tipo.trim() : '';
         const searchTypeNormalized = (searchType || '').toUpperCase();
 
         if (searchTypeNormalized.startsWith('NOME=')) {
             const nomeRaw = searchType.replace(/^NOME=/i, '').trim();
-            const nomeDigitado = normalizeNameForBling(nomeRaw);
-            const produtos = await fetchProductsByName(nomeDigitado, page);
+            const nomeValido = normalizeNameForBling(nomeRaw);
+            const produtos = await fetchProductsByName(nomeValido, page);
             return res.json({ sucesso: true, produtos, pagina: page });
         }
 
         if (searchTypeNormalized.startsWith('T&CODIGO=')) {
-            const codigoDigitado = searchType.replace(/^T&CODIGO=/i, '').trim();
-            const produtos = await fetchProductsByCode(codigoDigitado, page);
+            const codigoValido = searchType.replace(/^T&CODIGO=/i, '').trim();
+            const produtos = await fetchProductsByCode(codigoValido, page);
             return res.json({ sucesso: true, produtos, pagina: page });
         }
 
