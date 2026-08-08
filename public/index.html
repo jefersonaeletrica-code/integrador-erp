@@ -12,41 +12,60 @@
         <div class="flex flex-col md:flex-row justify-between items-center bg-white p-6 rounded-xl shadow-sm border border-gray-200 gap-4">
             <h1 class="text-2xl font-bold text-gray-900">Painel de Integração - A Elétrica</h1>
             <div class="flex bg-gray-100 p-1 rounded-lg">
-                <button onclick="mudarAba('config')" id="btnAbaConfig" class="px-5 py-2 rounded-md text-sm font-semibold transition bg-white shadow-sm text-gray-900">Configurações</button>
+                <button onclick="mudarAba('conexoes')" id="btnAbaConexoes" class="px-5 py-2 rounded-md text-sm font-semibold transition bg-white shadow-sm text-gray-900">Conexões ERP</button>
                 <button onclick="mudarAba('produtos')" id="btnAbaProdutos" class="px-5 py-2 rounded-md text-sm font-semibold transition text-gray-500 hover:text-gray-900">Produtos</button>
             </div>
         </div>
 
-        <!-- ABA 1: CONFIGURAÇÕES -->
-        <div id="abaConfig" class="space-y-6">
-            <!-- Bloco 1.1: Configuração do Bling -->
+        <!-- ABA 1: CONEXÕES ERP -->
+        <div id="abaConexoes" class="space-y-6">
+            <!-- Formulário para Adicionar Nova Conexão -->
             <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
-                <div class="flex justify-between items-center border-b pb-3">
-                    <h2 class="text-xl font-semibold text-gray-700">Credenciais do Bling (ERP)</h2>
-                    <span id="badgeBling" class="px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-600">Desconectado</span>
+                <h2 class="text-xl font-semibold text-gray-700 border-b pb-3">Adicionar Nova Conexão ERP</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Nome da Conexão</label>
+                        <input type="text" id="connName" placeholder="Ex: Bling - Conta Principal" class="w-full p-2.5 border rounded-lg text-sm">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Tipo de ERP</label>
+                        <select id="connType" onchange="mostrarCamposERP()" class="w-full p-2.5 border rounded-lg text-sm bg-white">
+                            <option value="">Selecione o tipo</option>
+                            <option value="bling">Bling</option>
+                            <option value="cisspoder">CissPoder</option>
+                        </select>
+                    </div>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input type="text" id="BLING_CLIENT_ID" placeholder="Client ID (Bling)" class="p-2.5 border rounded-lg text-sm">
-                    <input type="password" id="BLING_CLIENT_SECRET" placeholder="Client Secret (Bling)" class="p-2.5 border rounded-lg text-sm">
-                    <input type="text" id="BLING_REDIRECT_URI" placeholder="URL de Redirecionamento (/callback)" class="p-2.5 border rounded-lg text-sm md:col-span-2">
+
+                <!-- Campos específicos do Bling -->
+                <div id="camposBling" class="hidden space-y-4 pt-4 border-t">
+                    <h3 class="font-semibold text-gray-600">Credenciais do Bling</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input type="text" id="blingClientId" placeholder="Client ID" class="p-2.5 border rounded-lg text-sm">
+                        <input type="password" id="blingClientSecret" placeholder="Client Secret" class="p-2.5 border rounded-lg text-sm">
+                        <input type="text" id="blingRedirectUri" placeholder="URL de Redirecionamento (Ex: https://seu-site.com/callback)" class="p-2.5 border rounded-lg text-sm md:col-span-2">
+                    </div>
                 </div>
-                <div class="flex gap-3 pt-2">
-                    <button onclick="salvarConfigBling()" class="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800">Salvar Bling</button>
-                    <button onclick="conectarBling()" class="bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-orange-700">Conectar / Autorizar Bling</button>
+
+                <!-- Campos específicos do CissPoder -->
+                <div id="camposCissPoder" class="hidden space-y-4 pt-4 border-t">
+                    <h3 class="font-semibold text-gray-600">Credenciais do CissPoder</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input type="text" id="cissApiUrl" placeholder="URL da API" class="p-2.5 border rounded-lg text-sm">
+                        <input type="password" id="cissApiKey" placeholder="Chave da API (Token)" class="p-2.5 border rounded-lg text-sm">
+                    </div>
+                </div>
+
+                <div class="pt-2">
+                    <button onclick="salvarEAutenticarConexao()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">Salvar e Autenticar</button>
                 </div>
             </div>
 
-            <!-- Bloco 1.2: Configuração da Loja Virtual -->
+            <!-- Lista de Conexões Existentes -->
             <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
-                <div class="border-b pb-3">
-                    <h2 class="text-xl font-semibold text-gray-700">Credenciais da Loja Virtual</h2>
-                </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <input type="text" id="LOJA_API_URL" placeholder="URL da API da Loja" class="p-2.5 border rounded-lg text-sm">
-                    <input type="password" id="LOJA_API_KEY" placeholder="Chave / Token da API da Loja" class="p-2.5 border rounded-lg text-sm">
-                </div>
-                <div class="pt-2">
-                    <button onclick="salvarConfigLoja()" class="bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800">Salvar Loja</button>
+                <h2 class="text-xl font-semibold text-gray-700 border-b pb-3">Conexões Salvas</h2>
+                <div id="listaConexoes" class="space-y-3">
+                    <p class="text-gray-500">Nenhuma conexão encontrada.</p>
                 </div>
             </div>
         </div>
@@ -54,18 +73,24 @@
         <!-- ABA 2: PRODUTOS -->
         <div id="abaProdutos" class="space-y-6 hidden">
             <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
-                <div class="flex flex-col sm:flex-row justify-between items-center border-b pb-3 gap-4">
+                <div class="flex flex-col sm:flex-row justify-between items-start border-b pb-3 gap-4">
                     <h2 class="text-xl font-semibold text-gray-700">Gerenciamento de Produtos</h2>
+                    <div>
+                        <label for="conexaoBusca" class="block text-xs font-semibold text-gray-600 mb-1">Usar Conexão ERP</label>
+                        <select id="conexaoBusca" class="p-2.5 border rounded-lg text-sm bg-white">
+                            <option value="">Selecione uma conexão</option>
+                        </select>
+                    </div>
                 </div>
                 
                 <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4 items-end">
                     <div class="md:col-span-2">
                         <label class="block text-xs font-semibold text-gray-600 mb-1">Buscar por nome</label>
-                        <input type="text" id="buscaNomeProdutoBling" placeholder="Ex.: cabo flex" class="w-full p-2.5 border rounded-lg text-sm" onkeydown="if(event.key === 'Enter') buscarProdutos()" />
+                        <input type="text" id="buscaNomeProduto" placeholder="Ex.: cabo flex" class="w-full p-2.5 border rounded-lg text-sm" onkeydown="if(event.key === 'Enter') buscarProdutos()" />
                     </div>
                     <div class="md:col-span-2">
                         <label class="block text-xs font-semibold text-gray-600 mb-1">Buscar por código</label>
-                        <input type="text" id="buscaCodigoProdutoBling" placeholder="Ex.: 000123" class="w-full p-2.5 border rounded-lg text-sm" onkeydown="if(event.key === 'Enter') buscarProdutos()" />
+                        <input type="text" id="buscaCodigoProduto" placeholder="Ex.: 000123" class="w-full p-2.5 border rounded-lg text-sm" onkeydown="if(event.key === 'Enter') buscarProdutos()" />
                     </div>
                     <div class="flex gap-2">
                         <button onclick="buscarProdutos()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">Buscar Produtos</button>
@@ -85,7 +110,7 @@
                             </tr>
                         </thead>
                         <tbody id="tabelaProdutos" class="divide-y">
-                            <tr><td colspan="4" class="p-4 text-center text-gray-400">Clique em "Carregar Produtos do Bling" para listar os itens.</td></tr>
+                            <tr><td colspan="4" class="p-4 text-center text-gray-400">Selecione uma conexão e clique em "Buscar Produtos" para listar os itens.</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -118,62 +143,126 @@
         let produtosImportadosGlobais = [];
         let paginaAtual = 1;
         let filtroAtual = null;
+        let conexoesGlobais = [];
 
         // Controle de Abas
         function mudarAba(aba) {
-            const configDiv = document.getElementById('abaConfig');
+            const conexoesDiv = document.getElementById('abaConexoes');
             const produtosDiv = document.getElementById('abaProdutos');
-            const btnConfig = document.getElementById('btnAbaConfig');
+            const btnConexoes = document.getElementById('btnAbaConexoes');
             const btnProdutos = document.getElementById('btnAbaProdutos');
 
-            if (aba === 'config') {
-                configDiv.classList.remove('hidden');
+            if (aba === 'conexoes') {
+                conexoesDiv.classList.remove('hidden');
                 produtosDiv.classList.add('hidden');
-                btnConfig.className = "px-5 py-2 rounded-md text-sm font-semibold transition bg-white shadow-sm text-gray-900";
+                btnConexoes.className = "px-5 py-2 rounded-md text-sm font-semibold transition bg-white shadow-sm text-gray-900";
                 btnProdutos.className = "px-5 py-2 rounded-md text-sm font-semibold transition text-gray-500 hover:text-gray-900";
             } else {
-                configDiv.classList.add('hidden');
+                conexoesDiv.classList.add('hidden');
                 produtosDiv.classList.remove('hidden');
                 btnProdutos.className = "px-5 py-2 rounded-md text-sm font-semibold transition bg-white shadow-sm text-gray-900";
-                btnConfig.className = "px-5 py-2 rounded-md text-sm font-semibold transition text-gray-500 hover:text-gray-900";
+                btnConexoes.className = "px-5 py-2 rounded-md text-sm font-semibold transition text-gray-500 hover:text-gray-900";
             }
         }
 
-        // Carregar Configurações Iniciais
-        fetch('/api/config').then(r => r.json()).then(data => {
-            for(let key in data) {
-                if(document.getElementById(key)) document.getElementById(key).value = data[key];
-            }
-            if(data.temTokenBling) {
-                const badge = document.getElementById('badgeBling');
-                badge.className = 'px-3 py-1 rounded-full text-xs font-bold bg-green-100 text-green-700';
-                badge.innerText = 'Conectado ao Bling';
-            }
-        }).finally(carregarProdutosImportados);
+        function mostrarCamposERP() {
+            const tipo = document.getElementById('connType').value;
+            document.getElementById('camposBling').classList.toggle('hidden', tipo !== 'bling');
+            document.getElementById('camposCissPoder').classList.toggle('hidden', tipo !== 'cisspoder');
+        }
 
-        async function salvarConfigBling() {
-            const payload = {
-                BLING_CLIENT_ID: document.getElementById('BLING_CLIENT_ID').value,
-                BLING_CLIENT_SECRET: document.getElementById('BLING_CLIENT_SECRET').value,
-                BLING_REDIRECT_URI: document.getElementById('BLING_REDIRECT_URI').value
-            };
-            const res = await fetch('/api/config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+        async function salvarEAutenticarConexao() {
+            const name = document.getElementById('connName').value;
+            const type = document.getElementById('connType').value;
+
+            if (!name || !type) {
+                alert('Por favor, preencha o nome e o tipo da conexão.');
+                return;
+            }
+
+            let credentials = {};
+            if (type === 'bling') {
+                credentials = {
+                    client_id: document.getElementById('blingClientId').value,
+                    client_secret: document.getElementById('blingClientSecret').value,
+                    redirect_uri: document.getElementById('blingRedirectUri').value,
+                };
+            } else if (type === 'cisspoder') {
+                credentials = {
+                    api_url: document.getElementById('cissApiUrl').value,
+                    api_key: document.getElementById('cissApiKey').value,
+                };
+            }
+
+            const payload = { name, type, credentials };
+
+            // 1. Salva a conexão no banco de dados
+            const res = await fetch('/api/erp-connections', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
             const data = await res.json();
-            alert(data.mensagem);
+
+            if (!data.sucesso) {
+                alert('Erro ao salvar a conexão: ' + data.erro);
+                return;
+            }
+
+            alert('Conexão salva com sucesso!');
+            await carregarConexoes(); // Recarrega a lista de conexões
+
+            // 2. Se for Bling, redireciona para autenticação
+            if (type === 'bling') {
+                await autenticarConexao(data.connection.id);
+            }
         }
 
-        async function salvarConfigLoja() {
-            const payload = {
-                LOJA_API_URL: document.getElementById('LOJA_API_URL').value,
-                LOJA_API_KEY: document.getElementById('LOJA_API_KEY').value
-            };
-            const res = await fetch('/api/config', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
+        async function carregarConexoes() {
+            const res = await fetch('/api/erp-connections');
             const data = await res.json();
-            alert(data.mensagem);
+            if (data.sucesso) {
+                conexoesGlobais = data.connections || [];
+                renderizarConexoes();
+                popularDropdownConexoes();
+            }
         }
 
-        async function conectarBling() {
-            const res = await fetch('/api/auth/bling');
+        function renderizarConexoes() {
+            const lista = document.getElementById('listaConexoes');
+            if (conexoesGlobais.length === 0) {
+                lista.innerHTML = '<p class="text-gray-500">Nenhuma conexão encontrada.</p>';
+                return;
+            }
+            lista.innerHTML = conexoesGlobais.map(conn => `
+                <div class="flex justify-between items-center p-3 border rounded-lg bg-gray-50">
+                    <div>
+                        <p class="font-bold">${conn.name}</p>
+                        <span class="text-xs uppercase font-semibold px-2 py-0.5 rounded ${conn.type === 'bling' ? 'bg-orange-100 text-orange-700' : 'bg-purple-100 text-purple-700'}">${conn.type}</span>
+                    </div>
+                    <div class="flex gap-2">
+                        ${conn.type === 'bling' ? `<button onclick="autenticarConexao(${conn.id})" class="text-sm font-medium text-blue-600 hover:underline">Autenticar</button>` : ''}
+                        <button class="text-sm font-medium text-gray-500 hover:underline">Editar</button>
+                        <button class="text-sm font-medium text-red-600 hover:underline">Remover</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function popularDropdownConexoes() {
+            const dropdown = document.getElementById('conexaoBusca');
+            dropdown.innerHTML = '<option value="">Selecione uma conexão</option>';
+            conexoesGlobais.forEach(conn => {
+                const option = document.createElement('option');
+                option.value = conn.id;
+                option.textContent = `${conn.name} (${conn.type})`;
+                dropdown.appendChild(option);
+            });
+        }
+
+        async function autenticarConexao(connectionId) {
+            const res = await fetch(`/api/auth/${connectionId}/bling`);
             const data = await res.json();
             if(data.sucesso && data.url) {
                 window.location.href = data.url;
@@ -181,6 +270,12 @@
                 alert('Erro ao gerar URL de autorização.');
             }
         }
+
+        // Carregamento inicial
+        document.addEventListener('DOMContentLoaded', () => {
+            carregarConexoes();
+            carregarProdutosImportados();
+        });
 
         async function carregarProdutosImportados() {
             const res = await fetch('/api/produtos-importados');
@@ -209,8 +304,8 @@
         }
 
         async function buscarProdutos() {
-            const nome = document.getElementById('buscaNomeProdutoBling').value.trim();
-            const codigo = document.getElementById('buscaCodigoProdutoBling').value.trim();
+            const nome = document.getElementById('buscaNomeProduto').value.trim();
+            const codigo = document.getElementById('buscaCodigoProduto').value.trim();
 
             filtroAtual = null;
             if (codigo) {
@@ -228,8 +323,14 @@
         }
 
         async function carregarPagina(pagina) {
+            const connectionId = document.getElementById('conexaoBusca').value;
+            if (!connectionId) {
+                alert('Por favor, selecione uma conexão ERP para buscar os produtos.');
+                return;
+            }
+
             const tbody = document.getElementById('tabelaProdutos');
-            tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">Carregando produtos do Bling...</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">Carregando produtos do ERP...</td></tr>';
 
             const params = new URLSearchParams();
 
@@ -244,7 +345,7 @@
             params.set('pagina', String(pagina));
 
             const query = params.toString();
-            const res = await fetch(`/api/produtos-bling${query ? '?' + query : ''}`);
+            const res = await fetch(`/api/produtos/${connectionId}${query ? '?' + query : ''}`);
             const data = await res.json();
             
             if(!data.sucesso) {
@@ -271,7 +372,7 @@
             }
 
             if (produtosGlobais.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">Nenhum produto encontrado no Bling.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">Nenhum produto encontrado neste ERP.</td></tr>';
                 return;
             }
 
@@ -291,7 +392,7 @@
         function renderizarProdutos(lista) {
             const tbody = document.getElementById('tabelaProdutos');
             if(!lista || lista.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">Nenhum produto encontrado no Bling.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">Nenhum produto encontrado neste ERP.</td></tr>';
                 return;
             }
 
