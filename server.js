@@ -109,12 +109,14 @@ async function getBlingConnectionStatus(connection) {
                 console.log(`Token para a conexão ${connection.id} renovado com sucesso.`);
                 return 'connected';
             } catch (refreshError) {
-                console.error(`Falha ao renovar o token para a conexão ${connection.id}:`, refreshError.message);
+                const refreshErrorDetails = refreshError.response ? JSON.stringify(refreshError.response.data) : refreshError.message;
+                console.error(`Falha ao renovar o token para a conexão ${connection.id}:`, refreshErrorDetails);
                 return 'disconnected';
             }
         }
         // Para outros erros, consideramos a conexão com problemas
-        console.error(`Erro ao verificar status da conexão ${connection.id}:`, error.message);
+        const errorDetails = error.response ? JSON.stringify(error.response.data) : error.message;
+        console.error(`Erro ao verificar status da conexão ${connection.id}:`, errorDetails);
         return 'error';
     }
 }
