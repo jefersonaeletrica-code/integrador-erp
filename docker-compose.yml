@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  integrador-erp:
+    build: .
+    container_name: integrador-erp
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      DATA_DIR: /app/data
+      NODE_ENV: production
+    volumes:
+      - db-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  db-data:
+    driver: local
