@@ -91,7 +91,7 @@ const fetchProductPage = async (page, searchParams = {}) => {
 
 const normalizeNameForBling = (name) => {
     const words = (name || '').trim().split(/\s+/);
-    return words.length > 1 ? words.join('%20') : words.join('');
+    return words.join(' ');
 };
 
 const fetchProductsByName = async (name, pagina = 1) => {
@@ -164,8 +164,19 @@ app.get('/api/produtos-bling', async (req, res) => {
         const page = Number.isNaN(requestedPage) || requestedPage < 1 ? 1 : requestedPage;
 
         const searchType = typeof req.query.tipo === 'string' ? req.query.tipo.trim() : '';
-        const nomeDigitado = searchType.startsWith('NOME=') ? searchType.replace(/^NOME=/i, '').trim() : '';
-        const codigoDigitado = searchType.startsWith('T&codigo=') ? searchType.replace(/^T&codigo=/i, '').trim() : '';
+        const searchTypeNormalized = searchType.toUpperCase();
+
+        let nomeDigitado = '';
+        let codigoDigitado = '';
+
+        if (searchTypeNormalized.startsWith('NOME=')) {
+            const nomeRaw = searchType.replace(/^NOME=/i, '').trim();
+            nomeDigitado = normalizeNameForBling(nomeRaw);
+        }
+
+        if (searchTypeNormalized.startsWith('T&CODIGO=')) {
+            codigoDigitado = searchType.replace(/^T&codigo=/i, '').trim();
+        }
 
         if (nomeDigitado) {
             const produtos = await fetchProductsByName(nomeDigitado, page);
