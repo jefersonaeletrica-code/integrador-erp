@@ -74,17 +74,29 @@ async function refreshAccessToken() {
 }
 
 const fetchProductPage = async (page, searchParams = {}) => {
-    const params = new URLSearchParams();
+    const criterio = searchParams.criterio || '';
+    const tipo = typeof searchParams.tipo === 'string' ? searchParams.tipo.trim() : '';
 
-    if (searchParams.criterio && searchParams.tipo) {
-        params.set('criterio', String(searchParams.criterio));
-        params.set('tipo', String(searchParams.tipo));
+    let url;
+
+    if (tipo.toUpperCase().startsWith('T&CODIGO=')) {
+        const codigo = tipo.replace(/^T&codigo=/i, '').trim();
+        const rawQuery = `criterio=${encodeURIComponent(criterio)}&tipo=T&codigo=${encodeURIComponent(codigo)}&pagina=${encodeURIComponent(page)}&limite=100`;
+        url = `https://api.bling.com.br/Api/v3/produtos?${rawQuery}`;
+    } else if (tipo.toUpperCase().startsWith('NOME=')) {
+        const nome = tipo.replace(/^NOME=/i, '').trim();
+        const rawQuery = `criterio=${encodeURIComponent(criterio)}&tipo=${encodeURIComponent(tipo)}&pagina=${encodeURIComponent(page)}&limite=100`;
+        url = `https://api.bling.com.br/Api/v3/produtos?${rawQuery}`;
+    } else {
+        const params = new URLSearchParams();
+        if (criterio) params.set('criterio', String(criterio));
+        if (tipo) params.set('tipo', String(tipo));
+        params.set('pagina', String(page));
+        params.set('limite', '100');
+
+        url = `https://api.bling.com.br/Api/v3/produtos?${params.toString()}`;
     }
 
-    params.set('pagina', String(page));
-    params.set('limite', '100');
-
-    const url = `https://api.bling.com.br/Api/v3/produtos?${params.toString()}`;
     const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${tokens.access_token}` } });
     return response.data?.data || [];
 };
