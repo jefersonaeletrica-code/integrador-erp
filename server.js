@@ -182,36 +182,23 @@ app.get('/api/produtos-bling', async (req, res) => {
         const requestedPage = parseInt(req.query.pagina || req.query.page || '1', 10);
         const page = Number.isNaN(requestedPage) || requestedPage < 1 ? 1 : requestedPage;
 
-        const nomeDigitado = typeof req.query.nome === 'string' ? req.query.nome.trim() : '';
-        const codigoDigitado = typeof req.query.codigo === 'string' ? req.query.codigo.trim() : '';
+        const { nome, codigo, tipo } = req.query;
+        let produtos;
 
-        if (nomeDigitado) {
-            const produtos = await fetchProductsByName(nomeDigitado, page);
-            return res.json({ sucesso: true, produtos, pagina: page });
+        if (typeof nome === 'string' && nome.trim()) {
+            produtos = await fetchProductsByName(nome.trim(), page);
+        } else if (typeof codigo === 'string' && codigo.trim()) {
+            produtos = await fetchProductsByCode(codigo.trim(), page);
+        } else if (typeof tipo === 'string' && tipo.trim().toUpperCase().startsWith('NOME=')) {
+            const nomeValido = normalizeNameForBling(tipo.replace(/^NOME=/i, '').trim());
+            produtos = await fetchProductsByName(nomeValido, page);
+        } else if (typeof tipo === 'string' && tipo.trim().toUpperCase().startsWith('T&CODIGO=')) {
+            const codigoValido = tipo.replace(/^T&CODIGO=/i, '').trim();
+            produtos = await fetchProductsByCode(codigoValido, page);
+        } else {
+            produtos = await fetchAllProductsPaginated(page);
         }
 
-        if (codigoDigitado) {
-            const produtos = await fetchProductsByCode(codigoDigitado, page);
-            return res.json({ sucesso: true, produtos, pagina: page });
-        }
-
-        const searchType = typeof req.query.tipo === 'string' ? req.query.tipo.trim() : '';
-        const searchTypeNormalized = (searchType || '').toUpperCase();
-
-        if (searchTypeNormalized.startsWith('NOME=')) {
-            const nomeRaw = searchType.replace(/^NOME=/i, '').trim();
-            const nomeValido = normalizeNameForBling(nomeRaw);
-            const produtos = await fetchProductsByName(nomeValido, page);
-            return res.json({ sucesso: true, produtos, pagina: page });
-        }
-
-        if (searchTypeNormalized.startsWith('T&CODIGO=')) {
-            const codigoValido = searchType.replace(/^T&CODIGO=/i, '').trim();
-            const produtos = await fetchProductsByCode(codigoValido, page);
-            return res.json({ sucesso: true, produtos, pagina: page });
-        }
-
-        const produtos = await fetchAllProductsPaginated(page);
         res.json({ sucesso: true, produtos, pagina: page });
     } catch (e) { res.status(500).json({ sucesso: false, erro: e.message }); }
 });
