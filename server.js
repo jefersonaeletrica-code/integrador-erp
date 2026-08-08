@@ -221,6 +221,11 @@ app.post('/api/produtos-importados', (req, res) => {
 const startServer = async () => {
     try {
         db = require('./db'); // Carrega o driver de DB
+
+        if (typeof db.initialize === 'function') {
+            await db.initialize();
+        }
+
         const currentDb = await db.readDb(); // readDb pode ser assíncrono
 
         config = { ...envConfig, ...db.DEFAULT_DB.config, ...currentDb.config };

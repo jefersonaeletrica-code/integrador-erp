@@ -7,6 +7,9 @@ let db;
 if (DB_DRIVER === 'json') {
   console.log('Usando driver de banco de dados: JSON');
   db = require('./db.json');
+} else if (DB_DRIVER === 'mysql') {
+  console.log('Usando driver de banco de dados: MySQL');
+  db = require('./db.mysql');
 } else if (DB_DRIVER === 'mongodb') {
   console.log('Usando driver de banco de dados: MongoDB');
   db = require('./db.mongodb'); 
