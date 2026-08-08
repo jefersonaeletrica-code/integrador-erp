@@ -68,12 +68,10 @@
                         <input type="text" id="buscaCodigoProdutoBling" placeholder="Ex.: 000123" class="w-full p-2.5 border rounded-lg text-sm" />
                     </div>
                     <div class="flex gap-2">
-                        <button onclick="buscarPorNome()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">Buscar Nome</button>
-                        <button onclick="buscarPorCodigo()" class="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">Buscar Código</button>
+                        <button onclick="buscarProdutos()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">Buscar Produtos</button>
                     </div>
                 </div>
                 <div class="flex justify-end gap-3 mb-4">
-                    <button onclick="carregarProdutos()" class="bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-800">Carregar Todos</button>
                     <button onclick="enviarSelecionados()" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700">Enviar Selecionados</button>
                 </div>
                 <div class="overflow-x-auto">
@@ -210,30 +208,23 @@
             `).join('');
         }
 
+        async function buscarProdutos() {
+            const nome = document.getElementById('buscaNomeProdutoBling').value.trim();
+            const codigo = document.getElementById('buscaCodigoProdutoBling').value.trim();
+
+            if (codigo) {
+                filtroAtual = { tipo: 'codigo', termo: codigo };
+            } else if (nome) {
+                filtroAtual = { tipo: 'nome', termo: nome };
+            } else {
+                filtroAtual = null;
+            }
+
+            await carregarPagina(1);
+        }
+
         async function carregarProdutos() {
             filtroAtual = null;
-            await carregarPagina(1);
-        }
-
-        async function buscarPorNome() {
-            const termo = document.getElementById('buscaNomeProdutoBling').value.trim();
-            if (!termo) {
-                filtroAtual = null;
-                return carregarProdutos();
-            }
-
-            filtroAtual = { tipo: 'nome', termo };
-            await carregarPagina(1);
-        }
-
-        async function buscarPorCodigo() {
-            const termo = document.getElementById('buscaCodigoProdutoBling').value.trim();
-            if (!termo) {
-                filtroAtual = null;
-                return carregarProdutos();
-            }
-
-            filtroAtual = { tipo: 'codigo', termo };
             await carregarPagina(1);
         }
 
