@@ -220,6 +220,14 @@ app.post('/api/produtos-importados', (req, res) => {
 
 const startServer = async () => {
     try {
+        console.log('Verificando variáveis de ambiente para conexão com DB...');
+        console.log(`DB_DRIVER: ${process.env.DB_DRIVER}`);
+        console.log(`MYSQL_HOST: ${process.env.MYSQL_HOST}`);
+        console.log(`MYSQL_USER: ${process.env.MYSQL_USER}`);
+        console.log(`MYSQL_DATABASE: ${process.env.MYSQL_DATABASE}`);
+        console.log(`MYSQL_PASSWORD: ${process.env.MYSQL_PASSWORD ? '****** (definida)' : '(não definida)'}`);
+        console.log('----------------------------------------------------');
+
         db = require('./db'); // Carrega o driver de DB
         
         // A primeira chamada a uma função do DB (como readDb) vai disparar e aguardar a inicialização.
