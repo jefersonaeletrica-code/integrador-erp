@@ -79,8 +79,8 @@ const buildProductUrl = (page, searchParams = {}) => {
 
     if (tipo.toUpperCase().startsWith('NOME=')) {
         const rawName = tipo.replace(/^NOME=/i, '').trim();
-        const nome = rawName ? encodeURIComponent(rawName) : '';
-        const rawQuery = `criterio=${encodeURIComponent(criterio)}&tipo=NOME=${nome}&pagina=${encodeURIComponent(page)}&limite=100`;
+        // O Bling V3 para NOME com critério=5 usa o termo sem encodeURIComponent extra no `=` ou com formato limpo
+        const rawQuery = `criterio=${encodeURIComponent(criterio)}&tipo=NOME=${encodeURIComponent(rawName)}&pagina=${encodeURIComponent(page)}&limite=100`;
         return `https://api.bling.com.br/Api/v3/produtos?${rawQuery}`;
     }
 
