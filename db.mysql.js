@@ -21,20 +21,32 @@ let initializationPromise = null;
 
 const getPool = () => {
   if (!pool) {
-    const { MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE } = process.env;
-    if (!MYSQL_HOST || !MYSQL_USER || !MYSQL_PASSWORD || !MYSQL_DATABASE) {
-      throw new Error('As variáveis de ambiente do MySQL (MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE) não estão configuradas.');
+    // Suporte para ambos os padrões de variáveis de ambiente (MYSQL_ e DB_)
+    const HOST = process.env.MYSQL_HOST || process.env.DB_HOST;
+    const USER = process.env.MYSQL_USER || process.env.DB_USER;
+    const PASSWORD = process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD;
+    const DATABASE = process.env.MYSQL_DATABASE || process.env.DB_NAME;
+    const PORT = process.env.MYSQL_PORT || process.env.DB_PORT;
+    const SOCKET_PATH = process.env.MYSQL_SOCKET_PATH;
+
+    if (!HOST || !USER || !PASSWORD || !DATABASE) {
+      throw new Error('As variáveis de ambiente para conexão com o banco de dados (DB_HOST, DB_USER, DB_PASSWORD, DB_NAME) não estão configuradas.');
     }
     try {
-      pool = mysql.createPool({
-        host: MYSQL_HOST,
-        user: MYSQL_USER,
-        password: MYSQL_PASSWORD,
-        database: MYSQL_DATABASE,
+      const connectionConfig = {
+        host: HOST,
+        user: USER,
+        password: PASSWORD,
+        database: DATABASE,
+        port: PORT ? parseInt(PORT, 10) : 3306, // Usa a porta definida ou a padrão 3306
         waitForConnections: true,
         connectionLimit: 10,
         queueLimit: 0
-      });
+      };
+      if (SOCKET_PATH) {
+        connectionConfig.socketPath = SOCKET_PATH;
+      }
+      pool = mysql.createPool(connectionConfig);
       console.log('Pool de conexões MySQL criado com sucesso!');
     } catch (error) {
       console.error('Falha ao criar o pool de conexões MySQL. Verifique as variáveis de ambiente.', error);
