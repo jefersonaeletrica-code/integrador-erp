@@ -25,16 +25,21 @@ const getPool = () => {
     if (!MYSQL_HOST || !MYSQL_USER || !MYSQL_PASSWORD || !MYSQL_DATABASE) {
       throw new Error('As variáveis de ambiente do MySQL (MYSQL_HOST, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE) não estão configuradas.');
     }
-    pool = mysql.createPool({
-      host: MYSQL_HOST,
-      user: MYSQL_USER,
-      password: MYSQL_PASSWORD,
-      database: MYSQL_DATABASE,
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0
-    });
-    console.log('Pool de conexões MySQL criado com sucesso!');
+    try {
+      pool = mysql.createPool({
+        host: MYSQL_HOST,
+        user: MYSQL_USER,
+        password: MYSQL_PASSWORD,
+        database: MYSQL_DATABASE,
+        waitForConnections: true,
+        connectionLimit: 10,
+        queueLimit: 0
+      });
+      console.log('Pool de conexões MySQL criado com sucesso!');
+    } catch (error) {
+      console.error('Falha ao criar o pool de conexões MySQL. Verifique as variáveis de ambiente.', error);
+      throw error; // Lança o erro para parar a inicialização do app
+    }
   }
   return pool;
 };
