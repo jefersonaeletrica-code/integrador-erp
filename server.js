@@ -84,8 +84,9 @@ const fetchProductPage = async (page, searchParams = {}) => {
         const rawQuery = `criterio=${encodeURIComponent(criterio)}&tipo=T&codigo=${encodeURIComponent(codigo)}&pagina=${encodeURIComponent(page)}&limite=100`;
         url = `https://api.bling.com.br/Api/v3/produtos?${rawQuery}`;
     } else if (tipo.toUpperCase().startsWith('NOME=')) {
-        const nome = tipo.replace(/^NOME=/i, '').trim();
-        const rawQuery = `criterio=${encodeURIComponent(criterio)}&tipo=${encodeURIComponent(tipo)}&pagina=${encodeURIComponent(page)}&limite=100`;
+        const rawName = tipo.replace(/^NOME=/i, '').trim();
+        const nome = rawName ? encodeURIComponent(rawName) : '';
+        const rawQuery = `criterio=${encodeURIComponent(criterio)}&tipo=NOME=${nome}&pagina=${encodeURIComponent(page)}&limite=100`;
         url = `https://api.bling.com.br/Api/v3/produtos?${rawQuery}`;
     } else {
         const params = new URLSearchParams();
