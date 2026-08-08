@@ -3,3 +3,4 @@ config.json
 tokens.json
 produtos.json
 .env
+data/

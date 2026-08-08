@@ -2,28 +2,13 @@ require('dotenv').config();
 
 const express = require('express');
 const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
+const db = require('./db');
 
 const app = express();
 app.use(express.json());
 app.use(express.static('public'));
 
 const PORT = process.env.PORT || 3000;
-const CONFIG_FILE = path.join(__dirname, 'config.json');
-const TOKEN_FILE = path.join(__dirname, 'tokens.json');
-const PRODUCTS_FILE = path.join(__dirname, 'produtos.json');
-
-const DEFAULT_CONFIG = {
-    BLING_CLIENT_ID: '',
-    BLING_CLIENT_SECRET: '',
-    BLING_REDIRECT_URI: '',
-    LOJA_API_URL: '',
-    LOJA_API_KEY: ''
-};
-
-const DEFAULT_TOKENS = { access_token: '', refresh_token: '' };
-const DEFAULT_PRODUCTS = [];
 
 const envConfig = {
     BLING_CLIENT_ID: process.env.BLING_CLIENT_ID || '',
@@ -33,22 +18,10 @@ const envConfig = {
     LOJA_API_KEY: process.env.LOJA_API_KEY || ''
 };
 
-const ensureFileExists = (filePath, defaultValue) => {
-    if (!fs.existsSync(filePath)) {
-        fs.writeFileSync(filePath, JSON.stringify(defaultValue, null, 2), 'utf8');
-    }
-};
-
-ensureFileExists(CONFIG_FILE, DEFAULT_CONFIG);
-ensureFileExists(TOKEN_FILE, DEFAULT_TOKENS);
-ensureFileExists(PRODUCTS_FILE, DEFAULT_PRODUCTS);
-
-const fileConfig = fs.existsSync(CONFIG_FILE) ? JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) : {};
-let config = { ...envConfig, ...DEFAULT_CONFIG, ...fileConfig };
-
-// Carrega tokens e produtos importados
-let tokens = fs.existsSync(TOKEN_FILE) ? JSON.parse(fs.readFileSync(TOKEN_FILE, 'utf8')) : DEFAULT_TOKENS;
-let produtosImportados = fs.existsSync(PRODUCTS_FILE) ? JSON.parse(fs.readFileSync(PRODUCTS_FILE, 'utf8')) : DEFAULT_PRODUCTS;
+const currentDb = db.readDb();
+let config = { ...envConfig, ...db.DEFAULT_DB.config, ...currentDb.config };
+let tokens = { ...db.DEFAULT_DB.tokens, ...currentDb.tokens };
+let produtosImportados = Array.isArray(currentDb.produtos) ? currentDb.produtos : [];
 
 const saveConfig = (newConfig) => { 
     const mergedConfig = { ...config, ...newConfig };
@@ -63,17 +36,17 @@ const saveConfig = (newConfig) => {
     });
 
     config = mergedConfig;
-    fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2)); 
+    db.updateDb({ config });
 };
 
 const saveTokens = (data) => { 
     tokens = { access_token: data.access_token, refresh_token: data.refresh_token }; 
-    fs.writeFileSync(TOKEN_FILE, JSON.stringify(tokens)); 
+    db.updateDb({ tokens });
 };
 
 const saveProdutosImportados = (items) => {
     produtosImportados = items;
-    fs.writeFileSync(PRODUCTS_FILE, JSON.stringify(produtosImportados, null, 2));
+    db.updateDb({ produtos: produtosImportados });
 };
 
 async function refreshAccessToken() {
