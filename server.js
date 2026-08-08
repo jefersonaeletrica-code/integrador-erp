@@ -89,18 +89,55 @@ const fetchAllProductsPaginated = async (connection, pagina = 1) => {
     return fetchProductPage(connection, pagina);
 };
 
+async function getBlingConnectionStatus(connection) {
+    if (!connection.credentials || !connection.credentials.access_token) {
+        return 'requires_auth';
+    }
+
+    try {
+        // Tenta uma chamada leve na API para validar o token
+        await axios.get('https://www.bling.com.br/Api/v3/usuarios', {
+            headers: { 'Authorization': `Bearer ${connection.credentials.access_token}` }
+        });
+        return 'connected';
+    } catch (error) {
+        // Se o token estiver expirado (401), tenta renová-lo
+        if (error.response && error.response.status === 401) {
+            console.log(`Token para a conexão ${connection.id} expirou. Tentando renovar...`);
+            try {
+                await refreshAccessToken(connection);
+                console.log(`Token para a conexão ${connection.id} renovado com sucesso.`);
+                return 'connected';
+            } catch (refreshError) {
+                console.error(`Falha ao renovar o token para a conexão ${connection.id}:`, refreshError.message);
+                return 'disconnected';
+            }
+        }
+        // Para outros erros, consideramos a conexão com problemas
+        console.error(`Erro ao verificar status da conexão ${connection.id}:`, error.message);
+        return 'error';
+    }
+}
+
 // --- NOVAS ROTAS DE GERENCIAMENTO DE CONEXÕES ---
 
-app.get('/api/erp-connections', (req, res) => {
-    // Retorna as conexões, mas oculta segredos
-    const safeConnections = erpConnections.map(conn => {
+app.get('/api/erp-connections', async (req, res) => {
+    const connectionsWithStatus = await Promise.all(erpConnections.map(async (conn) => {
+        let status = 'not_applicable'; // Padrão para tipos não-Bling
+        if (conn.type === 'bling') {
+            status = await getBlingConnectionStatus(conn);
+        }
+
+        // Oculta segredos para a resposta da API
         const safeCreds = { ...conn.credentials };
         if (safeCreds.client_secret) safeCreds.client_secret = '******';
         if (safeCreds.access_token) safeCreds.access_token = safeCreds.access_token.substring(0, 8) + '...';
         if (safeCreds.refresh_token) safeCreds.refresh_token = '******';
-        return { ...conn, credentials: safeCreds };
-    });
-    res.json({ sucesso: true, connections: safeConnections });
+        
+        return { ...conn, credentials: safeCreds, status };
+    }));
+
+    res.json({ sucesso: true, connections: connectionsWithStatus });
 });
 
 app.post('/api/erp-connections', async (req, res) => {
