@@ -2,9 +2,9 @@ require('dotenv').config();
 
 const express = require('express');
 const axios = require('axios');
-const db = require('./db');
 
 const app = express();
+let db; // Será inicializado depois
 app.use(express.json());
 app.use(express.static('public'));
 
@@ -18,12 +18,12 @@ const envConfig = {
     LOJA_API_KEY: process.env.LOJA_API_KEY || ''
 };
 
-const currentDb = db.readDb();
-let config = { ...envConfig, ...db.DEFAULT_DB.config, ...currentDb.config };
-let tokens = { ...db.DEFAULT_DB.tokens, ...currentDb.tokens };
-let produtosImportados = Array.isArray(currentDb.produtos) ? currentDb.produtos : [];
+let config;
+let tokens;
+let produtosImportados;
 
 const saveConfig = (newConfig = {}) => {
+    if (!db) return; // Garante que o DB está inicializado
     const incoming = newConfig && typeof newConfig === 'object' ? newConfig : {};
     const mergedConfig = { ...config, ...incoming };
 
@@ -47,6 +47,7 @@ const saveConfig = (newConfig = {}) => {
 };
 
 const saveTokens = (data = {}) => {
+    if (!db) return;
     const payload = data && typeof data === 'object' ? data : {};
     const nextTokens = {
         access_token: payload.access_token || tokens.access_token || '',
@@ -59,6 +60,7 @@ const saveTokens = (data = {}) => {
 };
 
 const saveProdutosImportados = (items) => {
+    if (!db) return;
     produtosImportados = items;
     db.updateDb({ produtos: produtosImportados });
 };
@@ -213,4 +215,20 @@ app.post('/api/produtos-importados', (req, res) => {
     res.json({ sucesso: true, mensagem: 'Produtos importados salvos com sucesso!' });
 });
 
-app.listen(PORT, '0.0.0.0', () => console.log(`Servidor rodando na porta ${PORT}`));
+const startServer = async () => {
+    try {
+        db = require('./db'); // Carrega o driver de DB
+        const currentDb = await db.readDb(); // readDb pode ser assíncrono
+
+        config = { ...envConfig, ...db.DEFAULT_DB.config, ...currentDb.config };
+        tokens = { ...db.DEFAULT_DB.tokens, ...currentDb.tokens };
+        produtosImportados = Array.isArray(currentDb.produtos) ? currentDb.produtos : [];
+
+        app.listen(PORT, '0.0.0.0', () => console.log(`Servidor rodando na porta ${PORT}`));
+    } catch (error) {
+        console.error("Falha ao inicializar o servidor:", error);
+        process.exit(1);
+    }
+};
+
+startServer();
