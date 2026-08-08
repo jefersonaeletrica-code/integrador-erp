@@ -98,11 +98,10 @@ const readDb = async () => {
     const [produtos] = await connection.query('SELECT * FROM produtos_importados');
 
     return {
-      connections: connections.map(c => ({...c, credentials: JSON.parse(c.credentials)})),
+      connections: connections.map(c => ({...c, credentials: typeof c.credentials === 'string' ? JSON.parse(c.credentials) : c.credentials })),
       produtos: produtos.map(p => ({ ...p, preco: parseFloat(p.preco) })) // Garante que o preço seja número
     };
   } catch (error) {
-    await connection.rollback();
     console.error('Erro ao ler do banco de dados MySQL:', error);
     throw error;
   } finally {
