@@ -77,6 +77,12 @@ const initializeDatabase = async () => {
           UNIQUE KEY codigo (codigo)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+    // Garante que os registros de configuração e tokens existam
+    await connection.query("INSERT INTO app_config (id) VALUES (1) ON DUPLICATE KEY UPDATE id=1;");
+    await connection.query("INSERT INTO app_tokens (id) VALUES (1) ON DUPLICATE KEY UPDATE id=1;");
+
+
     initialized = true;
     console.log('Banco de dados MySQL pronto.');
   } finally {
@@ -93,18 +99,10 @@ const readDb = async () => {
     // Lê a configuração
     let [configRows] = await connection.query('SELECT * FROM app_config WHERE id = 1');
     let config = configRows[0];
-    if (!config) {
-      await connection.query('INSERT INTO app_config (id) VALUES (1)');
-      config = { ...DEFAULT_DB.config };
-    }
 
     // Lê os tokens
     let [tokenRows] = await connection.query('SELECT * FROM app_tokens WHERE id = 1');
     let tokens = tokenRows[0];
-    if (!tokens) {
-      await connection.query('INSERT INTO app_tokens (id) VALUES (1)');
-      tokens = { ...DEFAULT_DB.tokens };
-    }
 
     // Lê os produtos
     const [produtos] = await connection.query('SELECT * FROM produtos_importados');
