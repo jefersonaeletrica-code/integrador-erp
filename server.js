@@ -23,30 +23,39 @@ let config = { ...envConfig, ...db.DEFAULT_DB.config, ...currentDb.config };
 let tokens = { ...db.DEFAULT_DB.tokens, ...currentDb.tokens };
 let produtosImportados = Array.isArray(currentDb.produtos) ? currentDb.produtos : [];
 
-const saveConfig = (newConfig) => { 
-    const mergedConfig = { ...config, ...newConfig };
+const saveConfig = (newConfig = {}) => {
+    const incoming = newConfig && typeof newConfig === 'object' ? newConfig : {};
+    const mergedConfig = { ...config, ...incoming };
 
-    if (newConfig.BLING_CLIENT_SECRET === '******' || !newConfig.BLING_CLIENT_SECRET) mergedConfig.BLING_CLIENT_SECRET = config.BLING_CLIENT_SECRET;
-    if (newConfig.LOJA_API_KEY === '******' || !newConfig.LOJA_API_KEY) mergedConfig.LOJA_API_KEY = config.LOJA_API_KEY;
+    if (incoming.BLING_CLIENT_SECRET === '******' || !incoming.BLING_CLIENT_SECRET) {
+        mergedConfig.BLING_CLIENT_SECRET = config.BLING_CLIENT_SECRET || '';
+    }
 
-    Object.keys(config).forEach(key => {
+    if (incoming.LOJA_API_KEY === '******' || !incoming.LOJA_API_KEY) {
+        mergedConfig.LOJA_API_KEY = config.LOJA_API_KEY || '';
+    }
+
+    Object.keys(db.DEFAULT_DB.config).forEach(key => {
         if (mergedConfig[key] === '' || mergedConfig[key] === undefined || mergedConfig[key] === null) {
-            mergedConfig[key] = config[key];
+            mergedConfig[key] = config[key] || '';
         }
     });
 
-    config = mergedConfig;
+    config = { ...db.DEFAULT_DB.config, ...mergedConfig };
     db.updateDb({ config });
+    return config;
 };
 
-const saveTokens = (data) => { 
+const saveTokens = (data = {}) => {
+    const payload = data && typeof data === 'object' ? data : {};
     const nextTokens = {
-        access_token: data.access_token || tokens.access_token,
-        refresh_token: data.refresh_token || tokens.refresh_token
+        access_token: payload.access_token || tokens.access_token || '',
+        refresh_token: payload.refresh_token || tokens.refresh_token || ''
     };
 
     tokens = nextTokens;
     db.updateDb({ tokens });
+    return tokens;
 };
 
 const saveProdutosImportados = (items) => {
