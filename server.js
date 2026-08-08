@@ -77,8 +77,8 @@ const fetchProductPage = async (page, searchParams = {}) => {
     const params = new URLSearchParams();
 
     if (searchParams.criterio && searchParams.tipo) {
-        params.set('criterio', searchParams.criterio);
-        params.set('tipo', searchParams.tipo);
+        params.set('criterio', String(searchParams.criterio));
+        params.set('tipo', String(searchParams.tipo));
     }
 
     params.set('pagina', String(page));
@@ -91,7 +91,8 @@ const fetchProductPage = async (page, searchParams = {}) => {
 
 const normalizeNameForBling = (name) => {
     const words = (name || '').trim().split(/\s+/);
-    return words.join(' ');
+    const cleanName = words.join(' ');
+    return cleanName;
 };
 
 const fetchProductsByName = async (name, pagina = 1) => {
@@ -164,26 +165,17 @@ app.get('/api/produtos-bling', async (req, res) => {
         const page = Number.isNaN(requestedPage) || requestedPage < 1 ? 1 : requestedPage;
 
         const searchType = typeof req.query.tipo === 'string' ? req.query.tipo.trim() : '';
-        const searchTypeNormalized = searchType.toUpperCase();
-
-        let nomeDigitado = '';
-        let codigoDigitado = '';
+        const searchTypeNormalized = (searchType || '').toUpperCase();
 
         if (searchTypeNormalized.startsWith('NOME=')) {
             const nomeRaw = searchType.replace(/^NOME=/i, '').trim();
-            nomeDigitado = normalizeNameForBling(nomeRaw);
-        }
-
-        if (searchTypeNormalized.startsWith('T&CODIGO=')) {
-            codigoDigitado = searchType.replace(/^T&codigo=/i, '').trim();
-        }
-
-        if (nomeDigitado) {
+            const nomeDigitado = normalizeNameForBling(nomeRaw);
             const produtos = await fetchProductsByName(nomeDigitado, page);
             return res.json({ sucesso: true, produtos, pagina: page });
         }
 
-        if (codigoDigitado) {
+        if (searchTypeNormalized.startsWith('T&CODIGO=')) {
+            const codigoDigitado = searchType.replace(/^T&CODIGO=/i, '').trim();
             const produtos = await fetchProductsByCode(codigoDigitado, page);
             return res.json({ sucesso: true, produtos, pagina: page });
         }
