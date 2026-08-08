@@ -40,7 +40,12 @@ const saveConfig = (newConfig) => {
 };
 
 const saveTokens = (data) => { 
-    tokens = { access_token: data.access_token, refresh_token: data.refresh_token }; 
+    const nextTokens = {
+        access_token: data.access_token || tokens.access_token,
+        refresh_token: data.refresh_token || tokens.refresh_token
+    };
+
+    tokens = nextTokens;
     db.updateDb({ tokens });
 };
 
