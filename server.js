@@ -194,7 +194,7 @@ app.get('/api/produtos-bling', async (req, res) => {
         }
 
         const produtos = responseData?.data || [];
-        const total = responseData?.total; // Captura o total da resposta da API
+        const total = responseData?.total || responseData?.meta?.total; // Captura o total da resposta da API, considerando diferentes estruturas
 
         res.json({ sucesso: true, produtos, pagina: page, total });
     } catch (e) { res.status(500).json({ sucesso: false, erro: e.message }); }
