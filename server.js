@@ -221,11 +221,15 @@ app.post('/api/produtos-importados', (req, res) => {
 const startServer = async () => {
     try {
         console.log('Verificando variáveis de ambiente para conexão com DB...');
-        console.log(`DB_DRIVER: ${process.env.DB_DRIVER}`);
-        console.log(`MYSQL_HOST: ${process.env.MYSQL_HOST}`);
-        console.log(`MYSQL_USER: ${process.env.MYSQL_USER}`);
-        console.log(`MYSQL_DATABASE: ${process.env.MYSQL_DATABASE}`);
-        console.log(`MYSQL_PASSWORD: ${process.env.MYSQL_PASSWORD ? '****** (definida)' : '(não definida)'}`);
+        const dbVars = {
+            DRIVER: process.env.DB_DRIVER,
+            HOST: process.env.MYSQL_HOST || process.env.DB_HOST,
+            USER: process.env.MYSQL_USER || process.env.DB_USER,
+            DATABASE: process.env.MYSQL_DATABASE || process.env.DB_NAME,
+            PORT: process.env.MYSQL_PORT || process.env.DB_PORT,
+            PASSWORD: (process.env.MYSQL_PASSWORD || process.env.DB_PASSWORD) ? '****** (definida)' : '(não definida)'
+        };
+        console.log('Variáveis de DB utilizadas:', dbVars);
         console.log('----------------------------------------------------');
 
         db = require('./db'); // Carrega o driver de DB
