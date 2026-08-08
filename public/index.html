@@ -61,11 +61,11 @@
                 <div class="grid grid-cols-1 md:grid-cols-5 gap-3 mb-4 items-end">
                     <div class="md:col-span-2">
                         <label class="block text-xs font-semibold text-gray-600 mb-1">Buscar por nome</label>
-                        <input type="text" id="buscaNomeProdutoBling" placeholder="Ex.: cabo flex" class="w-full p-2.5 border rounded-lg text-sm" />
+                        <input type="text" id="buscaNomeProdutoBling" placeholder="Ex.: cabo flex" class="w-full p-2.5 border rounded-lg text-sm" onkeydown="if(event.key === 'Enter') buscarProdutos()" />
                     </div>
                     <div class="md:col-span-2">
                         <label class="block text-xs font-semibold text-gray-600 mb-1">Buscar por código</label>
-                        <input type="text" id="buscaCodigoProdutoBling" placeholder="Ex.: 000123" class="w-full p-2.5 border rounded-lg text-sm" />
+                        <input type="text" id="buscaCodigoProdutoBling" placeholder="Ex.: 000123" class="w-full p-2.5 border rounded-lg text-sm" onkeydown="if(event.key === 'Enter') buscarProdutos()" />
                     </div>
                     <div class="flex gap-2">
                         <button onclick="buscarProdutos()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">Buscar Produtos</button>
