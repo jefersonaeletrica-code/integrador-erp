@@ -103,7 +103,7 @@ async function getBlingConnectionStatus(connection) {
     } catch (error) {
         // Se o token estiver expirado (401), tenta renová-lo
         if (error.response && error.response.status === 401) {
-            console.log(`Token para a conexão ${connection.id} expirou. Tentando renovar...`);
+            console.log(`Token para a conexão ${connection.id} expirou. Verificando se é possível renovar...`);
             try {
                 await refreshAccessToken(connection);
                 console.log(`Token para a conexão ${connection.id} renovado com sucesso.`);
