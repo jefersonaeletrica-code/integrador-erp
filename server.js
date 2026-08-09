@@ -71,7 +71,7 @@ const fetchProductsByName = async (connection, name, pagina = 1) => {
     const searchParams = {
         criterio: '5', // Critério para "Contém"
         tipo: 'T', // Tipo para "Termo"
-        nome: searchTerm
+        nome: `%${searchTerm}` // Adiciona o coringa para buscar em qualquer parte do nome
     };
     return fetchProductPage(connection, pagina, searchParams);
 };
