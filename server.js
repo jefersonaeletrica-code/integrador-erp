@@ -96,7 +96,8 @@ async function getBlingConnectionStatus(connection) {
 
     try {
         // Tenta uma chamada leve na API para validar o token
-        await axios.get('https://api.bling.com.br/Api/v3/situacoes/modulos', {
+        // Usando o endpoint /contatos com limite 1, que é uma chamada leve e confiável.
+        await axios.get('https://api.bling.com.br/Api/v3/contatos?limite=1', {
             headers: { 'Authorization': `Bearer ${connection.credentials.access_token}` }
         });
         return 'connected';
