@@ -57,8 +57,9 @@
                     </div>
                 </div>
 
-                <div class="pt-2">
+                <div class="pt-2 flex gap-2">
                     <button id="btnSalvarConexao" onclick="salvarConexao()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">Salvar Conexão</button>
+                    <button id="btnCancelarEdicao" onclick="resetarFormularioConexao()" class="hidden bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-300">Cancelar</button>
                 </div>
             </div>
 
@@ -268,6 +269,7 @@
             document.getElementById('cissApiUrl').value = '';
             document.getElementById('cissApiKey').value = '';
             document.getElementById('btnSalvarConexao').innerText = 'Salvar Conexão';
+            document.getElementById('btnCancelarEdicao').classList.add('hidden');
             mostrarCamposERP();
         }
 
@@ -351,6 +353,7 @@
 
             mostrarCamposERP();
             document.getElementById('btnSalvarConexao').innerText = 'Atualizar Conexão';
+            document.getElementById('btnCancelarEdicao').classList.remove('hidden');
             window.scrollTo({ top: 0, behavior: 'smooth' });
         }
 
