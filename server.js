@@ -13,6 +13,10 @@ const PORT = process.env.PORT || 3000;
 let erpConnections = [];
 let produtosImportados;
 
+// Constantes para CissPoder baseadas na documentação
+const CISSPODER_CLIENT_ID = 'cisspoder-oauth';
+const CISSPODER_CLIENT_SECRET = 'poder7547';
+
 const saveProdutosImportados = (items) => {
     if (!db) return;
     produtosImportados = items;
@@ -36,7 +40,7 @@ async function refreshAccessToken(connection) {
     await db.updateDb({ connection: { id: connection.id, credentials: connection.credentials } });
 }
 
-const buildProductUrl = (page, searchParams = {}) => {
+const buildBlingProductUrl = (page, searchParams = {}) => {
     const params = new URLSearchParams();
     params.set('pagina', String(page));
     params.set('limite', '100');
@@ -52,8 +56,8 @@ const buildProductUrl = (page, searchParams = {}) => {
 };
 
 
-const fetchProductPage = async (connection, page, searchParams = {}) => {
-    const url = buildProductUrl(page, searchParams);
+const fetchBlingProductPage = async (connection, page, searchParams = {}) => {
+    const url = buildBlingProductUrl(page, searchParams);
     console.log('[BlingURL]', url);
 
     const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${connection.credentials.access_token}` } });
@@ -66,27 +70,94 @@ const normalizeNameForBling = (name) => {
     return cleanName;
 };
 
-const fetchProductsByName = async (connection, name, pagina = 1) => {
+const fetchBlingProductsByName = async (connection, name, pagina = 1) => {
     const searchTerm = normalizeNameForBling(name);
     const searchParams = {
         criterio: '5', // Critério para "Contém"
         tipo: 'T', // Tipo para "Termo"
         nome: `%${searchTerm}` // Adiciona o coringa para buscar em qualquer parte do nome
     };
-    return fetchProductPage(connection, pagina, searchParams);
+    return fetchBlingProductPage(connection, pagina, searchParams);
 };
 
-const fetchProductsByCode = async (connection, code, pagina = 1) => {
+const fetchBlingProductsByCode = async (connection, code, pagina = 1) => {
     const searchParams = {
         criterio: '5',
         tipo: 'T&codigo',
         codigo: code
     };
-    return fetchProductPage(connection, pagina, searchParams);
+    return fetchBlingProductPage(connection, pagina, searchParams);
 };
 
-const fetchAllProductsPaginated = async (connection, pagina = 1) => {
-    return fetchProductPage(connection, pagina);
+const fetchAllBlingProductsPaginated = async (connection, pagina = 1) => {
+    return fetchBlingProductPage(connection, pagina);
+};
+
+// --- Funções para CissPoder ---
+
+async function refreshCissPoderToken(connection) {
+    const { auth_url, username, password } = connection.credentials;
+    const url = `${auth_url}/oauth/token`;
+
+    const response = await axios.post(url,
+        new URLSearchParams({
+            grant_type: 'password',
+            username,
+            password,
+            client_id: CISSPODER_CLIENT_ID,
+            client_secret: CISSPODER_CLIENT_SECRET
+        }), {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        }
+    );
+
+    connection.credentials.access_token = response.data.access_token;
+    connection.credentials.token_expires_at = Date.now() + (response.data.expires_in * 1000);
+    await db.updateDb({ connection: { id: connection.id, credentials: connection.credentials } });
+}
+
+const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
+    // O serviço de produtos precisa ser confirmado, usando 'cad_produtos' como placeholder
+    const url = `${connection.credentials.service_url}/cad_produtos`; 
+    console.log('[CissPoderURL]', url);
+
+    const payload = {
+        page: page,
+        clausulas: clausulas
+    };
+
+    const response = await axios.post(url, payload, {
+        headers: {
+            'Authorization': `Bearer ${connection.credentials.access_token}`,
+            'Content-Type': 'application/json'
+        }
+    });
+
+    // Normaliza a resposta para o formato esperado (como o do Bling)
+    const data = response.data.content.map(p => ({
+        codigo: p.codigoproduto, // Assumindo nomes de campo, pode precisar de ajuste
+        nome: p.descricaoproduto,
+        preco: p.precovenda
+    }));
+
+    return {
+        data: data,
+        total: response.data.total,
+    };
+};
+
+const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
+    const clausulas = [{ campo: "descricaoproduto", valor: `%${name}%`, operador: "LIKE" }];
+    return fetchCissPoderProductPage(connection, pagina, clausulas);
+};
+
+const fetchCissPoderProductsByCode = async (connection, code, pagina = 1) => {
+    const clausulas = [{ campo: "codigoproduto", valor: code, operador: "IGUAL" }];
+    return fetchCissPoderProductPage(connection, pagina, clausulas);
+};
+
+const fetchAllCissPoderProducts = async (connection, pagina = 1) => {
+    return fetchCissPoderProductPage(connection, pagina);
 };
 
 async function getBlingConnectionStatus(connection) {
@@ -122,6 +193,32 @@ async function getBlingConnectionStatus(connection) {
     }
 }
 
+async function getCissPoderConnectionStatus(connection) {
+    if (!connection.credentials || !connection.credentials.username || !connection.credentials.password) {
+        return 'requires_auth'; // Se não tiver credenciais básicas
+    }
+
+    // Se não tem token ou se o token está para expirar (margem de 5 min)
+    const needsRefresh = !connection.credentials.access_token || connection.credentials.token_expires_at < (Date.now() + 300000);
+
+    if (needsRefresh) {
+        console.log(`Token para a conexão CissPoder ${connection.id} inexistente ou expirado. Tentando obter...`);
+        try {
+            await refreshCissPoderToken(connection);
+            console.log(`Token para a conexão CissPoder ${connection.id} obtido com sucesso.`);
+            return 'connected';
+        } catch (error) {
+            const errorDetails = error.response ? JSON.stringify(error.response.data) : error.message;
+            console.error(`Falha ao obter token para a conexão CissPoder ${connection.id}:`, errorDetails);
+            return 'disconnected';
+        }
+    }
+
+    // Se já tem um token válido, consideramos conectado.
+    // Uma chamada leve poderia ser adicionada aqui para ter 100% de certeza.
+    return 'connected';
+}
+
 // --- NOVAS ROTAS DE GERENCIAMENTO DE CONEXÕES ---
 
 app.get('/api/erp-connections', async (req, res) => {
@@ -129,10 +226,17 @@ app.get('/api/erp-connections', async (req, res) => {
         let status = 'not_applicable'; // Padrão para tipos não-Bling
         if (conn.type === 'bling') {
             status = await getBlingConnectionStatus(conn);
+        } else if (conn.type === 'cisspoder') {
+            status = await getCissPoderConnectionStatus(conn);
         }
 
         // Oculta segredos para a resposta da API
         const safeCreds = { ...conn.credentials };
+        // CissPoder
+        if (safeCreds.password) safeCreds.password = '******';
+        if (safeCreds.username) safeCreds.username = safeCreds.username; // pode manter o user
+
+        // Bling
         if (safeCreds.client_secret) safeCreds.client_secret = '******';
         if (safeCreds.access_token) safeCreds.access_token = safeCreds.access_token.substring(0, 8) + '...';
         if (safeCreds.refresh_token) safeCreds.refresh_token = '******';
@@ -276,8 +380,10 @@ app.get('/api/produtos/:connectionId', async (req, res) => {
 
     try {
         if (connection.type === 'bling') {
-            await refreshAccessToken(connection);
-        }
+            await getBlingConnectionStatus(connection); // Garante que o token está válido
+        } else if (connection.type === 'cisspoder') {
+            await getCissPoderConnectionStatus(connection); // Garante que o token está válido
+        } 
 
         const requestedPage = parseInt(req.query.pagina || req.query.page || '1', 10);
         const page = Number.isNaN(requestedPage) || requestedPage < 1 ? 1 : requestedPage;
@@ -285,22 +391,29 @@ app.get('/api/produtos/:connectionId', async (req, res) => {
         const { nome, codigo, tipo } = req.query;
         let responseData;
 
-        if (typeof nome === 'string' && nome.trim()) {
-            responseData = await fetchProductsByName(connection, nome.trim(), page);
-        } else if (typeof codigo === 'string' && codigo.trim()) {
-            responseData = await fetchProductsByCode(connection, codigo.trim(), page);
-        } else if (typeof tipo === 'string' && tipo.trim().toUpperCase().startsWith('NOME=')) {
-            const nomeValido = normalizeNameForBling(tipo.replace(/^NOME=/i, '').trim());
-            responseData = await fetchProductsByName(connection, nomeValido, page);
-        } else if (typeof tipo === 'string' && tipo.trim().toUpperCase().startsWith('T&CODIGO=')) {
-            const codigoValido = tipo.replace(/^T&CODIGO=/i, '').trim();
-            responseData = await fetchProductsByCode(connection, codigoValido, page);
+        if (connection.type === 'bling') {
+            if (typeof nome === 'string' && nome.trim()) {
+                responseData = await fetchBlingProductsByName(connection, nome.trim(), page);
+            } else if (typeof codigo === 'string' && codigo.trim()) {
+                responseData = await fetchBlingProductsByCode(connection, codigo.trim(), page);
+            } else {
+                responseData = await fetchAllBlingProductsPaginated(connection, page);
+            }
+        } else if (connection.type === 'cisspoder') {
+            if (typeof nome === 'string' && nome.trim()) {
+                responseData = await fetchCissPoderProductsByName(connection, nome.trim(), page);
+            } else if (typeof codigo === 'string' && codigo.trim()) {
+                responseData = await fetchCissPoderProductsByCode(connection, codigo.trim(), page);
+            } else {
+                responseData = await fetchAllCissPoderProducts(connection, page);
+            }
         } else {
-            responseData = await fetchAllProductsPaginated(connection, page);
+            return res.status(400).json({ sucesso: false, erro: 'Tipo de conexão não suportado para busca de produtos.' });
         }
-
+        
         const produtos = responseData?.data || [];
-        const total = responseData?.total || responseData?.meta?.total; // Captura o total da resposta da API, considerando diferentes estruturas
+        // Bling usa meta.total, CissPoder usa total. Normalizamos aqui.
+        const total = responseData?.total ?? responseData?.meta?.total; 
 
         res.json({ sucesso: true, produtos, pagina: page, total });
     } catch (e) { res.status(500).json({ sucesso: false, erro: e.message }); }
