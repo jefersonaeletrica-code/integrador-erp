@@ -135,6 +135,7 @@ const fetchCissPoderPrices = async (connection, productIds) => {
         page: 1,
         clausulas: [{ campo: "idsubproduto", valor: productIds.join(','), operador: "IN" }]
     };
+    console.log('[CissPoder Prices Payload]', JSON.stringify(payload, null, 2));
 
     try {
         const response = await axios.post(url, payload, {
@@ -144,6 +145,7 @@ const fetchCissPoderPrices = async (connection, productIds) => {
             }
         });
 
+        console.log('[CissPoder Prices Response]', JSON.stringify(response.data, null, 2));
         const priceMap = {};
         if (Array.isArray(response.data.data)) {
             response.data.data.forEach(priceInfo => {
