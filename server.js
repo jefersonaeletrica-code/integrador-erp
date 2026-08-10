@@ -107,7 +107,7 @@ async function refreshCissPoderToken(connection) {
         auth_url = `${auth_url}/oauth/token`;
     }
 
-    const response = await axios.post(url,
+    const response = await axios.post(auth_url,
         new URLSearchParams({
             grant_type: 'password',
             username,
@@ -127,11 +127,11 @@ async function refreshCissPoderToken(connection) {
 const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
     // Normaliza a URL de autenticação para obter a base e derivar a URL de serviço.
     // Remove '/oauth/token' e a barra final, se existirem.
-    const normalizedAuthUrl = connection.credentials.auth_url
-        .replace(/\/oauth\/token$/, '')
-        .replace(/\/$/, '');
+    const baseAuthUrl = connection.credentials.auth_url.split('/oauth/token')[0];
 
-    const serviceBaseUrl = normalizedAuthUrl.replace('/cisspoder-auth', '/cisspoder-service');
+    const serviceBaseUrl = baseAuthUrl
+        .replace(/\/$/, "") // Remove barra final se houver
+        .replace('/cisspoder-auth', '/cisspoder-service');
 
     // O serviço de produtos é 'cad_produtos' conforme documentação implícita.
     const url = `${serviceBaseUrl}/cad_produtos`; 
