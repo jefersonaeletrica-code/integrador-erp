@@ -96,8 +96,16 @@ const fetchAllBlingProductsPaginated = async (connection, pagina = 1) => {
 // --- Funções para CissPoder ---
 
 async function refreshCissPoderToken(connection) {
-    const { auth_url, username, password } = connection.credentials;
-    const url = `${auth_url}/oauth/token`;
+    let { auth_url, username, password } = connection.credentials;
+
+    // Garante que a URL termine com /oauth/token, sem duplicar
+    if (auth_url.endsWith('/oauth/token')) {
+        // A URL já está completa
+    } else if (auth_url.endsWith('/')) {
+        auth_url = `${auth_url}oauth/token`;
+    } else {
+        auth_url = `${auth_url}/oauth/token`;
+    }
 
     const response = await axios.post(url,
         new URLSearchParams({
@@ -117,13 +125,13 @@ async function refreshCissPoderToken(connection) {
 }
 
 const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
-    // Deriva a URL de serviço da URL de autenticação.
-    // Ex: 'http://host/cisspoder-auth' vira 'http://host/cisspoder-service'
-    const baseAuthUrl = connection.credentials.auth_url.endsWith('/') 
-        ? connection.credentials.auth_url.slice(0, -1) 
-        : connection.credentials.auth_url;
+    // Normaliza a URL de autenticação para obter a base e derivar a URL de serviço.
+    // Remove '/oauth/token' e a barra final, se existirem.
+    const normalizedAuthUrl = connection.credentials.auth_url
+        .replace(/\/oauth\/token$/, '')
+        .replace(/\/$/, '');
 
-    const serviceBaseUrl = baseAuthUrl.replace('/cisspoder-auth', '/cisspoder-service');
+    const serviceBaseUrl = normalizedAuthUrl.replace('/cisspoder-auth', '/cisspoder-service');
 
     // O serviço de produtos é 'cad_produtos' conforme documentação implícita.
     const url = `${serviceBaseUrl}/cad_produtos`; 
