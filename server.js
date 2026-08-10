@@ -147,9 +147,9 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
 
     // Normaliza a resposta para o formato esperado (como o do Bling)
     const data = response.data.content.map(p => ({
-        codigo: p.codigoproduto, // Assumindo nomes de campo, pode precisar de ajuste
-        nome: p.descricaoproduto,
-        preco: p.precovenda
+        codigo: p.IDPRODUTO,       // Mapeado de: Código Identificador 01
+        nome: p.DESCRCOMPRODUTO,  // Mapeado de: Descrição Principal
+        preco: p.precovenda || 0  // O campo de preço não foi encontrado na documentação do 'cad_produtos'. Usando 0 como padrão.
     }));
 
     return {
@@ -159,12 +159,12 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
 };
 
 const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
-    const clausulas = [{ campo: "descricaoproduto", valor: `%${name}%`, operador: "LIKE" }];
+    const clausulas = [{ campo: "DESCRCOMPRODUTO", valor: `%${name}%`, operador: "LIKE" }];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
 const fetchCissPoderProductsByCode = async (connection, code, pagina = 1) => {
-    const clausulas = [{ campo: "codigoproduto", valor: code, operador: "IGUAL" }];
+    const clausulas = [{ campo: "IDPRODUTO", valor: code, operador: "IGUAL" }];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
