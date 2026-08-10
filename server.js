@@ -137,6 +137,7 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
         page: page,
         clausulas: clausulas
     };
+    console.log('[CissPoder Payload]', JSON.stringify(payload, null, 2));
 
     const response = await axios.post(url, payload, {
         headers: {
@@ -144,6 +145,7 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
             'Content-Type': 'application/json'
         }
     });
+    console.log('[CissPoder Response]', JSON.stringify(response.data, null, 2));
 
     // Normaliza a resposta para o formato esperado (como o do Bling)
     // Adiciona uma verificação para garantir que 'content' seja um array antes de mapear.
@@ -154,6 +156,7 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
         nome: p.DESCRCOMPRODUTO,  // Mapeado de: Descrição Principal
         preco: p.precovenda || 0  // O campo de preço não foi encontrado na documentação do 'cad_produtos'. Usando 0 como padrão.
     }));
+    console.log(`[CissPoder] Encontrados ${data.length} produtos na resposta.`);
 
     return {
         data: data,
