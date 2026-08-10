@@ -98,14 +98,10 @@ const fetchAllBlingProductsPaginated = async (connection, pagina = 1) => {
 async function refreshCissPoderToken(connection) {
     let { auth_url, username, password } = connection.credentials;
 
-    // Garante que a URL termine com /oauth/token, sem duplicar
-    if (auth_url.endsWith('/oauth/token')) {
-        // A URL já está completa
-    } else if (auth_url.endsWith('/')) {
-        auth_url = `${auth_url}oauth/token`;
-    } else {
-        auth_url = `${auth_url}/oauth/token`;
-    }
+    // Normaliza a URL para garantir que termine com /oauth/token e não tenha partes duplicadas.
+    // Pega a base da URL antes de /oauth/token e anexa o caminho correto.
+    const baseUrl = auth_url.split('/oauth/token')[0].replace(/\/$/, '');
+    auth_url = `${baseUrl}/oauth/token`;
 
     const response = await axios.post(auth_url,
         new URLSearchParams({
