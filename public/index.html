@@ -131,7 +131,10 @@
                         <h3 class="text-lg font-semibold text-gray-700">Produtos importados localmente</h3>
                         <span id="contadorImportados" class="text-sm text-gray-500">0 produtos</span>
                     </div>
-                    <div id="listaImportados" class="space-y-2 text-sm text-gray-600">
+                    <div>
+                        <input type="text" id="buscaProdutoImportado" onkeyup="filtrarProdutosImportados()" placeholder="Buscar produto importado..." class="w-full p-2.5 border rounded-lg text-sm">
+                    </div>
+                    <div id="listaImportados" class="space-y-2 text-sm text-gray-600 max-h-60 overflow-y-auto">
                         <p class="text-gray-500">Nenhum produto importado salvo.</p>
                     </div>
                 </div>
@@ -140,12 +143,26 @@
 
     </div>
 
+    <!-- Spinner de Carregamento Global -->
+    <div id="spinner" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 flex items-center justify-center z-50">
+        <div class="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-white"></div>
+    </div>
+
     <script>
         let produtosGlobais = [];
         let produtosImportadosGlobais = [];
         let paginaAtual = 1;
         let filtroAtual = null;
         let conexoesGlobais = [];
+
+        // Funções de controle do Spinner
+        function showSpinner() {
+            document.getElementById('spinner').classList.remove('hidden');
+        }
+
+        function hideSpinner() {
+            document.getElementById('spinner').classList.add('hidden');
+        }
 
         // Controle de Abas
         function mudarAba(aba) {
@@ -183,6 +200,8 @@
                 return;
             }
 
+            showSpinner();
+
             let credentials = {};
             if (type === 'bling') {
                 const clientId = document.getElementById('blingClientId').value.trim();
@@ -191,10 +210,12 @@
 
                 if (!clientId || !redirectUri) {
                     alert('Para conexões Bling, o Client ID e a URL de Redirecionamento são obrigatórios.');
+                    hideSpinner();
                     return;
                 }
                 if (!editingId && !clientSecret) {
                     alert('Para novas conexões Bling, o Client Secret é obrigatório.');
+                    hideSpinner();
                     return;
                 }
 
@@ -209,10 +230,12 @@
 
                 if (!apiUrl) {
                     alert('Para conexões CissPoder, a URL da API é obrigatória.');
+                    hideSpinner();
                     return;
                 }
                 if (!editingId && !apiKey) {
                     alert('Para novas conexões CissPoder, a Chave da API é obrigatória.');
+                    hideSpinner();
                     return;
                 }
 
@@ -225,36 +248,43 @@
             const payload = { name, type, credentials };
 
             let res;
-            if (editingId) {
-                // Atualizando uma conexão existente
-                res = await fetch(`/api/erp-connections/${editingId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, credentials }) // O tipo não pode ser alterado
-                });
-            } else {
-                // Criando uma nova conexão
-                res = await fetch('/api/erp-connections', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-            }
+            try {
+                if (editingId) {
+                    // Atualizando uma conexão existente
+                    res = await fetch(`/api/erp-connections/${editingId}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, credentials }) // O tipo não pode ser alterado
+                    });
+                } else {
+                    // Criando uma nova conexão
+                    res = await fetch('/api/erp-connections', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                }
 
-            const data = await res.json();
+                const data = await res.json();
 
-            if (!data.sucesso) {
-                alert(`Erro ao ${editingId ? 'atualizar' : 'salvar'} a conexão: ${data.erro}`);
-                return;
-            }
+                if (!data.sucesso) {
+                    alert(`Erro ao ${editingId ? 'atualizar' : 'salvar'} a conexão: ${data.erro}`);
+                    return;
+                }
 
-            alert(`Conexão ${editingId ? 'atualizada' : 'salva'} com sucesso!`);
-            resetarFormularioConexao();
-            await carregarConexoes(); // Recarrega a lista de conexões
+                alert(`Conexão ${editingId ? 'atualizada' : 'salva'} com sucesso!`);
+                resetarFormularioConexao();
+                await carregarConexoes(); // Recarrega a lista de conexões
 
-            // Se for uma nova conexão Bling, redireciona para autenticação
-            if (!editingId && type === 'bling') {
-                await autenticarConexao(data.connection.id);
+                // Se for uma nova conexão Bling, redireciona para autenticação
+                if (!editingId && type === 'bling') {
+                    await autenticarConexao(data.connection.id);
+                }
+            } finally {
+                // Se não houver redirecionamento, esconde o spinner
+                if (!(!editingId && type === 'bling')) {
+                    hideSpinner();
+                }
             }
         }
 
@@ -274,12 +304,17 @@
         }
 
         async function carregarConexoes() {
-            const res = await fetch('/api/erp-connections');
-            const data = await res.json();
-            if (data.sucesso) {
-                conexoesGlobais = data.connections || [];
-                renderizarConexoes();
-                popularDropdownConexoes();
+            showSpinner();
+            try {
+                const res = await fetch('/api/erp-connections');
+                const data = await res.json();
+                if (data.sucesso) {
+                    conexoesGlobais = data.connections || [];
+                    renderizarConexoes();
+                    popularDropdownConexoes();
+                }
+            } finally {
+                hideSpinner();
             }
         }
 
@@ -362,29 +397,82 @@
             if (!conn) return;
 
             if (confirm(`Tem certeza que deseja remover a conexão "${conn.name}"?`)) {
-                const res = await fetch(`/api/erp-connections/${id}`, {
-                    method: 'DELETE'
-                });
+                showSpinner();
+                try {
+                    const res = await fetch(`/api/erp-connections/${id}`, {
+                        method: 'DELETE'
+                    });
 
-                const data = await res.json();
+                    const data = await res.json();
 
-                if (data.sucesso) {
-                    alert(data.mensagem);
-                    await carregarConexoes();
-                } else {
-                    alert('Erro ao remover a conexão: ' + data.erro);
+                    if (data.sucesso) {
+                        alert(data.mensagem);
+                        await carregarConexoes();
+                    } else {
+                        alert('Erro ao remover a conexão: ' + data.erro);
+                    }
+                } finally {
+                    hideSpinner();
                 }
             }
         }
 
         async function autenticarConexao(connectionId) {
-            const res = await fetch(`/api/auth/${connectionId}/bling`);
-            const data = await res.json();
-            if(data.sucesso && data.url) {
-                window.location.href = data.url;
-            } else {
-                alert('Erro ao gerar URL de autorização.');
+            showSpinner(); // Mostra o spinner antes de tentar o fetch e redirecionar
+            try {
+                const res = await fetch(`/api/auth/${connectionId}/bling`);
+                const data = await res.json();
+                if(data.sucesso && data.url) {
+                    window.location.href = data.url;
+                } else {
+                    alert('Erro ao gerar URL de autorização.');
+                    hideSpinner();
+                }
+            } catch (e) {
+                hideSpinner();
             }
+        }
+
+        async function removerProdutoImportado(codigo) {
+            if (confirm(`Tem certeza que deseja remover o produto com código "${codigo}" da lista de importados?`)) {
+                // Filtra o produto a ser removido da lista global
+                produtosImportadosGlobais = produtosImportadosGlobais.filter(p => p.codigo !== codigo);
+
+                showSpinner();
+                try {
+                    // Envia a lista atualizada para o backend
+                    const res = await fetch('/api/produtos-importados', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ produtos: produtosImportadosGlobais })
+                    });
+                    const data = await res.json();
+
+                    if (data.sucesso) {
+                        renderizarImportados(); // Atualiza a interface
+                    } else {
+                        alert('Erro ao remover produto: ' + (data.erro || 'Erro desconhecido.'));
+                        await carregarProdutosImportados(); // Recarrega a lista original em caso de erro
+                    }
+                } finally {
+                    hideSpinner();
+                }
+            }
+        }
+
+        function filtrarProdutosImportados() {
+            const termo = document.getElementById('buscaProdutoImportado').value.toLowerCase();
+            if (!termo) {
+                renderizarImportados(); // Renderiza a lista completa se a busca estiver vazia
+                return;
+            }
+
+            const produtosFiltrados = produtosImportadosGlobais.filter(p => 
+                (p.nome && p.nome.toLowerCase().includes(termo)) || 
+                (p.codigo && p.codigo.toLowerCase().includes(termo))
+            );
+
+            renderizarImportados(produtosFiltrados);
         }
 
         // Carregamento inicial
@@ -394,27 +482,37 @@
         });
 
         async function carregarProdutosImportados() {
-            const res = await fetch('/api/produtos-importados');
-            const data = await res.json();
-            if(data.sucesso) {
-                produtosImportadosGlobais = data.produtos || [];
-                renderizarImportados();
+            showSpinner();
+            try {
+                const res = await fetch('/api/produtos-importados');
+                const data = await res.json();
+                if(data.sucesso) {
+                    produtosImportadosGlobais = data.produtos || [];
+                    renderizarImportados(); // Renderiza a lista completa inicialmente
+                }
+            } finally {
+                hideSpinner();
             }
         }
 
-        function renderizarImportados() {
+        function renderizarImportados(listaParaRenderizar) {
             const lista = document.getElementById('listaImportados');
             const contador = document.getElementById('contadorImportados');
-            if(!produtosImportadosGlobais || produtosImportadosGlobais.length === 0) {
+            const listaDeProdutos = listaParaRenderizar !== undefined ? listaParaRenderizar : produtosImportadosGlobais;
+
+            if(!listaDeProdutos || listaDeProdutos.length === 0) {
                 contador.innerText = '0 produtos';
-                lista.innerHTML = '<p class="text-gray-500">Nenhum produto importado salvo.</p>';
+                lista.innerHTML = `<p class="text-gray-500">${document.getElementById('buscaProdutoImportado').value ? 'Nenhum produto encontrado.' : 'Nenhum produto importado salvo.'}</p>`;
                 return;
             }
 
-            contador.innerText = `${produtosImportadosGlobais.length} produtos`;
-            lista.innerHTML = produtosImportadosGlobais.map(p => `
-                <div class="py-2 border-b border-gray-100">
-                    <span class="font-medium">${p.codigo || 'S/N'}</span> - ${p.nome}
+            contador.innerText = `${listaDeProdutos.length} de ${produtosImportadosGlobais.length} produtos`;
+            lista.innerHTML = listaDeProdutos.map(p => `
+                <div class="flex justify-between items-center py-2 border-b border-gray-100">
+                    <span>
+                        <span class="font-medium">${p.codigo || 'S/N'}</span> - ${p.nome}
+                    </span>
+                    <button onclick="removerProdutoImportado('${p.codigo}')" class="text-xs text-red-500 hover:text-red-700 hover:underline font-semibold">Remover</button>
                 </div>
             `).join('');
         }
@@ -446,6 +544,7 @@
             }
 
             const tbody = document.getElementById('tabelaProdutos');
+            showSpinner();
             tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">Carregando produtos do ERP...</td></tr>';
 
             const params = new URLSearchParams();
@@ -461,38 +560,42 @@
             params.set('pagina', String(pagina));
 
             const query = params.toString();
-            const res = await fetch(`/api/produtos/${connectionId}${query ? '?' + query : ''}`);
-            const data = await res.json();
-            
-            if(!data.sucesso) {
-                tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Erro: ${data.erro}</td></tr>`;
-                return;
+            try {
+                const res = await fetch(`/api/produtos/${connectionId}${query ? '?' + query : ''}`);
+                const data = await res.json();
+                
+                if(!data.sucesso) {
+                    tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Erro: ${data.erro}</td></tr>`;
+                    return;
+                }
+
+                produtosGlobais = data.produtos || [];
+                paginaAtual = Number(data.pagina || pagina);
+
+                const btnAnterior = document.getElementById('btnPaginaAnterior');
+                const btnProxima = document.getElementById('btnPaginaProxima');
+
+                btnAnterior.disabled = paginaAtual <= 1;
+                btnProxima.disabled = produtosGlobais.length < 100;
+
+                const infoPaginacao = document.getElementById('infoPaginacao');
+                document.getElementById('paginaAtual').innerText = `Página ${paginaAtual}`;
+                
+                if (data.total !== undefined) {
+                    infoPaginacao.innerText = `Exibindo ${produtosGlobais.length} de ${data.total} produtos`;
+                } else {
+                    infoPaginacao.innerText = `Página ${paginaAtual}`;
+                }
+
+                if (produtosGlobais.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">Nenhum produto encontrado neste ERP.</td></tr>';
+                    return;
+                }
+
+                renderizarProdutos(produtosGlobais);
+            } finally {
+                hideSpinner();
             }
-
-            produtosGlobais = data.produtos || [];
-            paginaAtual = Number(data.pagina || pagina);
-
-            const btnAnterior = document.getElementById('btnPaginaAnterior');
-            const btnProxima = document.getElementById('btnPaginaProxima');
-
-            btnAnterior.disabled = paginaAtual <= 1;
-            btnProxima.disabled = produtosGlobais.length < 100;
-
-            const infoPaginacao = document.getElementById('infoPaginacao');
-            document.getElementById('paginaAtual').innerText = `Página ${paginaAtual}`;
-            
-            if (data.total !== undefined) {
-                infoPaginacao.innerText = `Exibindo ${produtosGlobais.length} de ${data.total} produtos`;
-            } else {
-                infoPaginacao.innerText = `Página ${paginaAtual}`;
-            }
-
-            if (produtosGlobais.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-gray-500">Nenhum produto encontrado neste ERP.</td></tr>';
-                return;
-            }
-
-            renderizarProdutos(produtosGlobais);
         }
 
         function paginaAnterior() {
@@ -541,19 +644,24 @@
                 ...selecionados.filter(p => !produtosImportadosGlobais.some(item => item.codigo === p.codigo))
             ];
 
-            const res = await fetch('/api/produtos-importados', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ produtos: produtosParaSalvar })
-            });
-            const data = await res.json();
+            showSpinner();
+            try {
+                const res = await fetch('/api/produtos-importados', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ produtos: produtosParaSalvar })
+                });
+                const data = await res.json();
 
-            if(data.sucesso) {
-                produtosImportadosGlobais = produtosParaSalvar;
-                renderizarImportados();
-                alert(data.mensagem);
-            } else {
-                alert('Erro ao salvar produtos importados: ' + (data.erro || 'Erro desconhecido.'));
+                if(data.sucesso) {
+                    produtosImportadosGlobais = produtosParaSalvar;
+                    renderizarImportados();
+                    alert(data.mensagem);
+                } else {
+                    alert('Erro ao salvar produtos importados: ' + (data.erro || 'Erro desconhecido.'));
+                }
+            } finally {
+                hideSpinner();
             }
         }
     </script>

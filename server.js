@@ -311,16 +311,9 @@ app.get('/api/produtos-importados', (req, res) => {
 });
 
 app.post('/api/produtos-importados', (req, res) => {
-    const novosProdutos = Array.isArray(req.body.produtos) ? req.body.produtos : [];
-    const mergedProdutos = [...produtosImportados];
-
-    novosProdutos.forEach(produto => {
-        if (!mergedProdutos.some(item => item.codigo === produto.codigo)) {
-            mergedProdutos.push(produto);
-        }
-    });
-
-    saveProdutosImportados(mergedProdutos);
+    // A lista enviada pelo frontend agora é a fonte da verdade.
+    const produtosParaSalvar = Array.isArray(req.body.produtos) ? req.body.produtos : [];
+    saveProdutosImportados(produtosParaSalvar);
     res.json({ sucesso: true, mensagem: 'Produtos importados salvos com sucesso!' });
 });
 
