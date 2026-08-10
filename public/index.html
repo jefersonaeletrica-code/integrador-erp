@@ -25,6 +25,7 @@
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label class="block text-xs font-semibold text-gray-600 mb-1">Nome da Conexão</label>
+                        <input type="hidden" id="editingConnectionId">
                         <input type="text" id="connName" placeholder="Ex: Bling - Conta Principal" class="w-full p-2.5 border rounded-lg text-sm">
                     </div>
                     <div class="md:col-span-2">
@@ -57,7 +58,7 @@
                 </div>
 
                 <div class="pt-2">
-                    <button onclick="salvarEAutenticarConexao()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">Salvar e Autenticar</button>
+                    <button id="btnSalvarConexao" onclick="salvarConexao()" class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700">Salvar Conexão</button>
                 </div>
             </div>
 
@@ -171,9 +172,10 @@
             document.getElementById('camposCissPoder').classList.toggle('hidden', tipo !== 'cisspoder');
         }
 
-        async function salvarEAutenticarConexao() {
+        async function salvarConexao() {
             const name = document.getElementById('connName').value;
             const type = document.getElementById('connType').value;
+            const editingId = document.getElementById('editingConnectionId').value;
 
             if (!name || !type) {
                 alert('Por favor, preencha o nome e o tipo da conexão.');
@@ -182,41 +184,91 @@
 
             let credentials = {};
             if (type === 'bling') {
-                credentials = {
-                    client_id: document.getElementById('blingClientId').value,
-                    client_secret: document.getElementById('blingClientSecret').value,
-                    redirect_uri: document.getElementById('blingRedirectUri').value,
-                };
+                const clientId = document.getElementById('blingClientId').value.trim();
+                const clientSecret = document.getElementById('blingClientSecret').value.trim();
+                const redirectUri = document.getElementById('blingRedirectUri').value.trim();
+
+                if (!clientId || !redirectUri) {
+                    alert('Para conexões Bling, o Client ID e a URL de Redirecionamento são obrigatórios.');
+                    return;
+                }
+                if (!editingId && !clientSecret) {
+                    alert('Para novas conexões Bling, o Client Secret é obrigatório.');
+                    return;
+                }
+
+                credentials.client_id = clientId;
+                credentials.redirect_uri = redirectUri;
+                if (clientSecret) { // Só inclui o secret se ele for preenchido
+                    credentials.client_secret = clientSecret;
+                }
             } else if (type === 'cisspoder') {
-                credentials = {
-                    api_url: document.getElementById('cissApiUrl').value,
-                    api_key: document.getElementById('cissApiKey').value,
-                };
+                const apiUrl = document.getElementById('cissApiUrl').value.trim();
+                const apiKey = document.getElementById('cissApiKey').value.trim();
+
+                if (!apiUrl) {
+                    alert('Para conexões CissPoder, a URL da API é obrigatória.');
+                    return;
+                }
+                if (!editingId && !apiKey) {
+                    alert('Para novas conexões CissPoder, a Chave da API é obrigatória.');
+                    return;
+                }
+
+                credentials.api_url = apiUrl;
+                if (apiKey) { // Só inclui a chave se ela for preenchida
+                    credentials.api_key = apiKey;
+                }
             }
 
             const payload = { name, type, credentials };
 
-            // 1. Salva a conexão no banco de dados
-            const res = await fetch('/api/erp-connections', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+            let res;
+            if (editingId) {
+                // Atualizando uma conexão existente
+                res = await fetch(`/api/erp-connections/${editingId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, credentials }) // O tipo não pode ser alterado
+                });
+            } else {
+                // Criando uma nova conexão
+                res = await fetch('/api/erp-connections', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+            }
 
             const data = await res.json();
 
             if (!data.sucesso) {
-                alert('Erro ao salvar a conexão: ' + data.erro);
+                alert(`Erro ao ${editingId ? 'atualizar' : 'salvar'} a conexão: ${data.erro}`);
                 return;
             }
 
-            alert('Conexão salva com sucesso!');
+            alert(`Conexão ${editingId ? 'atualizada' : 'salva'} com sucesso!`);
+            resetarFormularioConexao();
             await carregarConexoes(); // Recarrega a lista de conexões
 
-            // 2. Se for Bling, redireciona para autenticação
-            if (type === 'bling') {
+            // Se for uma nova conexão Bling, redireciona para autenticação
+            if (!editingId && type === 'bling') {
                 await autenticarConexao(data.connection.id);
             }
+        }
+
+        function resetarFormularioConexao() {
+            document.getElementById('editingConnectionId').value = '';
+            document.getElementById('connName').value = '';
+            document.getElementById('connType').value = '';
+            document.getElementById('connType').disabled = false;
+            document.getElementById('blingClientId').value = '';
+            document.getElementById('blingClientSecret').value = '';
+            document.getElementById('blingRedirectUri').value = '';
+            document.getElementById('cissApiUrl').value = '';
+            document.getElementById('cissApiKey').value = '';
+            document.getElementById('btnSalvarConexao').innerText = 'Salvar Conexão';
+            mostrarCamposERP();
         }
 
         async function carregarConexoes() {
@@ -258,8 +310,8 @@
                         </div>
                     </div>
                     <div class="flex gap-2">
-                        <button class="text-sm font-medium text-gray-500 hover:underline">Editar</button>
-                        <button class="text-sm font-medium text-red-600 hover:underline">Remover</button>
+                        <button onclick="iniciarEdicaoConexao(${conn.id})" class="text-sm font-medium text-gray-500 hover:underline">Editar</button>
+                        <button onclick="removerConexao(${conn.id})" class="text-sm font-medium text-red-600 hover:underline">Remover</button>
                     </div>
                 </div>
             `}).join('');
@@ -274,6 +326,52 @@
                 option.textContent = `${conn.name} (${conn.type})`;
                 dropdown.appendChild(option);
             });
+        }
+
+        function iniciarEdicaoConexao(id) {
+            const conn = conexoesGlobais.find(c => c.id === id);
+            if (!conn) return;
+
+            resetarFormularioConexao();
+
+            document.getElementById('editingConnectionId').value = conn.id;
+            document.getElementById('connName').value = conn.name;
+            document.getElementById('connType').value = conn.type;
+            document.getElementById('connType').disabled = true; // Não permite alterar o tipo
+
+            if (conn.type === 'bling') {
+                document.getElementById('blingClientId').value = conn.credentials.client_id || '';
+                // Deixamos o secret em branco por segurança, o usuário deve preencher se quiser alterar
+                document.getElementById('blingClientSecret').placeholder = 'Preencha para alterar o Client Secret';
+                document.getElementById('blingRedirectUri').value = conn.credentials.redirect_uri || '';
+            } else if (conn.type === 'cisspoder') {
+                document.getElementById('cissApiUrl').value = conn.credentials.api_url || '';
+                document.getElementById('cissApiKey').placeholder = 'Preencha para alterar a Chave da API';
+            }
+
+            mostrarCamposERP();
+            document.getElementById('btnSalvarConexao').innerText = 'Atualizar Conexão';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        async function removerConexao(id) {
+            const conn = conexoesGlobais.find(c => c.id === id);
+            if (!conn) return;
+
+            if (confirm(`Tem certeza que deseja remover a conexão "${conn.name}"?`)) {
+                const res = await fetch(`/api/erp-connections/${id}`, {
+                    method: 'DELETE'
+                });
+
+                const data = await res.json();
+
+                if (data.sucesso) {
+                    alert(data.mensagem);
+                    await carregarConexoes();
+                } else {
+                    alert('Erro ao remover a conexão: ' + data.erro);
+                }
+            }
         }
 
         async function autenticarConexao(connectionId) {

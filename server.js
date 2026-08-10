@@ -163,6 +163,61 @@ app.post('/api/erp-connections', async (req, res) => {
     }
 });
 
+app.put('/api/erp-connections/:id', async (req, res) => {
+    const { id } = req.params;
+    const { name, credentials } = req.body;
+
+    if (!name || !credentials) {
+        return res.status(400).json({ sucesso: false, erro: 'Nome e credenciais são obrigatórios.' });
+    }
+
+    const connectionIndex = erpConnections.findIndex(c => c.id == id);
+    if (connectionIndex === -1) {
+        return res.status(404).json({ sucesso: false, erro: 'Conexão não encontrada.' });
+    }
+
+    try {
+        const connection = erpConnections[connectionIndex];
+
+        // Mescla as credenciais, mantendo os segredos que não foram alterados
+        const newCredentials = { ...connection.credentials, ...credentials };
+
+        const updatedConnection = {
+            ...connection,
+            name,
+            credentials: newCredentials
+        };
+
+        await db.updateDb({ connection: { id, name, credentials: newCredentials } });
+        erpConnections[connectionIndex] = updatedConnection;
+
+        res.json({ sucesso: true, connection: updatedConnection });
+    } catch (e) {
+        res.status(500).json({ sucesso: false, erro: e.message });
+    }
+});
+
+app.delete('/api/erp-connections/:id', async (req, res) => {
+    const { id } = req.params;
+
+    const connectionIndex = erpConnections.findIndex(c => c.id == id);
+    if (connectionIndex === -1) {
+        return res.status(404).json({ sucesso: false, erro: 'Conexão não encontrada.' });
+    }
+
+    try {
+        const pool = db.getPool();
+        await pool.execute('DELETE FROM erp_connections WHERE id = ?', [id]);
+
+        // Remove from in-memory array
+        erpConnections.splice(connectionIndex, 1);
+
+        res.json({ sucesso: true, mensagem: 'Conexão removida com sucesso.' });
+    } catch (e) {
+        res.status(500).json({ sucesso: false, erro: e.message });
+    }
+});
+
 // OAuth Bling
 app.get('/api/auth/:connectionId/bling', (req, res) => {
     const { connectionId } = req.params;
