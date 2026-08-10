@@ -52,8 +52,7 @@
                 <div id="camposCissPoder" class="hidden space-y-4 pt-4 border-t">
                     <h3 class="font-semibold text-gray-600">Configuração do CissPoder</h3>
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <input type="text" id="cissAuthUrl" placeholder="URL de Autenticação" class="p-2.5 border rounded-lg text-sm md:col-span-2">
-                        <input type="text" id="cissServiceUrl" placeholder="URL de Serviço (Integrim)" class="p-2.5 border rounded-lg text-sm md:col-span-2">
+                        <input type="text" id="cissAuthUrl" placeholder="URL de Autenticação (ex: http://ip:porta/cisspoder-auth)" class="p-2.5 border rounded-lg text-sm md:col-span-2">
                         <input type="text" id="cissUsername" placeholder="Usuário" class="p-2.5 border rounded-lg text-sm">
                         <input type="password" id="cissPassword" placeholder="Senha" class="p-2.5 border rounded-lg text-sm">
                     </div>
@@ -228,12 +227,11 @@
                 }
             } else if (type === 'cisspoder') {
                 const authUrl = document.getElementById('cissAuthUrl').value.trim();
-                const serviceUrl = document.getElementById('cissServiceUrl').value.trim();
                 const username = document.getElementById('cissUsername').value.trim();
                 const password = document.getElementById('cissPassword').value.trim();
 
-                if (!authUrl || !serviceUrl || !username) {
-                    alert('Para conexões CissPoder, as URLs de autenticação e serviço, e o usuário são obrigatórios.');
+                if (!authUrl || !username) {
+                    alert('Para conexões CissPoder, a URL de autenticação e o usuário são obrigatórios.');
                     hideSpinner();
                     return;
                 }
@@ -244,7 +242,6 @@
                 }
 
                 credentials.auth_url = authUrl;
-                credentials.service_url = serviceUrl;
                 credentials.username = username;
 
                 if (password) { // Só inclui a senha se ela for preenchida
@@ -304,7 +301,6 @@
             document.getElementById('blingClientSecret').value = '';
             document.getElementById('blingRedirectUri').value = '';
             document.getElementById('cissAuthUrl').value = '';
-            document.getElementById('cissServiceUrl').value = '';
             document.getElementById('cissUsername').value = '';
             document.getElementById('cissPassword').value = '';
             document.getElementById('btnSalvarConexao').innerText = 'Salvar Conexão';
@@ -392,7 +388,6 @@
                 document.getElementById('blingRedirectUri').value = conn.credentials.redirect_uri || '';
             } else if (conn.type === 'cisspoder') {
                 document.getElementById('cissAuthUrl').value = conn.credentials.auth_url || '';
-                document.getElementById('cissServiceUrl').value = conn.credentials.service_url || '';
                 document.getElementById('cissUsername').value = conn.credentials.username || '';
                 document.getElementById('cissPassword').placeholder = 'Preencha para alterar a senha';
             }

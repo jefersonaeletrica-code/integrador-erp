@@ -117,8 +117,16 @@ async function refreshCissPoderToken(connection) {
 }
 
 const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
-    // O serviço de produtos precisa ser confirmado, usando 'cad_produtos' como placeholder
-    const url = `${connection.credentials.service_url}/cad_produtos`; 
+    // Deriva a URL de serviço da URL de autenticação.
+    // Ex: 'http://host/cisspoder-auth' vira 'http://host/cisspoder-service'
+    const baseAuthUrl = connection.credentials.auth_url.endsWith('/') 
+        ? connection.credentials.auth_url.slice(0, -1) 
+        : connection.credentials.auth_url;
+
+    const serviceBaseUrl = baseAuthUrl.replace('/cisspoder-auth', '/cisspoder-service');
+
+    // O serviço de produtos é 'cad_produtos' conforme documentação implícita.
+    const url = `${serviceBaseUrl}/cad_produtos`; 
     console.log('[CissPoderURL]', url);
 
     const payload = {
