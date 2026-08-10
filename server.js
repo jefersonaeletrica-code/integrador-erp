@@ -120,6 +120,43 @@ async function refreshCissPoderToken(connection) {
     await db.updateDb({ connection: { id: connection.id, credentials: connection.credentials } });
 }
 
+const fetchCissPoderPrices = async (connection, productIds) => {
+    if (!productIds || productIds.length === 0) {
+        return {};
+    }
+
+    const baseAuthUrl = connection.credentials.auth_url.split('/oauth/token')[0];
+    const serviceBaseUrl = baseAuthUrl.replace(/\/$/, "").replace('/cisspoder-auth', '/cisspoder-service');
+    const url = `${serviceBaseUrl}/cad_precos`;
+
+    // A API de preços geralmente aceita uma lista de IDs.
+    // O campo e operador exatos podem precisar de ajuste ('idsubproduto' e 'IN').
+    const payload = {
+        page: 1,
+        clausulas: [{ campo: "idsubproduto", valor: productIds.join(','), operador: "IN" }]
+    };
+
+    try {
+        const response = await axios.post(url, payload, {
+            headers: {
+                'Authorization': `Bearer ${connection.credentials.access_token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const priceMap = {};
+        if (Array.isArray(response.data.data)) {
+            response.data.data.forEach(priceInfo => {
+                priceMap[priceInfo.idsubproduto] = priceInfo.precovenda;
+            });
+        }
+        return priceMap;
+    } catch (error) {
+        console.error('[CissPoder] Falha ao buscar preços:', error.message);
+        return {}; // Retorna um mapa vazio em caso de erro para não quebrar a busca principal.
+    }
+};
+
 const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
     // Normaliza a URL de autenticação para obter a base e derivar a URL de serviço.
     // Remove '/oauth/token' e a barra final, se existirem.
@@ -151,10 +188,14 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
     // Adiciona uma verificação para garantir que 'content' seja um array antes de mapear.
     const productsArray = Array.isArray(response.data.data) ? response.data.data : [];
 
+    // Após buscar os produtos, busca os preços para eles.
+    const productIds = productsArray.map(p => p.idsubproduto);
+    const priceMap = await fetchCissPoderPrices(connection, productIds);
+
     const data = productsArray.map(p => ({
         codigo: p.idsubproduto,   // Mapeado de: idsubproduto
         nome: p.descrcomproduto,  // Mapeado de: descrcomproduto
-        preco: p.precovenda || 0  // O campo de preço não foi encontrado na documentação do 'cad_produtos'. Usando 0 como padrão.
+        preco: priceMap[p.idsubproduto] || 0 // Usa o preço do mapa de preços ou 0 se não encontrado.
     }));
     console.log(`[CissPoder] Encontrados ${data.length} produtos na resposta.`);
 
