@@ -146,7 +146,10 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
     });
 
     // Normaliza a resposta para o formato esperado (como o do Bling)
-    const data = response.data.content.map(p => ({
+    // Adiciona uma verificação para garantir que 'content' seja um array antes de mapear.
+    const productsArray = Array.isArray(response.data.content) ? response.data.content : [];
+
+    const data = productsArray.map(p => ({
         codigo: p.IDPRODUTO,       // Mapeado de: Código Identificador 01
         nome: p.DESCRCOMPRODUTO,  // Mapeado de: Descrição Principal
         preco: p.precovenda || 0  // O campo de preço não foi encontrado na documentação do 'cad_produtos'. Usando 0 como padrão.
