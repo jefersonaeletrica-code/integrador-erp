@@ -149,11 +149,11 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
 
     // Normaliza a resposta para o formato esperado (como o do Bling)
     // Adiciona uma verificação para garantir que 'content' seja um array antes de mapear.
-    const productsArray = Array.isArray(response.data.content) ? response.data.content : [];
+    const productsArray = Array.isArray(response.data.data) ? response.data.data : [];
 
     const data = productsArray.map(p => ({
-        codigo: p.IDPRODUTO,       // Mapeado de: Código Identificador 01
-        nome: p.DESCRCOMPRODUTO,  // Mapeado de: Descrição Principal
+        codigo: p.idsubproduto,   // Mapeado de: idsubproduto
+        nome: p.descrcomproduto,  // Mapeado de: descrcomproduto
         preco: p.precovenda || 0  // O campo de preço não foi encontrado na documentação do 'cad_produtos'. Usando 0 como padrão.
     }));
     console.log(`[CissPoder] Encontrados ${data.length} produtos na resposta.`);
@@ -165,12 +165,12 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
 };
 
 const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
-    const clausulas = [{ campo: "DESCRCOMPRODUTO", valor: `%${name}%`, operador: "LIKE" }];
+    const clausulas = [{ campo: "descrcomproduto", valor: `%${name}%`, operador: "LIKE" }];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
 const fetchCissPoderProductsByCode = async (connection, code, pagina = 1) => {
-    const clausulas = [{ campo: "IDPRODUTO", valor: code, operador: "IGUAL" }];
+    const clausulas = [{ campo: "idsubproduto", valor: code, operador: "IGUAL" }];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
