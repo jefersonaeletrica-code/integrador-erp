@@ -227,13 +227,16 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
     // Normaliza a resposta para o formato esperado (como o do Bling)
     // Adiciona uma verificação para garantir que 'content' seja um array antes de mapear.
     const productsArray = Array.isArray(response.data.data) ? response.data.data : [];
+    
+    // Remove duplicatas com base no 'idsubproduto', mantendo apenas a primeira ocorrência.
+    const uniqueProducts = Array.from(new Map(productsArray.map(p => [p.idsubproduto, p])).values());
 
-    const data = productsArray.map(p => ({
+    const data = uniqueProducts.map(p => ({
         codigo: p.idsubproduto,   // Mapeado de: idsubproduto
         nome: p.descrcomproduto,  // Mapeado de: descrcomproduto
         preco: 0 // O preço será carregado separadamente pelo frontend
     }));
-    console.log(`[CissPoder] Encontrados ${data.length} produtos na resposta.`);
+    console.log(`[CissPoder] Encontrados ${productsArray.length} registros na API, retornando ${data.length} produtos únicos.`);
 
     return {
         data: data,
