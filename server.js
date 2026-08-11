@@ -143,11 +143,11 @@ const fetchCissPoderPrices = async (connection, productIds) => {
     };
 
     // Adiciona a cláusula obrigatória de idempresa
-    payload.clausulas.push({ campo: "idempresa", valor: CISSPODER_DEFAULT_IDEMPRESA, operador: "IGUAL", operadorlogico: "AND" });
+    payload.clausulas.push({ campo: "idempresa", valor: CISSPODER_DEFAULT_IDEMPRESA, Operador: "IGUAL", OperadorLogico: "AND" });
 
     // Para simular o operador "IN", criamos uma cláusula "IGUAL" para cada ID, unidas por "OR"
     productIds.forEach((id, index) => {
-        payload.clausulas.push({ campo: "idsubproduto", valor: id, operador: "IGUAL", operadorlogico: index < productIds.length - 1 ? "OR" : "AND" });
+        payload.clausulas.push({ campo: "idsubproduto", valor: id, Operador: "IGUAL", OperadorLogico: index < productIds.length - 1 ? "OR" : "AND" });
     });
     console.log('[CissPoder Prices Payload]', JSON.stringify(payload, null, 2));
 
@@ -191,7 +191,7 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
     const payload = {
         page: page, // Página atual da busca de produtos
         clausulas: [
-            { campo: "IDEMPRESA", valor: CISSPODER_DEFAULT_IDEMPRESA, operador: "IGUAL", operadorlogico: "AND" },
+            { campo: "IDEMPRESA", valor: CISSPODER_DEFAULT_IDEMPRESA, Operador: "IGUAL", OperadorLogico: "AND" },
             ...clausulas
         ]
     };
@@ -235,12 +235,12 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
 };
 
 const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
-    const clausulas = [{ campo: "descrcomproduto", valor: `%${name}%`, operador: "LIKE", operadorlogico: "AND" }];
+    const clausulas = [{ campo: "descrcomproduto", valor: `%${name}%`, Operador: "LIKE", OperadorLogico: "AND" }];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
 const fetchCissPoderProductsByCode = async (connection, code, pagina = 1) => {
-    const clausulas = [{ campo: "idsubproduto", valor: code, operador: "IGUAL", operadorlogico: "AND" }];
+    const clausulas = [{ campo: "idsubproduto", valor: code, Operador: "IGUAL", OperadorLogico: "AND" }];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
