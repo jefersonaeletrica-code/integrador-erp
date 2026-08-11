@@ -623,10 +623,10 @@
 
             tbody.innerHTML = lista.map((p, index) => `
                 <tr class="hover:bg-gray-50">
-                    <td class="p-3"><input type="checkbox" class="chkProduto" value="${index}" data-codigo-produto="${p.codigo}"></td>
+                    <td class="p-3"><input type="checkbox" class="chkProduto" value="${index}"></td>
                     <td class="p-3 font-mono text-xs">${p.codigo || 'S/N'}</td>
                     <td class="p-3 font-medium">${p.nome}</td>
-                    <td class="p-3" id="preco-${p.codigo}">
+                    <td class="p-3" id="preco-${p.codigo}-${index}">
                         <span class="text-xs text-gray-400">Carregando...</span>
                     </td>
                 </tr>
@@ -640,7 +640,7 @@
             } else {
                 // Para Bling e outros, o preço já vem, então renderizamos direto
                 lista.forEach(p => {
-                    const elPreco = document.getElementById(`preco-${p.codigo}`);
+                    const elPreco = document.getElementById(`preco-${p.codigo}-${index}`);
                     if (elPreco) {
                         elPreco.innerHTML = `R$ ${p.preco ? Number(p.preco).toFixed(2) : '0.00'}`;
                     }
@@ -668,10 +668,11 @@
             console.log('[Preços] Resposta da API:', data);
             if (data.sucesso) {
                 for (const codigo in data.precos) {
-                    const elPreco = document.getElementById(`preco-${codigo}`);
-                    if (elPreco) {
-                        elPreco.innerHTML = `R$ ${data.precos[codigo] ? Number(data.precos[codigo]).toFixed(2) : '0.00'}`;
-                    }
+                    // Atualiza todas as linhas que correspondem a este código de produto
+                    const elementosPreco = document.querySelectorAll(`[id^="preco-${codigo}-"]`);
+                    elementosPreco.forEach(el => {
+                        el.innerHTML = `R$ ${data.precos[codigo] ? Number(data.precos[codigo]).toFixed(2) : '0.00'}`;
+                    });
                 }
             }
             // Em caso de falha, o "Carregando..." permanece, indicando o problema.
