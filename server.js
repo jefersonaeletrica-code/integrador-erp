@@ -204,57 +204,30 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
     };
     console.log('[CissPoder Payload]', JSON.stringify(payload, null, 2));
 
-    const allUniqueProducts = new Map();
-    let currentPage = page;
-    let totalFromApi = 0;
-    let hasNextPage = true;
-
-    // Continua buscando páginas da API até ter 100 produtos únicos ou até a API não ter mais páginas.
-    while (allUniqueProducts.size < 100 && hasNextPage) {
-        payload.page = currentPage;
-        console.log(`[CissPoder] Buscando página ${currentPage} da API...`);
-        
-        let response;
-        try {
-            response = await axiosInstance.post(url, payload, {
-                headers: {
-                    'Authorization': `Bearer ${connection.credentials.access_token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-
-            const productsFromPage = Array.isArray(response.data.data) ? response.data.data : [];
-            if (productsFromPage.length === 0) {
-                hasNextPage = false;
+    try {
+        const response = await axiosInstance.post(url, payload, {
+            headers: {
+                'Authorization': `Bearer ${connection.credentials.access_token}`,
+                'Content-Type': 'application/json'
             }
+        });
+        console.log('[CissPoder Response]', JSON.stringify(response.data, null, 2));
 
-            productsFromPage.forEach(p => {
-                if (!allUniqueProducts.has(p.idsubproduto)) {
-                    allUniqueProducts.set(p.idsubproduto, p);
-                }
-            });
+        const productsArray = Array.isArray(response.data.data) ? response.data.data : [];
+        const uniqueProducts = Array.from(new Map(productsArray.map(p => [p.idsubproduto, p])).values());
 
-            totalFromApi = response.data.total;
-            hasNextPage = response.data.hasNext && hasNextPage;
-            currentPage++;
+        const data = uniqueProducts.map(p => ({
+            codigo: p.idsubproduto,
+            nome: p.descrcomproduto,
+            preco: 0
+        }));
+        console.log(`[CissPoder] Encontrados ${productsArray.length} registros na API, retornando ${data.length} produtos únicos.`);
 
-        } catch (error) {
-            console.error(`[CissPoder] Falha ao buscar produtos. URL: ${url}`, error.message);
-            throw error; // Lança o erro para ser capturado pelo handler da rota
-        }
+        return { data, total: response.data.total, hasNext: response.data.hasNext };
+    } catch (error) {
+        console.error(`[CissPoder] Falha ao buscar produtos. URL: ${url}`, error.message);
+        throw error;
     }
-
-    const data = Array.from(allUniqueProducts.values()).slice(0, 100).map(p => ({
-        codigo: p.idsubproduto,   // Mapeado de: idsubproduto
-        nome: p.descrcomproduto,  // Mapeado de: descrcomproduto
-        preco: 0 // O preço será carregado separadamente pelo frontend
-    }));
-    console.log(`[CissPoder] Retornando ${data.length} produtos únicos para o frontend.`);
-
-    return {
-        data: data,
-        total: totalFromApi,
-    };
 };
 
 const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
@@ -515,23 +488,47 @@ app.get('/api/produtos/:connectionId', async (req, res) => {
                 responseData = await fetchAllBlingProductsPaginated(connection, page);
             }
         } else if (connection.type === 'cisspoder') {
+            let allProducts = [];
+            let totalFromApi = 0;
+
             if (typeof nome === 'string' && nome.trim()) {
-                responseData = await fetchCissPoderProductsByName(connection, nome.trim(), page);
+                const result = await fetchCissPoderProductsByName(connection, nome.trim(), page);
+                allProducts = result.data;
+                totalFromApi = result.total;
             } else if (typeof codigo === 'string' && codigo.trim()) {
-                responseData = await fetchCissPoderProductsByCode(connection, codigo.trim(), page);
+                const result = await fetchCissPoderProductsByCode(connection, codigo.trim(), page);
+                allProducts = result.data;
+                totalFromApi = result.total;
             } else {
-                responseData = await fetchAllCissPoderProducts(connection, page);
+                // Lógica de paginação para busca geral
+                const uniqueProductsMap = new Map();
+                let currentPage = page;
+                let hasNext = true;
+
+                while (uniqueProductsMap.size < 100 && hasNext) {
+                    console.log(`[CissPoder] Buscando página ${currentPage} da API para preencher a página do frontend.`);
+                    const result = await fetchAllCissPoderProducts(connection, currentPage);
+                    result.data.forEach(p => {
+                        if (!uniqueProductsMap.has(p.codigo)) {
+                            uniqueProductsMap.set(p.codigo, p);
+                        }
+                    });
+                    totalFromApi = result.total;
+                    hasNext = result.hasNext;
+                    currentPage++;
+                }
+                allProducts = Array.from(uniqueProductsMap.values()).slice(0, 100);
             }
 
             // Se a conexão for CissPoder, busca os preços para os produtos encontrados
-            if (responseData.data && responseData.data.length > 0) {
-                const productIds = responseData.data.map(p => p.codigo);
+            if (allProducts.length > 0) {
+                const productIds = allProducts.map(p => p.codigo);
                 const priceMap = await fetchCissPoderPrices(connection, productIds);
-                // Atribui os preços aos produtos
-                responseData.data.forEach(p => {
+                allProducts.forEach(p => {
                     p.preco = priceMap[p.codigo] || 0;
                 });
             }
+            responseData = { data: allProducts, total: totalFromApi };
         } else {
             return res.status(400).json({ sucesso: false, erro: 'Tipo de conexão não suportado para busca de produtos.' });
         }
