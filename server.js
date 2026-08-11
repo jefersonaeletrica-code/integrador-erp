@@ -231,7 +231,10 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
 };
 
 const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
-    const clausulas = [{ campo: "descrcomproduto", valor: `%${name}%`, Operador: "LIKE", OperadorLogico: "AND" }];
+    // Transforma "palavra1 palavra2" em "%palavra1%palavra2%"
+    const searchTerm = '%' + name.trim().split(/\s+/).filter(Boolean).join('%') + '%';
+    
+    const clausulas = [{ campo: "descrcomproduto", valor: searchTerm, Operador: "LIKE", OperadorLogico: "AND" }];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
