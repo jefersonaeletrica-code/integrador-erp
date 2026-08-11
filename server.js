@@ -132,11 +132,10 @@ const fetchCissPoderPrices = async (connection, productIds) => {
 
     const payload = {
         page: 1, // Assumimos que a busca de preços não é paginada ou que a primeira página é suficiente
-        clausulas: [{
-            campo: "idempresa", valor: CISSPODER_DEFAULT_IDEMPRESA, operador: "IGUAL"
-        }],
-        // A documentação do CISS Integrim sugere o uso de 'IN' para múltiplos valores.
-        clausulas: [{ campo: "idsubproduto", valor: productIds.join(','), operador: "IN" }]
+        clausulas: [
+            { campo: "idempresa", valor: CISSPODER_DEFAULT_IDEMPRESA, operador: "IGUAL" },
+            { campo: "idsubproduto", valor: productIds.join(','), operador: "IN" }
+        ]
     };
     console.log('[CissPoder Prices Payload]', JSON.stringify(payload, null, 2));
 
