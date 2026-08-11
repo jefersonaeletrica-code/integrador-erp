@@ -205,16 +205,16 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
 
 const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
     const clausulas = [{ campo: "descrcomproduto", valor: `%${name}%`, operador: "LIKE" }];
-    return await fetchCissPoderProductPage(connection, pagina, clausulas);
+    return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
 const fetchCissPoderProductsByCode = async (connection, code, pagina = 1) => {
     const clausulas = [{ campo: "idsubproduto", valor: code, operador: "IGUAL" }];
-    return await fetchCissPoderProductPage(connection, pagina, clausulas);
+    return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
 const fetchAllCissPoderProducts = async (connection, pagina = 1) => {
-    return await fetchCissPoderProductPage(connection, pagina);
+    return fetchCissPoderProductPage(connection, pagina);
 };
 
 async function getBlingConnectionStatus(connection) {
