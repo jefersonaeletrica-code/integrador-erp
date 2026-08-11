@@ -99,11 +99,10 @@ const fetchAllBlingProductsPaginated = async (connection, pagina = 1) => {
 async function refreshCissPoderToken(connection) {
     let { auth_url, username, password } = connection.credentials;
 
-    // Normaliza a URL para garantir que termine com /oauth/token e não tenha partes duplicadas.
-    // Pega a base da URL antes de /oauth/token e anexa o caminho correto.
-    const baseUrl = auth_url.split('/oauth/token')[0].replace(/\/$/, '');
-    auth_url = `${baseUrl}/oauth/token`;
-
+    // Usa o construtor URL para garantir a manipulação correta.
+    const urlObject = new URL(auth_url);
+    urlObject.pathname = '/cisspoder-auth/oauth/token';
+    auth_url = urlObject.toString();
     const response = await axios.post(auth_url,
         new URLSearchParams({
             grant_type: 'password',
@@ -126,9 +125,10 @@ const fetchCissPoderPrices = async (connection, productIds) => {
         return {};
     }
 
-    const baseAuthUrl = connection.credentials.auth_url.split('/oauth/token')[0];
-    const serviceBaseUrl = baseAuthUrl.replace(/\/$/, "").replace('/cisspoder-auth', '/cisspoder-service');
-    const url = `${serviceBaseUrl}/precos_custos_produtos_empresa`;
+    const authUrlObject = new URL(connection.credentials.auth_url);
+    authUrlObject.pathname = '/cisspoder-service/precos_custos_produtos_empresa';
+    const url = authUrlObject.toString();
+
 
     const payload = {
         page: 1, // Assumimos que a busca de preços não é paginada ou que a primeira página é suficiente
@@ -163,16 +163,10 @@ const fetchCissPoderPrices = async (connection, productIds) => {
 };
 
 const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
-    // Normaliza a URL de autenticação para obter a base e derivar a URL de serviço.
-    // Remove '/oauth/token' e a barra final, se existirem.
-    const baseAuthUrl = connection.credentials.auth_url.split('/oauth/token')[0];
-
-    const serviceBaseUrl = baseAuthUrl
-        .replace(/\/$/, "") // Remove barra final se houver
-        .replace('/cisspoder-auth', '/cisspoder-service');
-
-    // O serviço de produtos é 'cad_produtos' conforme documentação implícita.
-    const url = `${serviceBaseUrl}/cad_produtos`; 
+    // Usa o construtor URL para derivação segura da URL de serviço.
+    const authUrlObject = new URL(connection.credentials.auth_url);
+    authUrlObject.pathname = '/cisspoder-service/cad_produtos';
+    const url = authUrlObject.toString();
     console.log('[CissPoderURL]', url);
 
     const payload = {
