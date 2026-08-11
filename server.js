@@ -155,7 +155,7 @@ const fetchCissPoderPrices = async (connection, productIds) => {
 
     // Para simular o operador "IN", criamos uma cláusula "IGUAL" para cada ID, unidas por "OR"
     productIds.forEach((id, index) => {
-        payload.clausulas.push({ campo: "idsubproduto", valor: id, Operador: "IGUAL", OperadorLogico: index < productIds.length - 1 ? "OR" : "AND" });
+        payload.clausulas.push({ campo: "idsubproduto", valor: id, Operador: "IGUAL", OperadorLogico: "OR" });
     });
     console.log('[CissPoder Prices Payload]', JSON.stringify(payload, null, 2));
 
@@ -204,43 +204,56 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
     };
     console.log('[CissPoder Payload]', JSON.stringify(payload, null, 2));
 
-    let response;
-    try {
-        response = await axiosInstance.post(url, payload, {
-            headers: {
-                'Authorization': `Bearer ${connection.credentials.access_token}`,
-                'Content-Type': 'application/json'
-            }
-        });
-        console.log('[CissPoder Response]', JSON.stringify(response.data, null, 2));
-    } catch (error) {
-        console.error(`[CissPoder] Falha ao buscar produtos. URL: ${url}`);
-        if (error.response) {
-            console.error('Erro de resposta:', error.response.status, JSON.stringify(error.response.data));
-        } else if (error.request) {
-            console.error('Erro de requisição (sem resposta):', error.message);
-        } else {
-            console.error('Erro ao configurar a requisição:', error.message);
-        }
-        throw error; // Lança o erro para ser capturado pelo handler da rota
-    }
-    // Normaliza a resposta para o formato esperado (como o do Bling)
-    // Adiciona uma verificação para garantir que 'content' seja um array antes de mapear.
-    const productsArray = Array.isArray(response.data.data) ? response.data.data : [];
-    
-    // Remove duplicatas com base no 'idsubproduto', mantendo apenas a primeira ocorrência.
-    const uniqueProducts = Array.from(new Map(productsArray.map(p => [p.idsubproduto, p])).values());
+    const allUniqueProducts = new Map();
+    let currentPage = page;
+    let totalFromApi = 0;
+    let hasNextPage = true;
 
-    const data = uniqueProducts.map(p => ({
+    // Continua buscando páginas da API até ter 100 produtos únicos ou até a API não ter mais páginas.
+    while (allUniqueProducts.size < 100 && hasNextPage) {
+        payload.page = currentPage;
+        console.log(`[CissPoder] Buscando página ${currentPage} da API...`);
+        
+        let response;
+        try {
+            response = await axiosInstance.post(url, payload, {
+                headers: {
+                    'Authorization': `Bearer ${connection.credentials.access_token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            const productsFromPage = Array.isArray(response.data.data) ? response.data.data : [];
+            if (productsFromPage.length === 0) {
+                hasNextPage = false;
+            }
+
+            productsFromPage.forEach(p => {
+                if (!allUniqueProducts.has(p.idsubproduto)) {
+                    allUniqueProducts.set(p.idsubproduto, p);
+                }
+            });
+
+            totalFromApi = response.data.total;
+            hasNextPage = response.data.hasNext && hasNextPage;
+            currentPage++;
+
+        } catch (error) {
+            console.error(`[CissPoder] Falha ao buscar produtos. URL: ${url}`, error.message);
+            throw error; // Lança o erro para ser capturado pelo handler da rota
+        }
+    }
+
+    const data = Array.from(allUniqueProducts.values()).slice(0, 100).map(p => ({
         codigo: p.idsubproduto,   // Mapeado de: idsubproduto
         nome: p.descrcomproduto,  // Mapeado de: descrcomproduto
         preco: 0 // O preço será carregado separadamente pelo frontend
     }));
-    console.log(`[CissPoder] Encontrados ${productsArray.length} registros na API, retornando ${data.length} produtos únicos.`);
+    console.log(`[CissPoder] Retornando ${data.length} produtos únicos para o frontend.`);
 
     return {
         data: data,
-        total: response.data.total,
+        total: totalFromApi,
     };
 };
 
