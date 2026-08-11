@@ -231,7 +231,7 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
 };
 
 const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
-    const clausulas = [{ campo: "descrcomproduto", valor: name, Operador: "LIKE", OperadorLogico: "AND" }];
+    const clausulas = [{ campo: "descrcomproduto", valor: `%${name}%`, Operador: "LIKE", OperadorLogico: "AND" }];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
