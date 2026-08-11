@@ -654,7 +654,9 @@
 
         async function carregarPrecosParaProdutosVisiveis(produtos) {
             const connectionId = document.getElementById('conexaoBusca').value;
+            console.log('[Preços] Carregando preços para:', produtos);
             const productIds = produtos.map(p => p.codigo);
+            console.log('[Preços] Enviando IDs:', productIds);
 
             const res = await fetch(`/api/precos/${connectionId}`, {
                 method: 'POST',
@@ -663,6 +665,7 @@
             });
             const data = await res.json();
 
+            console.log('[Preços] Resposta da API:', data);
             if (data.sucesso) {
                 for (const codigo in data.precos) {
                     const elPreco = document.getElementById(`preco-${codigo}`);
