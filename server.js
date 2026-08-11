@@ -1,5 +1,6 @@
 require('dotenv').config();
 
+const https = require('https');
 const express = require('express');
 const axios = require('axios');
 
@@ -9,6 +10,12 @@ app.use(express.json());
 app.use(express.static('public'));
 
 const PORT = process.env.PORT || 3000;
+
+// Cria uma instância do axios com configurações reutilizáveis
+const axiosInstance = axios.create({
+    timeout: 30000, // Timeout de 30 segundos
+    httpsAgent: new https.Agent({ rejectUnauthorized: false }) // Ignora erros de certificado SSL
+});
 
 let erpConnections = [];
 let produtosImportados;
@@ -30,7 +37,7 @@ async function refreshAccessToken(connection) {
     }
     const { client_id, client_secret, refresh_token } = connection.credentials;
     const basicAuth = Buffer.from(`${client_id}:${client_secret}`).toString('base64');
-    const response = await axios.post('https://www.bling.com.br/Api/v3/oauth/token', 
+    const response = await axiosInstance.post('https://www.bling.com.br/Api/v3/oauth/token', 
         new URLSearchParams({ grant_type: 'refresh_token', refresh_token }), 
         { headers: { 'Authorization': `Basic ${basicAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
     );
@@ -61,7 +68,7 @@ const fetchBlingProductPage = async (connection, page, searchParams = {}) => {
     const url = buildBlingProductUrl(page, searchParams);
     console.log('[BlingURL]', url);
 
-    const response = await axios.get(url, { headers: { 'Authorization': `Bearer ${connection.credentials.access_token}` } });
+    const response = await axiosInstance.get(url, { headers: { 'Authorization': `Bearer ${connection.credentials.access_token}` } });
     return response.data;
 };
 
@@ -103,7 +110,7 @@ async function refreshCissPoderToken(connection) {
     const urlObject = new URL(auth_url);
     urlObject.pathname = '/cisspoder-auth/oauth/token';
     auth_url = urlObject.toString();
-    const response = await axios.post(auth_url,
+    const response = await axiosInstance.post(auth_url,
         new URLSearchParams({
             grant_type: 'password',
             username,
@@ -140,7 +147,7 @@ const fetchCissPoderPrices = async (connection, productIds) => {
     console.log('[CissPoder Prices Payload]', JSON.stringify(payload, null, 2));
 
     try {
-        const response = await axios.post(url, payload, {
+        const response = await axiosInstance.post(url, payload, {
             headers: {
                 'Authorization': `Bearer ${connection.credentials.access_token}`,
                 'Content-Type': 'application/json'
@@ -157,7 +164,14 @@ const fetchCissPoderPrices = async (connection, productIds) => {
         }
         return priceMap;
     } catch (error) {
-        console.error('[CissPoder] Falha ao buscar preços:', error.message);
+        console.error(`[CissPoder] Falha ao buscar preços. URL: ${url}`);
+        if (error.response) {
+            console.error('Erro de resposta:', JSON.stringify(error.response.data));
+        } else if (error.request) {
+            console.error('Erro de requisição (sem resposta):', error.message);
+        } else {
+            console.error('Erro ao configurar a requisição:', error.message);
+        }
         return {}; // Retorna um mapa vazio em caso de erro para não quebrar a busca principal.
     }
 };
@@ -178,14 +192,26 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
     };
     console.log('[CissPoder Payload]', JSON.stringify(payload, null, 2));
 
-    const response = await axios.post(url, payload, {
-        headers: {
-            'Authorization': `Bearer ${connection.credentials.access_token}`,
-            'Content-Type': 'application/json'
+    let response;
+    try {
+        response = await axiosInstance.post(url, payload, {
+            headers: {
+                'Authorization': `Bearer ${connection.credentials.access_token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        console.log('[CissPoder Response]', JSON.stringify(response.data, null, 2));
+    } catch (error) {
+        console.error(`[CissPoder] Falha ao buscar produtos. URL: ${url}`);
+        if (error.response) {
+            console.error('Erro de resposta:', error.response.status, JSON.stringify(error.response.data));
+        } else if (error.request) {
+            console.error('Erro de requisição (sem resposta):', error.message);
+        } else {
+            console.error('Erro ao configurar a requisição:', error.message);
         }
-    });
-    console.log('[CissPoder Response]', JSON.stringify(response.data, null, 2));
-
+        throw error; // Lança o erro para ser capturado pelo handler da rota
+    }
     // Normaliza a resposta para o formato esperado (como o do Bling)
     // Adiciona uma verificação para garantir que 'content' seja um array antes de mapear.
     const productsArray = Array.isArray(response.data.data) ? response.data.data : [];
@@ -225,7 +251,7 @@ async function getBlingConnectionStatus(connection) {
     try {
         // Tenta uma chamada leve na API para validar o token
         // Usando o endpoint /contatos com limite 1, que é uma chamada leve e confiável.
-        await axios.get('https://api.bling.com.br/Api/v3/contatos?limite=1', {
+        await axiosInstance.get('https://api.bling.com.br/Api/v3/contatos?limite=1', {
             headers: { 'Authorization': `Bearer ${connection.credentials.access_token}` }
         });
         return 'connected';
@@ -410,7 +436,7 @@ app.get('/callback', async (req, res) => {
     try {
         const { client_id, client_secret } = connection.credentials;
         const basicAuth = Buffer.from(`${client_id}:${client_secret}`).toString('base64');
-        const response = await axios.post('https://www.bling.com.br/Api/v3/oauth/token', 
+        const response = await axiosInstance.post('https://www.bling.com.br/Api/v3/oauth/token', 
             new URLSearchParams({ grant_type: 'authorization_code', code }), 
             { headers: { 'Authorization': `Basic ${basicAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
         );
@@ -422,7 +448,11 @@ app.get('/callback', async (req, res) => {
 
         res.redirect('/?autorizado=true');
     } catch (e) { 
-        res.status(500).send('Erro na autorização: ' + (e.response?.data ? JSON.stringify(e.response.data) : e.message)); 
+        console.error('Falha no callback do Bling:', e.message);
+        if (e.response) {
+            console.error('Detalhes do erro:', JSON.stringify(e.response.data));
+        }
+        res.status(500).send('Erro na autorização: ' + (e.response?.data ? JSON.stringify(e.response.data) : e.message));
     }
 });
 
@@ -473,7 +503,15 @@ app.get('/api/produtos/:connectionId', async (req, res) => {
         const total = responseData?.total ?? responseData?.meta?.total; 
 
         res.json({ sucesso: true, produtos, pagina: page, total });
-    } catch (e) { res.status(500).json({ sucesso: false, erro: e.message }); }
+    } catch (e) {
+        // O erro já foi logado dentro da função de fetch, aqui apenas retornamos o 500.
+        let errorMessage = e.message;
+        if (e.code === 'ECONNABORTED') {
+            errorMessage = 'A requisição para o ERP demorou demais e foi cancelada (timeout).';
+        } else if (e.response) {
+            errorMessage = `O ERP retornou um erro ${e.response.status}.`;
+        }
+        res.status(500).json({ sucesso: false, erro: errorMessage }); }
 });
 
 app.get('/api/produtos-importados', (req, res) => {
