@@ -127,13 +127,12 @@ const fetchCissPoderPrices = async (connection, productIds) => {
 
     const baseAuthUrl = connection.credentials.auth_url.split('/oauth/token')[0];
     const serviceBaseUrl = baseAuthUrl.replace(/\/$/, "").replace('/cisspoder-auth', '/cisspoder-service');
-    const url = `${serviceBaseUrl}/cad_precos`;
+    const url = `${serviceBaseUrl}/PRECOS_CUSTOS_PRODUTOS_EMPRESA`;
 
-    // A API de preços geralmente aceita uma lista de IDs.
-    // O campo e operador exatos podem precisar de ajuste ('idsubproduto' e 'IN').
     const payload = {
         page: 1,
-        clausulas: [{ campo: "idsubproduto", valor: productIds.join(','), operador: "IN" }]
+        // A documentação do CISS Integrim sugere o uso de 'IN' para múltiplos valores.
+        clausulas: [{ campo: "IDSUBPRODUTO", valor: productIds.join(','), operador: "IN" }]
     };
     console.log('[CissPoder Prices Payload]', JSON.stringify(payload, null, 2));
 
@@ -149,7 +148,8 @@ const fetchCissPoderPrices = async (connection, productIds) => {
         const priceMap = {};
         if (Array.isArray(response.data.data)) {
             response.data.data.forEach(priceInfo => {
-                priceMap[priceInfo.idsubproduto] = priceInfo.precovenda;
+                // Usa o IDSUBPRODUTO para mapear o VALPRECOVAREJO
+                priceMap[priceInfo.IDSUBPRODUTO] = priceInfo.VALPRECOVAREJO;
             });
         }
         return priceMap;
@@ -213,7 +213,7 @@ const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
 };
 
 const fetchCissPoderProductsByCode = async (connection, code, pagina = 1) => {
-    const clausulas = [{ campo: "idsubproduto", valor: code, operador: "IGUAL" }];
+    const clausulas = [{ campo: "IDSUBPRODUTO", valor: code, operador: "IGUAL" }];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
