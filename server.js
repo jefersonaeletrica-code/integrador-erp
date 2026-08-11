@@ -151,11 +151,11 @@ const fetchCissPoderPrices = async (connection, productIds) => {
     };
 
     // Adiciona a cláusula obrigatória de idempresa
-    payload.clausulas.push({ campo: "idempresa", valor: CISSPODER_DEFAULT_IDEMPRESA, OperadorLogico: "AND", Operador: "IGUAL" });
+    payload.clausulas.push({ campo: "idempresa", valor: CISSPODER_DEFAULT_IDEMPRESA, operadorlogico: "AND", operador: "IGUAL" });
 
     // Para simular o operador "IN", criamos uma cláusula "IGUAL" para cada ID, unidas por "OR"
     productIds.forEach((id, index) => {
-        payload.clausulas.push({ campo: "idsubproduto", valor: id, OperadorLogico: "OR", Operador: "IGUAL" });
+        payload.clausulas.push({ campo: "idsubproduto", valor: id, operadorlogico: "OR", operador: "IGUAL" });
     });
     console.log('[CissPoder Prices Payload]', JSON.stringify(payload, null, 2));
 
@@ -231,12 +231,20 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
 };
 
 const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
-    const clausulas = [{ campo: "descrcomproduto", valor: name.trim(), OperadorLogico: "AND", Operador: "IGUAL" }];
+    // A busca por nome deve usar LIKE para encontrar correspondências parciais.
+    // Dividimos o termo de busca para que "cabo flex" se torne duas cláusulas: LIKE '%cabo%' AND LIKE '%flex%'.
+    const searchWords = name.trim().split(/\s+/).filter(word => word.length > 0);
+    const clausulas = searchWords.map(word => ({
+        campo: "descrcomproduto",
+        valor: `%${word}%`,
+        operadorlogico: "AND",
+        operador: "LIKE"
+    }));
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
 const fetchCissPoderProductsByCode = async (connection, code, pagina = 1) => {
-    const clausulas = [{ campo: "idsubproduto", valor: code, OperadorLogico: "AND", Operador: "IGUAL" }];
+    const clausulas = [{ campo: "idsubproduto", valor: code, operadorlogico: "AND", operador: "IGUAL" }];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
