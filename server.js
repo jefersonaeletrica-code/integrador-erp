@@ -191,8 +191,7 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
     const payload = {
         page: page, // Página atual da busca de produtos
         clausulas: [
-            // Adiciona a cláusula de empresa como base para todas as buscas de produto
-            { campo: "idempresa", valor: CISSPODER_DEFAULT_IDEMPRESA, operador: "IGUAL", operadorlogico: "AND" },
+            { campo: "IDEMPRESA", valor: CISSPODER_DEFAULT_IDEMPRESA, operador: "IGUAL", operadorlogico: "AND" },
             ...clausulas
         ]
     };
@@ -246,7 +245,7 @@ const fetchCissPoderProductsByCode = async (connection, code, pagina = 1) => {
 };
 
 const fetchAllCissPoderProducts = async (connection, pagina = 1) => {
-    return fetchCissPoderProductPage(connection, pagina);
+    return fetchCissPoderProductPage(connection, pagina, []);
 };
 
 async function getBlingConnectionStatus(connection) {
