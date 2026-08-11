@@ -16,6 +16,7 @@ let produtosImportados;
 // Constantes para CissPoder baseadas na documentação
 const CISSPODER_CLIENT_ID = 'cisspoder-oauth';
 const CISSPODER_CLIENT_SECRET = 'poder7547';
+const CISSPODER_DEFAULT_IDEMPRESA = 1; // IDEMPRESA padrão para todas as buscas
 
 const saveProdutosImportados = (items) => {
     if (!db) return;
@@ -130,7 +131,10 @@ const fetchCissPoderPrices = async (connection, productIds) => {
     const url = `${serviceBaseUrl}/precos_custos_produtos_empresa`;
 
     const payload = {
-        page: 1,
+        page: 1, // Assumimos que a busca de preços não é paginada ou que a primeira página é suficiente
+        clausulas: [{
+            campo: "idempresa", valor: CISSPODER_DEFAULT_IDEMPRESA, operador: "IGUAL"
+        }],
         // A documentação do CISS Integrim sugere o uso de 'IN' para múltiplos valores.
         clausulas: [{ campo: "idsubproduto", valor: productIds.join(','), operador: "IN" }]
     };
@@ -173,8 +177,11 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
     console.log('[CissPoderURL]', url);
 
     const payload = {
-        page: page,
-        clausulas: clausulas
+        page: page, // Página atual da busca de produtos
+        clausulas: [
+            { campo: "idempresa", valor: CISSPODER_DEFAULT_IDEMPRESA, operador: "IGUAL" },
+            ...clausulas // Adiciona as cláusulas de busca por nome/código
+        ]
     };
     console.log('[CissPoder Payload]', JSON.stringify(payload, null, 2));
 
