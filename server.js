@@ -150,14 +150,13 @@ const fetchCissPoderPrices = async (connection, productIds) => {
         clausulas: []
     };
 
-    // Para cada produto, criamos um par de cláusulas (idempresa E idsubproduto),
-    // e unimos esses pares com OR.
-    // Lógica: (empresa=1 AND produto=X) OR (empresa=1 AND produto=Y) ...
-    productIds.forEach((id) => {
-        payload.clausulas.push({ campo: "idempresa", valor: CISSPODER_DEFAULT_IDEMPRESA, operadorlogico: "AND", operador: "IGUAL" });
-        payload.clausulas.push({ campo: "idsubproduto", valor: id, operadorlogico: "OR", operador: "IGUAL" });
-    });
+    // Adiciona o filtro de empresa como base.
+    payload.clausulas.push({ campo: "idempresa", valor: CISSPODER_DEFAULT_IDEMPRESA, operadorlogico: "AND", operador: "IGUAL" });
 
+    // Para cada produto, adiciona uma cláusula. A primeira se conecta com AND, as outras com OR.
+    productIds.forEach((id, index) => {
+        payload.clausulas.push({ campo: "idsubproduto", valor: id, operadorlogico: index === 0 ? "AND" : "OR", operador: "IGUAL" });
+    });
     console.log('[CissPoder Prices Payload]', JSON.stringify(payload, null, 2));
 
     try {
@@ -232,8 +231,8 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
 };
 
 const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
-    // A busca por nome deve usar LIKE para encontrar correspondências parciais.
-    // Dividimos o termo de busca para que "cabo flex" se torne duas cláusulas: LIKE '%cabo%' AND LIKE '%flex%'.
+    // A busca por nome deve usar LIKE. Dividimos o termo para que "cabo flex" se torne duas cláusulas:
+    // LIKE '%cabo%' AND LIKE '%flex%'.
     const searchWords = name.trim().split(/\s+/).filter(word => word.length > 0);
     const clausulas = searchWords.map(word => ({
         campo: "descrcomproduto",
