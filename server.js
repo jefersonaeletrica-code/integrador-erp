@@ -190,14 +190,10 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
     // Adiciona uma verificação para garantir que 'content' seja um array antes de mapear.
     const productsArray = Array.isArray(response.data.data) ? response.data.data : [];
 
-    // Após buscar os produtos, busca os preços para eles.
-    const productIds = productsArray.map(p => p.idsubproduto);
-    const priceMap = await fetchCissPoderPrices(connection, productIds);
-
     const data = productsArray.map(p => ({
         codigo: p.idsubproduto,   // Mapeado de: idsubproduto
         nome: p.descrcomproduto,  // Mapeado de: descrcomproduto
-        preco: priceMap[p.idsubproduto] || 0 // Usa o preço do mapa de preços ou 0 se não encontrado.
+        preco: 0 // O preço será carregado separadamente pelo frontend
     }));
     console.log(`[CissPoder] Encontrados ${data.length} produtos na resposta.`);
 
@@ -209,16 +205,16 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
 
 const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
     const clausulas = [{ campo: "descrcomproduto", valor: `%${name}%`, operador: "LIKE" }];
-    return fetchCissPoderProductPage(connection, pagina, clausulas);
+    return await fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
 const fetchCissPoderProductsByCode = async (connection, code, pagina = 1) => {
     const clausulas = [{ campo: "idsubproduto", valor: code, operador: "IGUAL" }];
-    return fetchCissPoderProductPage(connection, pagina, clausulas);
+    return await fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
 const fetchAllCissPoderProducts = async (connection, pagina = 1) => {
-    return fetchCissPoderProductPage(connection, pagina);
+    return await fetchCissPoderProductPage(connection, pagina);
 };
 
 async function getBlingConnectionStatus(connection) {
@@ -489,6 +485,28 @@ app.post('/api/produtos-importados', (req, res) => {
     const produtosParaSalvar = Array.isArray(req.body.produtos) ? req.body.produtos : [];
     saveProdutosImportados(produtosParaSalvar);
     res.json({ sucesso: true, mensagem: 'Produtos importados salvos com sucesso!' });
+});
+
+app.post('/api/precos/:connectionId', async (req, res) => {
+    const { connectionId } = req.params;
+    const { productIds } = req.body;
+
+    if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
+        return res.status(400).json({ sucesso: false, erro: 'A lista de IDs de produtos é obrigatória.' });
+    }
+
+    const connection = erpConnections.find(c => c.id == connectionId);
+    if (!connection) {
+        return res.status(404).json({ sucesso: false, erro: 'Conexão não encontrada.' });
+    }
+
+    try {
+        // Garante que o token está válido antes de prosseguir
+        if (connection.type === 'cisspoder') await getCissPoderConnectionStatus(connection);
+        
+        const priceMap = await fetchCissPoderPrices(connection, productIds);
+        res.json({ sucesso: true, precos: priceMap });
+    } catch (e) { res.status(500).json({ sucesso: false, erro: e.message }); }
 });
 
 const startServer = async () => {
