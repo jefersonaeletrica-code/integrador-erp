@@ -191,7 +191,7 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
     const payload = {
         page: page, // Página atual da busca de produtos
         clausulas: [
-            { campo: "IDEMPRESA", valor: CISSPODER_DEFAULT_IDEMPRESA, Operador: "IGUAL", OperadorLogico: "AND" },
+            { campo: "idempresa", valor: CISSPODER_DEFAULT_IDEMPRESA, Operador: "IGUAL", OperadorLogico: "AND" },
             ...clausulas
         ]
     };
