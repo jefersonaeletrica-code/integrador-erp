@@ -26,9 +26,17 @@ const CISSPODER_CLIENT_SECRET = 'poder7547';
 const CISSPODER_DEFAULT_IDEMPRESA = 1; // IDEMPRESA padrão para todas as buscas
 
 const saveProdutosImportados = (items) => {
-    if (!db) return;
-    produtosImportados = items;
-    db.updateDb({ produtos: produtosImportados });
+    if (!db || !Array.isArray(items)) {
+        console.warn('Tentativa de salvar produtos importados com DB não inicializado ou itens inválidos.');
+        return;
+    }
+
+    // Remove duplicados com base no 'codigo'
+    const uniqueProducts = Array.from(new Map(items.map(product => [product.codigo, product])).values());
+
+    produtosImportados = uniqueProducts;
+    db.updateDb({ produtos: uniqueProducts });
+    console.log(`Produtos importados salvos. Total de únicos: ${uniqueProducts.length}`);
 };
 
 async function refreshAccessToken(connection) {
