@@ -127,12 +127,12 @@ const fetchCissPoderPrices = async (connection, productIds) => {
 
     const baseAuthUrl = connection.credentials.auth_url.split('/oauth/token')[0];
     const serviceBaseUrl = baseAuthUrl.replace(/\/$/, "").replace('/cisspoder-auth', '/cisspoder-service');
-    const url = `${serviceBaseUrl}/PRECOS_CUSTOS_PRODUTOS_EMPRESA`;
+    const url = `${serviceBaseUrl}/precos_custos_produtos_empresa`;
 
     const payload = {
         page: 1,
         // A documentação do CISS Integrim sugere o uso de 'IN' para múltiplos valores.
-        clausulas: [{ campo: "IDSUBPRODUTO", valor: productIds.join(','), operador: "IN" }]
+        clausulas: [{ campo: "idsubproduto", valor: productIds.join(','), operador: "IN" }]
     };
     console.log('[CissPoder Prices Payload]', JSON.stringify(payload, null, 2));
 
@@ -148,8 +148,8 @@ const fetchCissPoderPrices = async (connection, productIds) => {
         const priceMap = {};
         if (Array.isArray(response.data.data)) {
             response.data.data.forEach(priceInfo => {
-                // Usa o IDSUBPRODUTO para mapear o VALPRECOVAREJO
-                priceMap[priceInfo.IDSUBPRODUTO] = priceInfo.VALPRECOVAREJO;
+                // Mapeia o preço usando os campos em minúsculas
+                priceMap[priceInfo.idsubproduto] = priceInfo.valprecovarejo;
             });
         }
         return priceMap;
@@ -213,7 +213,7 @@ const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
 };
 
 const fetchCissPoderProductsByCode = async (connection, code, pagina = 1) => {
-    const clausulas = [{ campo: "IDSUBPRODUTO", valor: code, operador: "IGUAL" }];
+    const clausulas = [{ campo: "idsubproduto", valor: code, operador: "IGUAL" }];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
