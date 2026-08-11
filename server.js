@@ -151,14 +151,11 @@ const fetchCissPoderPrices = async (connection, productIds) => {
     };
 
     // Adiciona a cláusula obrigatória de idempresa
-    payload.clausulas.push({ campo: "idempresa", valor: CISSPODER_DEFAULT_IDEMPRESA, operadorlogico: "AND", operador: "IGUAL" });
-
-    // Para simular o operador "IN", criamos uma cláusula "IGUAL" para cada ID, unidas por "OR"
-    productIds.forEach((id, index) => {
-        // A primeira cláusula de produto usa AND, as seguintes usam OR.
-        const logicOperator = index === 0 ? "AND" : "OR";
-        payload.clausulas.push({ campo: "idsubproduto", valor: id, operadorlogico: logicOperator, operador: "IGUAL" });
-    });
+    payload.clausulas.push(
+        { campo: "idempresa", valor: CISSPODER_DEFAULT_IDEMPRESA, operadorlogico: "AND", operador: "IGUAL" },
+        // A forma correta de buscar múltiplos IDs é com o operador IN e uma string de valores.
+        { campo: "idsubproduto", valor: productIds.join(','), operadorlogico: "AND", operador: "IN" }
+    );
     console.log('[CissPoder Prices Payload]', JSON.stringify(payload, null, 2));
 
     try {
