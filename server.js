@@ -155,7 +155,9 @@ const fetchCissPoderPrices = async (connection, productIds) => {
 
     // Para simular o operador "IN", criamos uma cláusula "IGUAL" para cada ID, unidas por "OR"
     productIds.forEach((id, index) => {
-        payload.clausulas.push({ campo: "idsubproduto", valor: id, operadorlogico: "OR", operador: "IGUAL" });
+        // A primeira cláusula de produto usa AND, as seguintes usam OR.
+        const logicOperator = index === 0 ? "AND" : "OR";
+        payload.clausulas.push({ campo: "idsubproduto", valor: id, operadorlogico: logicOperator, operador: "IGUAL" });
     });
     console.log('[CissPoder Prices Payload]', JSON.stringify(payload, null, 2));
 
