@@ -231,10 +231,15 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
 };
 
 const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
-    // Conforme solicitado, usando o operador IGUAL com o formato de busca de %
-    const searchTerm = '%' + name.trim().split(/\s+/).filter(Boolean).join('%') + '%';
-
-    const clausulas = [{ campo: "descrcomproduto", valor: searchTerm, Operador: "IGUAL", OperadorLogico: "AND" }];
+    // Divide o termo de busca em palavras e cria uma cláusula LIKE para cada uma.
+    // Isso garante que a busca por "cabo flex" se torne duas condições: nome LIKE '%cabo%' AND nome LIKE '%flex%'.
+    const searchWords = name.trim().split(/\s+/).filter(word => word.length > 0);
+    const clausulas = searchWords.map(word => ({
+        campo: "descrcomproduto",
+        valor: `%${word}%`,
+        Operador: "LIKE",
+        OperadorLogico: "AND"
+    }));
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
