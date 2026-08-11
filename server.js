@@ -258,7 +258,7 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
 };
 
 const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
-    const clausulas = [{ campo: "descrcomproduto", valor: `%${name}%`, Operador: "LIKE", OperadorLogico: "AND" }];
+    const clausulas = [{ campo: "descrcomproduto", valor: name, Operador: "LIKE", OperadorLogico: "AND" }];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
@@ -521,6 +521,16 @@ app.get('/api/produtos/:connectionId', async (req, res) => {
                 responseData = await fetchCissPoderProductsByCode(connection, codigo.trim(), page);
             } else {
                 responseData = await fetchAllCissPoderProducts(connection, page);
+            }
+
+            // Se a conexão for CissPoder, busca os preços para os produtos encontrados
+            if (responseData.data && responseData.data.length > 0) {
+                const productIds = responseData.data.map(p => p.codigo);
+                const priceMap = await fetchCissPoderPrices(connection, productIds);
+                // Atribui os preços aos produtos
+                responseData.data.forEach(p => {
+                    p.preco = priceMap[p.codigo] || 0;
+                });
             }
         } else {
             return res.status(400).json({ sucesso: false, erro: 'Tipo de conexão não suportado para busca de produtos.' });
