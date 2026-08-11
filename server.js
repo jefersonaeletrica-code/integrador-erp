@@ -231,10 +231,10 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
 };
 
 const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
-    // Transforma "palavra1 palavra2" em "%palavra1%palavra2%"
+    // Conforme solicitado, usando o operador IGUAL com o formato de busca de %
     const searchTerm = '%' + name.trim().split(/\s+/).filter(Boolean).join('%') + '%';
-    
-    const clausulas = [{ campo: "descrcomproduto", valor: searchTerm, Operador: "LIKE", OperadorLogico: "AND" }];
+
+    const clausulas = [{ campo: "descrcomproduto", valor: searchTerm, Operador: "IGUAL", OperadorLogico: "AND" }];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
