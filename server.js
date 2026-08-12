@@ -178,15 +178,15 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
 };
 
 const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
-    // Para evitar timeouts em buscas complexas, consolidamos os termos de busca
-    // em uma única cláusula LIKE. "cabo flex" se torna "%cabo%flex%".
-    const searchTerm = '%' + name.trim().split(/\s+/).filter(Boolean).join('%') + '%';
-    const clausulas = [{
+    // Para uma busca mais flexível, criamos uma cláusula LIKE para cada palavra.
+    // Isso permite que "cabo acabamento" encontre "ACABAMENTO ... CABO".
+    const searchWords = name.trim().split(/\s+/).filter(Boolean);
+    const clausulas = searchWords.map(word => ({
         campo: "descrcomproduto",
-        valor: searchTerm,
+        valor: `%${word}%`,
         operadorlogico: "AND",
         operador: "LIKE"
-    }];
+    }));
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
