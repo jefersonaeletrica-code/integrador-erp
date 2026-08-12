@@ -14,6 +14,7 @@
             <div class="flex bg-gray-100 p-1 rounded-lg">
                 <button onclick="mudarAba('conexoes')" id="btnAbaConexoes" class="px-5 py-2 rounded-md text-sm font-semibold transition bg-white shadow-sm text-gray-900">Conexões ERP</button>
                 <button onclick="mudarAba('produtos')" id="btnAbaProdutos" class="px-5 py-2 rounded-md text-sm font-semibold transition text-gray-500 hover:text-gray-900">Produtos</button>
+                <button onclick="mudarAba('fornecedores')" id="btnAbaFornecedores" class="px-5 py-2 rounded-md text-sm font-semibold transition text-gray-500 hover:text-gray-900">Conexões Fornecedores</button>
             </div>
         </div>
 
@@ -141,6 +142,19 @@
             </div>
         </div>
 
+        <!-- ABA 3: CONEXÕES FORNECEDORES -->
+        <div id="abaFornecedores" class="space-y-6 hidden">
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
+                <h2 class="text-xl font-semibold text-gray-700 border-b pb-3">Adicionar Nova Conexão de Fornecedor</h2>
+                <p class="text-gray-500">A interface para adicionar novas conexões de fornecedores (via API ou Web Scraper) será construída aqui.</p>
+            </div>
+
+            <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
+                <h2 class="text-xl font-semibold text-gray-700 border-b pb-3">Conexões de Fornecedores Salvas</h2>
+                <p class="text-gray-500">Nenhuma conexão de fornecedor encontrada.</p>
+            </div>
+        </div>
+
     </div>
 
     <!-- Spinner de Carregamento Global -->
@@ -168,19 +182,29 @@
         function mudarAba(aba) {
             const conexoesDiv = document.getElementById('abaConexoes');
             const produtosDiv = document.getElementById('abaProdutos');
+            const fornecedoresDiv = document.getElementById('abaFornecedores');
+
             const btnConexoes = document.getElementById('btnAbaConexoes');
             const btnProdutos = document.getElementById('btnAbaProdutos');
+            const btnFornecedores = document.getElementById('btnAbaFornecedores');
+
+            // Resetar todos
+            conexoesDiv.classList.add('hidden');
+            produtosDiv.classList.add('hidden');
+            fornecedoresDiv.classList.add('hidden');
+            btnConexoes.className = "px-5 py-2 rounded-md text-sm font-semibold transition text-gray-500 hover:text-gray-900";
+            btnProdutos.className = "px-5 py-2 rounded-md text-sm font-semibold transition text-gray-500 hover:text-gray-900";
+            btnFornecedores.className = "px-5 py-2 rounded-md text-sm font-semibold transition text-gray-500 hover:text-gray-900";
 
             if (aba === 'conexoes') {
                 conexoesDiv.classList.remove('hidden');
-                produtosDiv.classList.add('hidden');
                 btnConexoes.className = "px-5 py-2 rounded-md text-sm font-semibold transition bg-white shadow-sm text-gray-900";
-                btnProdutos.className = "px-5 py-2 rounded-md text-sm font-semibold transition text-gray-500 hover:text-gray-900";
-            } else {
-                conexoesDiv.classList.add('hidden');
+            } else if (aba === 'produtos') {
                 produtosDiv.classList.remove('hidden');
                 btnProdutos.className = "px-5 py-2 rounded-md text-sm font-semibold transition bg-white shadow-sm text-gray-900";
-                btnConexoes.className = "px-5 py-2 rounded-md text-sm font-semibold transition text-gray-500 hover:text-gray-900";
+            } else if (aba === 'fornecedores') {
+                fornecedoresDiv.classList.remove('hidden');
+                btnFornecedores.className = "px-5 py-2 rounded-md text-sm font-semibold transition bg-white shadow-sm text-gray-900";
             }
         }
 
