@@ -1,5 +1,5 @@
 const express = require('express');
-const erpService = require('../services/erpService');
+const erpService = require('./erpService');
 
 const router = express.Router();
 

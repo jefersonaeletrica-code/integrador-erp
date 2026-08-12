@@ -5,10 +5,10 @@ const express = require('express');
 const app = express();
 
 // Importa os módulos de rotas e serviços
-const erpRoutes = require('./routes/erpRoutes');
-const supplierRoutes = require('./routes/supplierRoutes');
-const productRoutes = require('./routes/productRoutes');
-const productService = require('./services/productService');
+const erpRoutes = require('./erpRoutes');
+const supplierRoutes = require('./supplierRoutes');
+const productRoutes = require('./productRoutes');
+const productService = require('./productService');
 
 let db; // Será inicializado depois
 app.use(express.json());
