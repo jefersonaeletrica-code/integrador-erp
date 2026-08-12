@@ -153,7 +153,7 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
             {
                 // O campo de nome no endpoint 'cad_produtos' é 'descrcomproduto'
                 campo: "descrcomproduto",
-                tipo: "ASC" // Ordena por nome em ordem alfabética ascendente
+                direcao: "ASC" // Corrigido de 'tipo' para 'direcao' conforme o exemplo
             }
         ]
     };
