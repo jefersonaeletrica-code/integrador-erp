@@ -138,8 +138,8 @@ async function refreshCissPoderToken(connection) {
 const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
     // Usa o construtor URL para derivação segura da URL de serviço.
     const authUrlObject = new URL(connection.credentials.auth_url);
-    // O nome do serviço pode ser case-sensitive, então testamos com minúsculas.
-    authUrlObject.pathname = '/cisspoder-service/ecommerce_padrao_produtos';
+    // Voltando a usar o endpoint 'cad_produtos' que temos permissão para acessar.
+    authUrlObject.pathname = '/cisspoder-service/cad_produtos';
     const url = authUrlObject.toString();
     console.log('[CissPoderURL]', url);
 
@@ -165,8 +165,8 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
 
         const data = uniqueProducts.map(p => ({
             codigo: p.idsubproduto,
-            nome: p.nome,
-            marca: p.descricaomarca
+            nome: p.descrcomproduto,
+            marca: p.descricao // Mapeado para "Descrição do Fabricante"
         }));
         console.log(`[CissPoder] Encontrados ${productsArray.length} registros na API, retornando ${data.length} produtos únicos.`);
 
@@ -182,7 +182,7 @@ const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
     // em uma única cláusula LIKE. "cabo flex" se torna "%cabo%flex%".
     const searchTerm = '%' + name.trim().split(/\s+/).filter(Boolean).join('%') + '%';
     const clausulas = [{
-        campo: "nome",
+        campo: "descrcomproduto",
         valor: searchTerm,
         operadorlogico: "AND",
         operador: "LIKE"
@@ -197,8 +197,7 @@ const fetchCissPoderProductsByCode = async (connection, code, pagina = 1) => {
 
 const fetchAllCissPoderProducts = async (connection, pagina = 1) => {
     const clausulas = [
-        // Para otimizar a busca e evitar timeouts, filtramos por produtos ativos que possuem EAN (maior que 0).
-        { campo: "ativo", valor: 1, operadorlogico: "AND", operador: "IGUAL" }
+        { campo: "flaginativo", valor: "F", operadorlogico: "AND", operador: "IGUAL" }
     ];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
