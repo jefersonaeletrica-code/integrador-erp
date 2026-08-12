@@ -231,15 +231,15 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
 };
 
 const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
-    // A busca por nome deve usar LIKE. Dividimos o termo para que "cabo flex" se torne duas cláusulas:
-    // LIKE '%cabo%' AND LIKE '%flex%'.
-    const searchWords = name.trim().split(/\s+/).filter(word => word.length > 0);
-    const clausulas = searchWords.map(word => ({
+    // Para evitar timeouts em buscas complexas, consolidamos os termos de busca
+    // em uma única cláusula LIKE. "cabo flex" se torna "%cabo%flex%".
+    const searchTerm = '%' + name.trim().split(/\s+/).filter(Boolean).join('%') + '%';
+    const clausulas = [{
         campo: "descrcomproduto",
-        valor: `%${word}%`,
+        valor: searchTerm,
         operadorlogico: "AND",
         operador: "LIKE"
-    }));
+    }];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
