@@ -140,41 +140,41 @@ const fetchCissPoderPrices = async (connection, productIds) => {
         return {};
     }
 
-    const authUrlObject = new URL(connection.credentials.auth_url);
-    authUrlObject.pathname = '/cisspoder-service/precos_custos_produtos_empresa';
-    const url = authUrlObject.toString();
-
-
-    const payload = {
-        page: 1, // Assumimos que a busca de preços não é paginada ou que a primeira página é suficiente
-        clausulas: []
-    };
-
-    // Adiciona o filtro de empresa como base.
-    payload.clausulas.push({ campo: "idempresa", valor: CISSPODER_DEFAULT_IDEMPRESA, operadorlogico: "AND", operador: "IGUAL" });
-
-    // Conforme solicitado, usando apenas IGUAL e AND.
-    productIds.forEach(id => {
-        payload.clausulas.push({ campo: "idsubproduto", valor: id, operadorlogico: "AND", operador: "IGUAL" });
-    });
-    console.log('[CissPoder Prices Payload]', JSON.stringify(payload, null, 2));
-
     try {
-        const response = await axiosInstance.post(url, payload, {
-            headers: {
-                'Authorization': `Bearer ${connection.credentials.access_token}`,
-                'Content-Type': 'application/json'
+        const authUrlObject = new URL(connection.credentials.auth_url);
+        authUrlObject.pathname = '/cisspoder-service/precos_custos_produtos_empresa';
+        const url = authUrlObject.toString();
+
+        // Cria uma promessa para cada busca de preço
+        const pricePromises = productIds.map(id => {
+            const payload = {
+                page: 1,
+                clausulas: [
+                    { campo: "idempresa", valor: CISSPODER_DEFAULT_IDEMPRESA, operadorlogico: "AND", operador: "IGUAL" },
+                    { campo: "idsubproduto", valor: id, operadorlogico: "AND", operador: "IGUAL" }
+                ]
+            };
+
+            return axiosInstance.post(url, payload, {
+                headers: {
+                    'Authorization': `Bearer ${connection.credentials.access_token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+        });
+
+        // Executa todas as buscas em paralelo
+        const responses = await Promise.all(pricePromises);
+
+        const priceMap = {};
+        responses.forEach(response => {
+            if (response.data && Array.isArray(response.data.data) && response.data.data.length > 0) {
+                const priceInfo = response.data.data[0];
+                priceMap[priceInfo.idsubproduto] = priceInfo.valprecovarejo;
             }
         });
 
-        console.log('[CissPoder Prices Response]', JSON.stringify(response.data, null, 2));
-        const priceMap = {};
-        if (Array.isArray(response.data.data)) {
-            response.data.data.forEach(priceInfo => {
-                // Mapeia o preço usando os campos em minúsculas
-                priceMap[priceInfo.idsubproduto] = priceInfo.valprecovarejo;
-            });
-        }
+        console.log(`[CissPoder] Preços encontrados para ${Object.keys(priceMap).length} de ${productIds.length} produtos.`);
         return priceMap;
     } catch (error) {
         console.error(`[CissPoder] Falha ao buscar preços. URL: ${url}`);
