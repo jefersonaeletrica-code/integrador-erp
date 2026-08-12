@@ -198,8 +198,7 @@ const fetchCissPoderProductsByCode = async (connection, code, pagina = 1) => {
 const fetchAllCissPoderProducts = async (connection, pagina = 1) => {
     const clausulas = [
         // Para otimizar a busca e evitar timeouts, filtramos por produtos ativos que possuem EAN (maior que 0).
-        { campo: "ativo", valor: 1, operadorlogico: "AND", operador: "IGUAL" },
-        { campo: "ean", valor: 0, operadorlogico: "AND", operador: "MAIOR" }
+        { campo: "ativo", valor: 1, operadorlogico: "AND", operador: "IGUAL" }
     ];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
