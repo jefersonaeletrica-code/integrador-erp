@@ -153,9 +153,9 @@ const fetchCissPoderPrices = async (connection, productIds) => {
     // Adiciona o filtro de empresa como base.
     payload.clausulas.push({ campo: "idempresa", valor: CISSPODER_DEFAULT_IDEMPRESA, operadorlogico: "AND", operador: "IGUAL" });
 
-    // Para cada produto, adiciona uma cláusula. A primeira se conecta com AND, as outras com OR.
-    productIds.forEach((id, index) => {
-        payload.clausulas.push({ campo: "idsubproduto", valor: id, operadorlogico: index === 0 ? "AND" : "OR", operador: "IGUAL" });
+    // Conforme solicitado, usando apenas IGUAL e AND.
+    productIds.forEach(id => {
+        payload.clausulas.push({ campo: "idsubproduto", valor: id, operadorlogico: "AND", operador: "IGUAL" });
     });
     console.log('[CissPoder Prices Payload]', JSON.stringify(payload, null, 2));
 
