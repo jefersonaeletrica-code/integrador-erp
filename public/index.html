@@ -109,7 +109,7 @@
                                 <th class="p-3 w-10"><input type="checkbox" id="selectAll" onclick="toggleTodos(this)"></th>
                                 <th class="p-3">SKU</th>
                                 <th class="p-3">Nome do Produto</th>
-                                <th class="p-3">Preço</th>
+                                <th class="p-3">Marca</th>
                             </tr>
                         </thead>
                         <tbody id="tabelaProdutos" class="divide-y">
@@ -626,56 +626,13 @@
                     <td class="p-3"><input type="checkbox" class="chkProduto" value="${index}"></td>
                     <td class="p-3 font-mono text-xs">${p.codigo || 'S/N'}</td>
                     <td class="p-3 font-medium">${p.nome}</td>
-                    <td class="p-3" id="preco-${p.codigo}-${index}">
-                        <span class="text-xs text-gray-400">Carregando...</span>
-                    </td>
+                    <td class="p-3">${p.marca || 'N/A'}</td>
                 </tr>
             `).join('');
-
-            // Após renderizar, busca os preços em segundo plano
-            const connectionId = document.getElementById('conexaoBusca').value;
-            const conn = conexoesGlobais.find(c => c.id == connectionId);
-            if (conn && conn.type === 'cisspoder') {
-                carregarPrecosParaProdutosVisiveis(lista);
-            } else {
-                // Para Bling e outros, o preço já vem, então renderizamos direto
-                lista.forEach(p => {
-                    const elPreco = document.getElementById(`preco-${p.codigo}-${index}`);
-                    if (elPreco) {
-                        elPreco.innerHTML = `R$ ${p.preco ? Number(p.preco).toFixed(2) : '0.00'}`;
-                    }
-                });
-            }
         }
 
         function toggleTodos(master) {
             document.querySelectorAll('.chkProduto').forEach(chk => chk.checked = master.checked);
-        }
-
-        async function carregarPrecosParaProdutosVisiveis(produtos) {
-            const connectionId = document.getElementById('conexaoBusca').value;
-            console.log('[Preços] Carregando preços para:', produtos);
-            const productIds = produtos.map(p => p.codigo);
-            console.log('[Preços] Enviando IDs:', productIds);
-
-            const res = await fetch(`/api/precos/${connectionId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ productIds })
-            });
-            const data = await res.json();
-
-            console.log('[Preços] Resposta da API:', data);
-            if (data.sucesso) {
-                for (const codigo in data.precos) {
-                    // Atualiza todas as linhas que correspondem a este código de produto
-                    const elementosPreco = document.querySelectorAll(`[id^="preco-${codigo}-"]`);
-                    elementosPreco.forEach(el => {
-                        el.innerHTML = `R$ ${data.precos[codigo] ? Number(data.precos[codigo]).toFixed(2) : '0.00'}`;
-                    });
-                }
-            }
-            // Em caso de falha, o "Carregando..." permanece, indicando o problema.
         }
 
         async function enviarSelecionados() {
