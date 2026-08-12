@@ -435,38 +435,34 @@ app.get('/api/produtos/:connectionId', async (req, res) => {
                 responseData = await fetchAllBlingProductsPaginated(connection, page);
             }
         } else if (connection.type === 'cisspoder') {
-            let allProducts = [];
+            const uniqueProductsMap = new Map();
             let totalFromApi = 0;
+            let currentPage = page;
+            let hasNext = true;
+            let fetchFunction;
 
             if (typeof nome === 'string' && nome.trim()) {
-                const result = await fetchCissPoderProductsByName(connection, nome.trim(), page);
-                allProducts = result.data;
-                totalFromApi = result.total;
+                fetchFunction = (p) => fetchCissPoderProductsByName(connection, nome.trim(), p);
             } else if (typeof codigo === 'string' && codigo.trim()) {
-                const result = await fetchCissPoderProductsByCode(connection, codigo.trim(), page);
-                allProducts = result.data;
-                totalFromApi = result.total;
+                fetchFunction = (p) => fetchCissPoderProductsByCode(connection, codigo.trim(), p);
             } else {
-                // Lógica de paginação para busca geral
-                const uniqueProductsMap = new Map();
-                let currentPage = page;
-                let hasNext = true;
-
-                while (uniqueProductsMap.size < 100 && hasNext) {
-                    console.log(`[CissPoder] Buscando página ${currentPage} da API para preencher a página do frontend.`);
-                    const result = await fetchAllCissPoderProducts(connection, currentPage);
-                    result.data.forEach(p => {
-                        if (!uniqueProductsMap.has(p.codigo)) {
-                            uniqueProductsMap.set(p.codigo, p);
-                        }
-                    });
-                    totalFromApi = result.total;
-                    hasNext = result.hasNext;
-                    currentPage++;
-                }
-                allProducts = Array.from(uniqueProductsMap.values()).slice(0, 100);
+                fetchFunction = (p) => fetchAllCissPoderProducts(connection, p);
             }
 
+            // Lógica de paginação unificada para todas as buscas CissPoder
+            while (uniqueProductsMap.size < 100 && hasNext) {
+                console.log(`[CissPoder] Buscando página ${currentPage} da API para preencher a página do frontend.`);
+                const result = await fetchFunction(currentPage);
+                result.data.forEach(p => {
+                    if (!uniqueProductsMap.has(p.codigo)) {
+                        uniqueProductsMap.set(p.codigo, p);
+                    }
+                });
+                totalFromApi = result.total;
+                hasNext = result.hasNext;
+                currentPage++;
+            }
+            const allProducts = Array.from(uniqueProductsMap.values()).slice(0, 100);
             responseData = { data: allProducts, total: totalFromApi };
         } else {
             return res.status(400).json({ sucesso: false, erro: 'Tipo de conexão não suportado para busca de produtos.' });
