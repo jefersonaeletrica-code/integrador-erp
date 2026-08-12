@@ -61,6 +61,16 @@ const initializeDatabase = async () => {
     `);
 
     await connection.query(`
+      CREATE TABLE IF NOT EXISTS supplier_connections (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        type VARCHAR(50) NOT NULL, -- 'dismatal_webscraper', etc.
+        credentials JSON NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await connection.query(`
         CREATE TABLE IF NOT EXISTS produtos_importados (
           id INT NOT NULL AUTO_INCREMENT,
           codigo VARCHAR(100) NOT NULL,
@@ -93,12 +103,14 @@ const readDb = async () => {
     // await connection.beginTransaction(); // Não é mais necessário para leituras simples
 
     const [connections] = await connection.query('SELECT * FROM erp_connections');
+    const [supplierConnections] = await connection.query('SELECT * FROM supplier_connections');
 
     // Lê os produtos
     const [produtos] = await connection.query('SELECT * FROM produtos_importados');
 
     return {
       connections: connections.map(c => ({...c, credentials: typeof c.credentials === 'string' ? JSON.parse(c.credentials) : c.credentials })),
+      supplierConnections: supplierConnections.map(c => ({...c, credentials: typeof c.credentials === 'string' ? JSON.parse(c.credentials) : c.credentials })),
       produtos: produtos.map(p => ({ ...p, preco: parseFloat(p.preco) })) // Garante que o preço seja número
     };
   } catch (error) {

@@ -3,6 +3,7 @@ require('dotenv').config();
 const https = require('https');
 const express = require('express');
 const axios = require('axios');
+const puppeteer = require('puppeteer');
 
 const app = express();
 let db; // Será inicializado depois
@@ -18,6 +19,7 @@ const axiosInstance = axios.create({
 });
 
 let erpConnections = [];
+let supplierConnections = [];
 let produtosImportados;
 
 // Constantes para CissPoder baseadas na documentação
@@ -306,6 +308,37 @@ app.post('/api/erp-connections', async (req, res) => {
     }
 });
 
+app.post('/api/supplier-connections', async (req, res) => {
+    const { name, type, credentials } = req.body;
+    if (!name || !type || !credentials) {
+        return res.status(400).json({ sucesso: false, erro: 'Nome, tipo e credenciais são obrigatórios.' });
+    }
+
+    try {
+        const pool = db.getPool();
+        const [result] = await pool.execute(
+            'INSERT INTO supplier_connections (name, type, credentials) VALUES (?, ?, ?)',
+            [name, type, JSON.stringify(credentials)]
+        );
+        const newConnection = { id: result.insertId, name, type, credentials };
+        supplierConnections.push(newConnection);
+        res.status(201).json({ sucesso: true, connection: newConnection });
+    } catch (e) {
+        res.status(500).json({ sucesso: false, erro: e.message });
+    }
+});
+
+app.get('/api/supplier-connections', async (req, res) => {
+    const connectionsWithSafeCredentials = supplierConnections.map(conn => {
+        const safeCreds = { ...conn.credentials };
+        if (safeCreds.password) {
+            safeCreds.password = '******';
+        }
+        return { ...conn, credentials: safeCreds };
+    });
+    res.json({ sucesso: true, connections: connectionsWithSafeCredentials });
+});
+
 app.put('/api/erp-connections/:id', async (req, res) => {
     const { id } = req.params;
     const { name, credentials } = req.body;
@@ -358,6 +391,160 @@ app.delete('/api/erp-connections/:id', async (req, res) => {
         res.json({ sucesso: true, mensagem: 'Conexão removida com sucesso.' });
     } catch (e) {
         res.status(500).json({ sucesso: false, erro: e.message });
+    }
+});
+
+app.delete('/api/supplier-connections/:id', async (req, res) => {
+    const { id } = req.params;
+
+    const connectionIndex = supplierConnections.findIndex(c => c.id == id);
+    if (connectionIndex === -1) {
+        return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
+    }
+
+    try {
+        const pool = db.getPool();
+        await pool.execute('DELETE FROM supplier_connections WHERE id = ?', [id]);
+
+        // Remove from in-memory array
+        supplierConnections.splice(connectionIndex, 1);
+
+        res.json({ sucesso: true, mensagem: 'Conexão de fornecedor removida com sucesso.' });
+    } catch (e) {
+        res.status(500).json({ sucesso: false, erro: e.message });
+    }
+});
+
+app.post('/api/supplier-connections/:id/test', async (req, res) => {
+    const { id } = req.params;
+    const connection = supplierConnections.find(c => c.id == id);
+
+    if (!connection) {
+        return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
+    }
+
+    if (connection.type !== 'dismatal_webscraper') {
+        return res.status(400).json({ sucesso: false, erro: 'Teste disponível apenas para conexões Dismatal.' });
+    }
+
+    const { url, username, password } = connection.credentials;
+    let browser = null;
+    try {
+        browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+        const page = await browser.newPage();
+        await page.goto(url, { waitUntil: 'networkidle2' });
+
+        // Preenche os campos de login
+        await page.type('input[name="usuario"]', username);
+        await page.type('input[name="senha"]', password);
+
+        // Clica no botão de login e aguarda a navegação
+        await Promise.all([
+            page.waitForNavigation({ waitUntil: 'networkidle2' }),
+            page.click('button[type="submit"]')
+        ]);
+
+        // Verifica se o login foi bem-sucedido procurando por um elemento que só existe após o login
+        // Por exemplo, um link de "Sair" ou o nome do usuário.
+        const successfulLoginIndicator = await page.$('a[href*="sair"]');
+
+        if (successfulLoginIndicator) {
+            res.json({ sucesso: true, mensagem: 'Conexão com a Dismatal bem-sucedida!' });
+        } else {
+            // Se o indicador não for encontrado, verifica se há uma mensagem de erro
+            const errorElement = await page.$('.alert-danger'); // Exemplo de seletor de erro
+            const errorMessage = errorElement ? await page.evaluate(el => el.textContent, errorElement) : 'Credenciais inválidas ou falha no login.';
+            res.status(401).json({ sucesso: false, erro: errorMessage.trim() });
+        }
+    } catch (e) {
+        res.status(500).json({ sucesso: false, erro: `Erro durante o teste de conexão: ${e.message}` });
+    } finally {
+        if (browser) await browser.close();
+    }
+});
+
+app.post('/api/supplier-connections/:id/products', async (req, res) => {
+    const { id } = req.params;
+    const { searchTerm } = req.body; // Recebe o termo de busca do frontend
+    const connection = supplierConnections.find(c => c.id == id);
+
+    if (!connection) {
+        return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
+    }
+
+    if (connection.type !== 'dismatal_webscraper') {
+        return res.status(400).json({ sucesso: false, erro: 'Busca de produtos disponível apenas para conexões Dismatal.' });
+    }
+
+    const { url, username, password } = connection.credentials;
+    let browser = null;
+    try {
+        console.log('[Dismatal Scraper] Iniciando busca de produtos...');
+        browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+        const page = await browser.newPage();
+
+        // --- 1. Login ---
+        console.log('[Dismatal Scraper] Acessando a página de login...');
+        await page.goto(url, { waitUntil: 'networkidle2' });
+        await page.type('input[name="usuario"]', username);
+        await page.type('input[name="senha"]', password);
+        await Promise.all([
+            page.waitForNavigation({ waitUntil: 'networkidle2' }),
+            page.click('button[type="submit"]')
+        ]);
+
+        const successfulLoginIndicator = await page.$('a[href*="sair"]');
+        if (!successfulLoginIndicator) {
+            return res.status(401).json({ sucesso: false, erro: 'Falha no login. Verifique as credenciais.' });
+        }
+        console.log('[Dismatal Scraper] Login bem-sucedido.');
+
+        // --- 2. Navegação e Extração (Exemplo) ---
+        if (searchTerm && searchTerm.trim() !== '') {
+            console.log(`[Dismatal Scraper] Buscando por: "${searchTerm}"`);
+            // IMPORTANTE: Substitua 'input[name="descricao"]' pelo seletor real do campo de busca no portal.
+            await page.type('input[name="descricao"]', searchTerm);
+
+            // IMPORTANTE: Adapte a forma como a busca é submetida.
+            // Opção 1: Clicar em um botão de busca.
+            // await page.click('#botao-buscar');
+
+            // Opção 2: Pressionar Enter (mais comum).
+            await page.keyboard.press('Enter');
+
+            // Aguarda a navegação ou a atualização da página com os resultados.
+            await page.waitForNavigation({ waitUntil: 'networkidle2' });
+        }
+        console.log('[Dismatal Scraper] Extraindo dados dos produtos...');
+
+        const produtos = await page.evaluate(() => {
+            const items = [];
+            // IMPORTANTE: Substitua '.product-item' pelo seletor correto que engloba cada produto na lista.
+            document.querySelectorAll('.product-item').forEach(el => {
+                // IMPORTANTE: Substitua os seletores abaixo pelos seletores corretos para cada campo.
+                const nome = el.querySelector('.product-name')?.innerText;
+                const codigo = el.querySelector('.product-sku')?.innerText;
+                const preco = el.querySelector('.product-price')?.innerText;
+
+                if (nome && codigo) {
+                    items.push({
+                        nome: nome.trim(),
+                        codigo: codigo.trim(),
+                        preco: preco ? preco.trim() : 'N/A'
+                    });
+                }
+            });
+            return items;
+        });
+
+        console.log(`[Dismatal Scraper] ${produtos.length} produtos encontrados.`);
+        res.json({ sucesso: true, produtos });
+
+    } catch (e) {
+        console.error('[Dismatal Scraper] Erro:', e.message);
+        res.status(500).json({ sucesso: false, erro: `Erro durante a busca de produtos: ${e.message}` });
+    } finally {
+        if (browser) await browser.close();
     }
 });
 
@@ -526,9 +713,11 @@ const startServer = async () => {
 
         // Carrega as conexões e produtos na memória
         erpConnections = Array.isArray(currentDb.connections) ? currentDb.connections : [];
+        supplierConnections = Array.isArray(currentDb.supplierConnections) ? currentDb.supplierConnections : [];
         produtosImportados = Array.isArray(currentDb.produtos) ? currentDb.produtos : [];
 
         console.log(`${erpConnections.length} conexões ERP carregadas.`);
+        console.log(`${supplierConnections.length} conexões de fornecedores carregadas.`);
         console.log(`${produtosImportados.length} produtos importados carregados.`);
 
         app.listen(PORT, '0.0.0.0', () => console.log(`Servidor rodando na porta ${PORT}`));
