@@ -479,7 +479,7 @@ app.get('/api/produtos/:connectionId', async (req, res) => {
             produtos = produtos.map(p => ({
                 codigo: p.codigo,
                 nome: p.nome,
-                marca: p.fabricante?.nome || 'N/A' // Extrai o nome do fabricante como marca
+                preco: p.preco || 0 // Para Bling, retornamos o preço
             }));
         }
 

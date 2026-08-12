@@ -109,7 +109,7 @@
                                 <th class="p-3 w-10"><input type="checkbox" id="selectAll" onclick="toggleTodos(this)"></th>
                                 <th class="p-3">SKU</th>
                                 <th class="p-3">Nome do Produto</th>
-                                <th class="p-3">Marca</th>
+                                <th id="colunaDinamica" class="p-3">Marca / Preço</th>
                             </tr>
                         </thead>
                         <tbody id="tabelaProdutos" class="divide-y">
@@ -621,12 +621,26 @@
                 return;
             }
 
+            // Altera o cabeçalho da coluna dinamicamente
+            const connectionId = document.getElementById('conexaoBusca').value;
+            const conn = conexoesGlobais.find(c => c.id == connectionId);
+            const colunaDinamica = document.getElementById('colunaDinamica');
+            if (conn?.type === 'bling') {
+                colunaDinamica.innerText = 'Preço';
+            } else {
+                colunaDinamica.innerText = 'Marca';
+            }
+
             tbody.innerHTML = lista.map((p, index) => `
                 <tr class="hover:bg-gray-50">
                     <td class="p-3"><input type="checkbox" class="chkProduto" value="${index}"></td>
                     <td class="p-3 font-mono text-xs">${p.codigo || 'S/N'}</td>
                     <td class="p-3 font-medium">${p.nome}</td>
-                    <td class="p-3">${p.marca || 'N/A'}</td>
+                    <td class="p-3">
+                        ${conn?.type === 'bling' 
+                            ? `R$ ${Number(p.preco || 0).toFixed(2)}` 
+                            : `${p.marca || 'N/A'}`}
+                    </td>
                 </tr>
             `).join('');
         }
