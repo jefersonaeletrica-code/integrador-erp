@@ -106,7 +106,8 @@ const fetchBlingProductsByCode = async (connection, code, pagina = 1) => {
 };
 
 const fetchAllBlingProductsPaginated = async (connection, pagina = 1) => {
-    return fetchBlingProductPage(connection, pagina);
+    const searchParams = { criterio: 2 }; // Usa criterio=2 para buscar produtos ativos
+    return fetchBlingProductPage(connection, pagina, searchParams);
 };
 
 // --- Funções para CissPoder ---
@@ -147,6 +148,12 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
         page: page, // Página atual da busca de produtos
         clausulas: [
             ...clausulas
+        ],
+        ordenacoes: [
+            {
+                campo: "nome",
+                tipo: "ASC" // Ordena por nome em ordem alfabética ascendente
+            }
         ]
     };
     console.log('[CissPoder Payload]', JSON.stringify(payload, null, 2));
