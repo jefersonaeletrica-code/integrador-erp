@@ -236,29 +236,18 @@ async function getBlingConnectionStatus(connection) {
 }
 
 async function getCissPoderConnectionStatus(connection) {
-    if (!connection.credentials || !connection.credentials.username || !connection.credentials.password) {
-        return 'requires_auth'; // Se não tiver credenciais básicas
+    // Força a renovação do token a cada verificação para garantir que ele esteja sempre válido.
+    // Isso resolve os erros 401 de forma definitiva.
+    console.log(`Tentando obter/renovar token para a conexão CissPoder ${connection.id}...`);
+    try {
+        await refreshCissPoderToken(connection);
+        console.log(`Token para a conexão CissPoder ${connection.id} obtido/renovado com sucesso.`);
+        return 'connected';
+    } catch (error) {
+        const errorDetails = error.response ? JSON.stringify(error.response.data) : error.message;
+        console.error(`Falha ao obter/renovar token para a conexão CissPoder ${connection.id}:`, errorDetails);
+        return 'disconnected';
     }
-
-    // Se não tem token ou se o token está para expirar (margem de 5 min)
-    const needsRefresh = !connection.credentials.access_token || connection.credentials.token_expires_at < (Date.now() + 300000);
-
-    if (needsRefresh) {
-        console.log(`Token para a conexão CissPoder ${connection.id} inexistente ou expirado. Tentando obter...`);
-        try {
-            await refreshCissPoderToken(connection);
-            console.log(`Token para a conexão CissPoder ${connection.id} obtido com sucesso.`);
-            return 'connected';
-        } catch (error) {
-            const errorDetails = error.response ? JSON.stringify(error.response.data) : error.message;
-            console.error(`Falha ao obter token para a conexão CissPoder ${connection.id}:`, errorDetails);
-            return 'disconnected';
-        }
-    }
-
-    // Se já tem um token válido, consideramos conectado.
-    // Uma chamada leve poderia ser adicionada aqui para ter 100% de certeza.
-    return 'connected';
 }
 
 // --- NOVAS ROTAS DE GERENCIAMENTO DE CONEXÕES ---
