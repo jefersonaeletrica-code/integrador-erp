@@ -472,7 +472,17 @@ app.get('/api/produtos/:connectionId', async (req, res) => {
             return res.status(400).json({ sucesso: false, erro: 'Tipo de conexão não suportado para busca de produtos.' });
         }
         
-        const produtos = responseData?.data || [];
+        let produtos = responseData?.data || [];
+
+        // Normaliza a resposta do Bling para o formato padrão, extraindo a marca.
+        if (connection.type === 'bling') {
+            produtos = produtos.map(p => ({
+                codigo: p.codigo,
+                nome: p.nome,
+                marca: p.fabricante?.nome || 'N/A' // Extrai o nome do fabricante como marca
+            }));
+        }
+
         // Bling usa meta.total, CissPoder usa total. Normalizamos aqui.
         const total = responseData?.total ?? responseData?.meta?.total; 
 
