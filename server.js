@@ -138,8 +138,8 @@ async function refreshCissPoderToken(connection) {
 const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
     // Usa o construtor URL para derivação segura da URL de serviço.
     const authUrlObject = new URL(connection.credentials.auth_url);
-    // Alterado para o novo serviço de produtos padrão do e-commerce
-    authUrlObject.pathname = '/cisspoder-service/ECOMMERCE_PADRAO_PRODUTOS';
+    // O nome do serviço pode ser case-sensitive, então testamos com minúsculas.
+    authUrlObject.pathname = '/cisspoder-service/ecommerce_padrao_produtos';
     const url = authUrlObject.toString();
     console.log('[CissPoderURL]', url);
 
