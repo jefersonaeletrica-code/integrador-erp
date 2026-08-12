@@ -196,7 +196,10 @@ const fetchCissPoderProductsByCode = async (connection, code, pagina = 1) => {
 };
 
 const fetchAllCissPoderProducts = async (connection, pagina = 1) => {
-    const clausulas = [{ campo: "ativo", valor: 1, operadorlogico: "AND", operador: "IGUAL" }];
+    const clausulas = [
+        { campo: "idempresa", valor: CISSPODER_DEFAULT_IDEMPRESA, operadorlogico: "AND", operador: "IGUAL" },
+        { campo: "ativo", valor: 1, operadorlogico: "AND", operador: "IGUAL" }
+    ];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
