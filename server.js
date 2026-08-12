@@ -135,11 +135,66 @@ async function refreshCissPoderToken(connection) {
     await db.updateDb({ connection: { id: connection.id, credentials: connection.credentials } });
 }
 
+const fetchCissPoderPrices = async (connection, productIds) => {
+    if (!productIds || productIds.length === 0) {
+        return {};
+    }
+
+    try {
+        const authUrlObject = new URL(connection.credentials.auth_url);
+        authUrlObject.pathname = '/cisspoder-service/precos_custos_produtos_empresa';
+        const url = authUrlObject.toString();
+
+        // Cria uma promessa para cada busca de preço
+        const pricePromises = productIds.map(id => {
+            const payload = {
+                page: 1,
+                clausulas: [
+                    { campo: "idempresa", valor: CISSPODER_DEFAULT_IDEMPRESA, operadorlogico: "AND", operador: "IGUAL" },
+                    { campo: "idsubproduto", valor: id, operadorlogico: "AND", operador: "IGUAL" }
+                ]
+            };
+
+            return axiosInstance.post(url, payload, {
+                headers: {
+                    'Authorization': `Bearer ${connection.credentials.access_token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+        });
+
+        // Executa todas as buscas em paralelo
+        const responses = await Promise.all(pricePromises);
+
+        const priceMap = {};
+        responses.forEach(response => {
+            if (response.data && Array.isArray(response.data.data) && response.data.data.length > 0) {
+                const priceInfo = response.data.data[0];
+                priceMap[priceInfo.idsubproduto] = priceInfo.valprecovarejo;
+            }
+        });
+
+        console.log(`[CissPoder] Preços encontrados para ${Object.keys(priceMap).length} de ${productIds.length} produtos.`);
+        return priceMap;
+    } catch (error) {
+        console.error(`[CissPoder] Falha ao buscar preços. URL: ${url}`);
+        if (error.response) {
+            console.error('Erro de resposta:', JSON.stringify(error.response.data));
+        } else if (error.request) {
+            console.error('Erro de requisição (sem resposta):', error.message);
+        } else {
+            console.error('Erro ao configurar a requisição:', error.message);
+        }
+        return {}; // Retorna um mapa vazio em caso de erro para não quebrar a busca principal.
+    }
+};
+
 const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
     // Usa o construtor URL para derivação segura da URL de serviço.
     const authUrlObject = new URL(connection.credentials.auth_url);
     // Alterado para o novo serviço de produtos padrão do e-commerce
     authUrlObject.pathname = '/cisspoder-service/ECOMMERCE_PADRAO_PRODUTOS';
+    authUrlObject.pathname = '/cisspoder-service/cad_produtos';
     const url = authUrlObject.toString();
     console.log('[CissPoderURL]', url);
 
@@ -167,6 +222,8 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
             codigo: p.idsubproduto,
             nome: p.nome, // Campo 'nome' do novo serviço
             marca: p.descricaomarca // Campo 'descricaomarca' do novo serviço
+            nome: p.descrcomproduto,
+            preco: 0
         }));
         console.log(`[CissPoder] Encontrados ${productsArray.length} registros na API, retornando ${data.length} produtos únicos.`);
 
@@ -183,6 +240,7 @@ const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
     const searchTerm = '%' + name.trim().split(/\s+/).filter(Boolean).join('%') + '%';
     const clausulas = [{
         campo: "nome", // Campo de busca agora é 'nome'
+        campo: "descrcomproduto",
         valor: searchTerm,
         operadorlogico: "AND",
         operador: "LIKE"
@@ -199,8 +257,9 @@ const fetchAllCissPoderProducts = async (connection, pagina = 1) => {
     const clausulas = [
         // Para otimizar a busca e evitar timeouts, filtramos por produtos ativos que possuem EAN.
         { campo: "ativo", valor: 1, operadorlogico: "AND", operador: "IGUAL" },
-        { campo: "ean", valor: null, operadorlogico: "AND", operador: "DIFERENTE_NULL" }
+        { campo: "ean", valor: 0, operadorlogico: "AND", operador: "MAIOR" }
     ];
+    const clausulas = [{ campo: "flaginativo", valor: "F", operadorlogico: "AND", operador: "IGUAL" }];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
