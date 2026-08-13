@@ -1,5 +1,5 @@
 const express = require('express');
-const dismatalScraper = require('../dismatal.scraper.js');
+const dismatalScraper = require('./dismatal.scraper.js');
 
 const router = express.Router();
 
