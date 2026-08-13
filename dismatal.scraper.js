@@ -56,14 +56,21 @@ const interactWithSelector = async (page, selector, action, value = '', timeout 
     return element;
 };
 
+const getBrowser = async () => {
+    const apiKey = process.env.BROWSERLESS_API_KEY;
+    if (!apiKey) {
+        throw new Error('A variável de ambiente BROWSERLESS_API_KEY não está configurada. Obtenha uma em https://www.browserless.io/');
+    }
+    const browserWSEndpoint = `wss://chrome.browserless.io?token=${apiKey}`;
+    console.log('[Dismatal Scraper] Conectando ao navegador remoto...');
+    return puppeteer.connect({ browserWSEndpoint });
+};
+
 const testConnection = async (connection) => {
     const { url, username, password } = connection.credentials;
     let browser = null;
     try {
-        browser = await puppeteer.launch({
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        });
+        browser = await getBrowser();
         const page = await browser.newPage();
         await page.goto(url, { waitUntil: 'networkidle2' });
 
@@ -288,10 +295,7 @@ const fetchProducts = async (connection, searchTerm) => {
     let browser = null;
     try {
         console.log('[Dismatal Scraper] Iniciando busca de produtos...');
-        browser = await puppeteer.launch({
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        });
+        browser = await getBrowser();
         const page = await browser.newPage();
 
         console.log('[Dismatal Scraper] Acessando a página de login...');
