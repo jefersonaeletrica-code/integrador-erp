@@ -61,7 +61,7 @@ const testConnection = async (connection) => {
             args: chromium.args,
             headless: true,
             executablePath,
-        };
+        });
         const page = await browser.newPage();
         await page.goto(url, { waitUntil: 'networkidle2' });
 
