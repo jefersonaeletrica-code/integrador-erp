@@ -34,9 +34,15 @@ const startServer = async () => {
         const currentDb = await db.readDb();
 
         // Carrega as conexões e produtos na memória
-        erpConnections = Array.isArray(currentDb.connections) ? currentDb.connections : [];
-        supplierConnections = Array.isArray(currentDb.supplierConnections) ? currentDb.supplierConnections : [];
+        // Limpa os arrays existentes e adiciona os novos itens para manter a referência
+        erpConnections.splice(0, erpConnections.length); // Limpa o array
+        (Array.isArray(currentDb.connections) ? currentDb.connections : []).forEach(conn => erpConnections.push(conn));
+
+        supplierConnections.splice(0, supplierConnections.length); // Limpa o array
+        (Array.isArray(currentDb.supplierConnections) ? currentDb.supplierConnections : []).forEach(conn => supplierConnections.push(conn));
+
         productService.produtosImportados = currentDb.produtos; // Atualiza o estado no productService
+
 
         console.log(`${erpConnections.length} conexões ERP carregadas.`);
         console.log(`${supplierConnections.length} conexões de fornecedores carregadas.`);
