@@ -1,5 +1,6 @@
 const chromium = require('@sparticuz/chromium');
 const puppeteer = require('puppeteer-core');
+const path = require('path');
 
 /**
  * Seletores CSS e configuração específica para Dismatal B2B Portal
@@ -56,6 +57,10 @@ const testConnection = async (connection) => {
     const { url, username, password } = connection.credentials;
     let browser = null;
     try {
+        // Define um diretório local para o Chromium, evitando problemas de permissão em /tmp
+        chromium.setHeadless(true);
+        chromium.setDownloadPath(path.join(__dirname, 'chromium-data'));
+
         const executablePath = await chromium.executablePath();
         browser = await puppeteer.launch({
             args: chromium.args,
@@ -286,6 +291,10 @@ const fetchProducts = async (connection, searchTerm) => {
     let browser = null;
     try {
         console.log('[Dismatal Scraper] Iniciando busca de produtos...');
+        // Define um diretório local para o Chromium, evitando problemas de permissão em /tmp
+        chromium.setHeadless(true);
+        chromium.setDownloadPath(path.join(__dirname, 'chromium-data'));
+
         const executablePath = await chromium.executablePath();
         browser = await puppeteer.launch({
             args: chromium.args,
