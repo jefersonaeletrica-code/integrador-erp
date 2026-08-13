@@ -17,6 +17,7 @@ const SELECTORS = {
     passwordInput: ['input[formcontrolname="senha"]', 'input[name="senha"]', 'input[type="password"]'],
     submitButton: ['button.btn-login', 'button[type="submit"]'],
     logoutLink: ['a[href*="sair"]'],
+    cookieAcceptButton: ['button[data-test="COOKIE-POPUP-CLOSE-BTN"]', '.cookie-popup__button'],
     loginError: ['.alert-danger'],
 
     // Seletores de busca
@@ -88,6 +89,15 @@ const testConnection = async (connection) => {
         browser = await getBrowser();
         const page = await browser.newPage();
         await page.goto(url, { waitUntil: 'networkidle2' });
+
+        // PASSO ADICIONAL: Fechar o pop-up de cookies se ele aparecer.
+        try {
+            console.log('[Dismatal Scraper] Tentando fechar pop-up de cookies...');
+            await interactWithSelector(page, SELECTORS.cookieAcceptButton, 'click', '', 3000); // Curto timeout, pois pode não aparecer
+            console.log('[Dismatal Scraper] Pop-up de cookies fechado.');
+        } catch (e) {
+            console.log('[Dismatal Scraper] Pop-up de cookies não encontrado ou já fechado.');
+        }
 
         // PASSO ADICIONAL: Clicar no botão de login para abrir o pop-up.
         console.log('[Dismatal Scraper] Procurando e clicando no botão de login para abrir o modal...');
@@ -323,6 +333,15 @@ const fetchProducts = async (connection, searchTerm) => {
 
         console.log('[Dismatal Scraper] Acessando a página de login...');
         await page.goto(url, { waitUntil: 'networkidle2' });
+
+        // PASSO ADICIONAL: Fechar o pop-up de cookies se ele aparecer.
+        try {
+            console.log('[Dismatal Scraper] Tentando fechar pop-up de cookies...');
+            await interactWithSelector(page, SELECTORS.cookieAcceptButton, 'click', '', 3000); // Curto timeout, pois pode não aparecer
+            console.log('[Dismatal Scraper] Pop-up de cookies fechado.');
+        } catch (e) {
+            console.log('[Dismatal Scraper] Pop-up de cookies não encontrado ou já fechado.');
+        }
 
         // PASSO ADICIONAL: Clicar no botão de login para abrir o pop-up.
         console.log('[Dismatal Scraper] Procurando e clicando no botão de login para abrir o modal...');
