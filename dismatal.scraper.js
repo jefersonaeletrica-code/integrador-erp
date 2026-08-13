@@ -1,4 +1,4 @@
-const puppeteer = require('puppeteer-core');
+const puppeteer = require('puppeteer');
 
 /**
  * Seletores CSS e configuração específica para Dismatal B2B Portal
@@ -55,19 +55,7 @@ const testConnection = async (connection) => {
     const { url, username, password } = connection.credentials;
     let browser = null;
     try {
-        // Com puppeteer-core, buscamos o navegador via chrome-for-testing
-        const { executablePath } = await puppeteer.launch({
-            channel: 'chrome-for-testing',
-            headless: true,
-        }).then(async browser => {
-            const path = browser.process()?.spawnfile;
-            await browser.close();
-            if (!path) throw new Error('Não foi possível encontrar o caminho do chrome-for-testing.');
-            return { executablePath: path };
-        });
-
         const launchOptions = {
-            executablePath,
             headless: true,
             args: ['--no-sandbox', '--disable-setuid-sandbox'],
         };
@@ -296,19 +284,7 @@ const fetchProducts = async (connection, searchTerm) => {
     let browser = null;
     try {
         console.log('[Dismatal Scraper] Iniciando busca de produtos...');
-        // Com puppeteer-core, buscamos o navegador via chrome-for-testing
-        const { executablePath } = await puppeteer.launch({
-            channel: 'chrome-for-testing',
-            headless: true,
-        }).then(async browser => {
-            const path = browser.process()?.spawnfile;
-            await browser.close();
-            if (!path) throw new Error('Não foi possível encontrar o caminho do chrome-for-testing.');
-            return { executablePath: path };
-        });
-
         const launchOptions = {
-            executablePath,
             headless: true,
             args: ['--no-sandbox', '--disable-setuid-sandbox'],
         };
