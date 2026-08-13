@@ -59,7 +59,15 @@ const interactWithSelector = async (page, selectors, action, value = '', timeout
             // Ignora o erro e tenta o próximo seletor da lista
         }
     }
-    // Se nenhum seletor funcionou, lança um erro.
+    // Se nenhum seletor funcionou, loga o HTML da página e lança um erro.
+    console.error('Falha ao encontrar seletor. Conteúdo da página no momento do erro:');
+    try {
+        const pageContent = await page.content();
+        console.error(pageContent);
+    } catch (htmlError) {
+        console.error('Não foi possível obter o conteúdo HTML da página.', htmlError);
+    }
+
     throw new Error(`Nenhum dos seletores [${selectors.join(', ')}] foi encontrado na página. A estrutura do site pode ter mudado.`);
 };
 
