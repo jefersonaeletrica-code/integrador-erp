@@ -1,16 +1,5 @@
 const path = require('path');
-
-// **Solução para o erro EACCES em servidores**
-// Define um diretório local e gravável para o cache e os executáveis do Chromium,
-// evitando o uso do diretório /tmp, que muitas vezes tem restrições de execução.
-// É crucial que estas variáveis sejam definidas ANTES de importar o puppeteer ou o chromium.
-process.env.PUPPETEER_CACHE_DIR = path.join(__dirname, '.cache', 'puppeteer');
-// Define o diretório onde o Chromium será baixado e extraído
-process.env.CHROMIUM_DOWNLOAD_PATH = path.join(__dirname, '.cache', 'chromium');
-// Define o diretório para arquivos temporários do Puppeteer
-process.env.PUPPETEER_TMPDIR = path.join(__dirname, '.tmp');
-
-const chromium = require('@sparticuz/chromium');
+const chromium = require('chrome-aws-lambda');
 const puppeteer = require('puppeteer-core');
 
 /**
@@ -68,11 +57,11 @@ const testConnection = async (connection) => {
     const { url, username, password } = connection.credentials;
     let browser = null;
     try {
-        const executablePath = await chromium.executablePath();
+        const executablePath = await chromium.executablePath || puppeteer.executablePath();
         browser = await puppeteer.launch({
             args: chromium.args,
-            headless: true,
             executablePath,
+            headless: chromium.headless,
         });
         const page = await browser.newPage();
         await page.goto(url, { waitUntil: 'networkidle2' });
@@ -298,11 +287,11 @@ const fetchProducts = async (connection, searchTerm) => {
     let browser = null;
     try {
         console.log('[Dismatal Scraper] Iniciando busca de produtos...');
-        const executablePath = await chromium.executablePath();
+        const executablePath = await chromium.executablePath || puppeteer.executablePath();
         browser = await puppeteer.launch({
             args: chromium.args,
-            headless: true,
             executablePath,
+            headless: chromium.headless,
         });
         const page = await browser.newPage();
 
