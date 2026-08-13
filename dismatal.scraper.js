@@ -11,6 +11,8 @@ const puppeteer = require('puppeteer');
  */
 const SELECTORS = {
     // Seletores de autenticação
+    loginButton: ['p.login-btn__click', 'a.login-btn', '#drawer-header-btn', '[data-testid="login-btn"]'],
+    loginModal: ['[role="dialog"]', '.modal', '.login-modal'],
     usernameInput: ['input[formcontrolname="usuario"]', 'input[name="usuario"]', 'input[placeholder="CNPJ"]', 'input[data-placeholder="CNPJ"]', 'input[placeholder*="Usuário"]'],
     passwordInput: ['input[formcontrolname="senha"]', 'input[name="senha"]', 'input[type="password"]'],
     submitButton: ['button.btn-login', 'button[type="submit"]'],
@@ -78,6 +80,14 @@ const testConnection = async (connection) => {
         browser = await getBrowser();
         const page = await browser.newPage();
         await page.goto(url, { waitUntil: 'networkidle2' });
+
+        // PASSO ADICIONAL: Clicar no botão de login para abrir o pop-up.
+        console.log('[Dismatal Scraper] Procurando e clicando no botão de login para abrir o modal...');
+        await interactWithSelector(page, SELECTORS.loginButton, 'click');
+
+        // PASSO ADICIONAL: Aguardar o pop-up de login aparecer.
+        console.log('[Dismatal Scraper] Aguardando o modal de login aparecer...');
+        await page.waitForSelector(SELECTORS.loginModal[0], { visible: true, timeout: 5000 });
 
         await interactWithSelector(page, SELECTORS.usernameInput, 'type', username);
         await interactWithSelector(page, SELECTORS.passwordInput, 'type', password);
@@ -305,6 +315,15 @@ const fetchProducts = async (connection, searchTerm) => {
 
         console.log('[Dismatal Scraper] Acessando a página de login...');
         await page.goto(url, { waitUntil: 'networkidle2' });
+
+        // PASSO ADICIONAL: Clicar no botão de login para abrir o pop-up.
+        console.log('[Dismatal Scraper] Procurando e clicando no botão de login para abrir o modal...');
+        await interactWithSelector(page, SELECTORS.loginButton, 'click');
+
+        // PASSO ADICIONAL: Aguardar o pop-up de login aparecer.
+        console.log('[Dismatal Scraper] Aguardando o modal de login aparecer...');
+        await page.waitForSelector(SELECTORS.loginModal[0], { visible: true, timeout: 5000 });
+
         await interactWithSelector(page, SELECTORS.usernameInput, 'type', username);
         await interactWithSelector(page, SELECTORS.passwordInput, 'type', password);
 
