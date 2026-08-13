@@ -11,7 +11,7 @@ const puppeteer = require('puppeteer');
  */
 const SELECTORS = {
     // Seletores de autenticação
-    usernameInput: ['input[formcontrolname="usuario"]', 'input[name="usuario"]', 'input[placeholder*="Usuário"]'],
+    usernameInput: ['input[formcontrolname="usuario"]', 'input[name="usuario"]', 'input[placeholder="CNPJ"]', 'input[data-placeholder="CNPJ"]', 'input[placeholder*="Usuário"]'],
     passwordInput: ['input[formcontrolname="senha"]', 'input[name="senha"]', 'input[type="password"]'],
     submitButton: ['button.btn-login', 'button[type="submit"]'],
     logoutLink: ['a[href*="sair"]'],
