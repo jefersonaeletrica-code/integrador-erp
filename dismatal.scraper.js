@@ -38,22 +38,27 @@ const SELECTORS = {
 /**
  * Função auxiliar para interagir com um elemento, lançando um erro claro se ele não for encontrado.
  * @param {import('puppeteer').Page} page - A instância da página do Puppeteer.
- * @param {string} selector - O seletor CSS do elemento.
+ * @param {string[]} selectors - Um array de seletores CSS para tentar em ordem.
  * @param {string} action - A ação a ser executada ('type', 'click').
  * @param {string} [value] - O valor para a ação 'type'.
- * @param {number} [timeout=5000] - Tempo de espera pelo seletor em milissegundos.
+ * @param {number} [timeout=3000] - Tempo de espera para cada seletor em milissegundos.
  */
-const interactWithSelector = async (page, selector, action, value = '', timeout = 5000) => {
-    const element = await page.waitForSelector(selector, { timeout }).catch(() => null);
-    if (!element) {
-        throw new Error(`O seletor '${selector}' não foi encontrado na página. A estrutura do site pode ter mudado.`);
+const interactWithSelector = async (page, selectors, action, value = '', timeout = 3000) => {
+    for (const selector of selectors) {
+        try {
+            const element = await page.waitForSelector(selector, { timeout });
+            if (action === 'type') {
+                await element.type(value);
+            } else if (action === 'click') {
+                await element.click();
+            }
+            return element; // Retorna sucesso ao encontrar e interagir com o primeiro seletor válido
+        } catch (error) {
+            // Ignora o erro e tenta o próximo seletor da lista
+        }
     }
-    if (action === 'type') {
-        await element.type(value);
-    } else if (action === 'click') {
-        await element.click();
-    }
-    return element;
+    // Se nenhum seletor funcionou, lança um erro.
+    throw new Error(`Nenhum dos seletores [${selectors.join(', ')}] foi encontrado na página. A estrutura do site pode ter mudado.`);
 };
 
 const getBrowser = async () => {
@@ -74,12 +79,12 @@ const testConnection = async (connection) => {
         const page = await browser.newPage();
         await page.goto(url, { waitUntil: 'networkidle2' });
 
-        await interactWithSelector(page, SELECTORS.usernameInput[0], 'type', username);
-        await interactWithSelector(page, SELECTORS.passwordInput[0], 'type', password);
+        await interactWithSelector(page, SELECTORS.usernameInput, 'type', username);
+        await interactWithSelector(page, SELECTORS.passwordInput, 'type', password);
 
         await Promise.all([
             page.waitForNavigation({ waitUntil: 'networkidle2' }),
-            interactWithSelector(page, SELECTORS.submitButton[0], 'click')
+            interactWithSelector(page, SELECTORS.submitButton, 'click')
         ]);
 
         const successfulLoginIndicator = await page.$(SELECTORS.logoutLink[0]);
@@ -300,12 +305,12 @@ const fetchProducts = async (connection, searchTerm) => {
 
         console.log('[Dismatal Scraper] Acessando a página de login...');
         await page.goto(url, { waitUntil: 'networkidle2' });
-        await interactWithSelector(page, SELECTORS.usernameInput[0], 'type', username);
-        await interactWithSelector(page, SELECTORS.passwordInput[0], 'type', password);
+        await interactWithSelector(page, SELECTORS.usernameInput, 'type', username);
+        await interactWithSelector(page, SELECTORS.passwordInput, 'type', password);
 
         await Promise.all([
             page.waitForNavigation({ waitUntil: 'networkidle2' }),
-            interactWithSelector(page, SELECTORS.submitButton[0], 'click')
+            interactWithSelector(page, SELECTORS.submitButton, 'click')
         ]);
 
         const successfulLoginIndicator = await page.$(SELECTORS.logoutLink[0]);
@@ -356,7 +361,7 @@ const fetchProducts = async (connection, searchTerm) => {
                     await page.goto(url, { waitUntil: 'networkidle2' });
                 }
 
-                const searchInput = await interactWithSelector(page, SELECTORS.searchInput[0], 'type', searchTerm);
+                const searchInput = await interactWithSelector(page, SELECTORS.searchInput, 'type', searchTerm);
                 await searchInput.press('Enter');
                 await page.waitForNavigation({ waitUntil: 'networkidle2' });
 
