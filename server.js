@@ -10,7 +10,7 @@ const supplierRoutes = require('./supplierRoutes.js');
 const productRoutes = require('./productRoutes.js');
 const productService = require('./productService.js');
 
-let db; // Será inicializado depois
+const db = require('./db'); // Carrega o driver de DB imediatamente
 app.use(express.json());
 app.use(express.static('public'));
 
@@ -29,8 +29,6 @@ const startServer = async () => {
         console.log('Verificando variáveis de ambiente para conexão com DB...');
         console.log('----------------------------------------------------');
 
-        db = require('./db'); // Carrega o driver de DB
-        
         const currentDb = await db.readDb();
 
         // Carrega as conexões e produtos na memória
