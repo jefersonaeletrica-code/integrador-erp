@@ -160,12 +160,18 @@ const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
     // Para uma busca mais flexível, criamos uma cláusula LIKE para cada palavra.
     // Isso permite que "cabo acabamento" encontre "ACABAMENTO ... CABO".
     const searchWords = name.trim().split(/\s+/).filter(Boolean);
-    const clausulas = searchWords.map(word => ({
-        campo: "descrcomproduto",
-        valor: `%${word}%`,
-        operadorlogico: "AND",
-        operador: "LIKE"
-    }));
+    const clausulas = searchWords.map((word, index) => {
+        const clause = {
+            campo: "descrcomproduto",
+            valor: `%${word}%`,
+            operador: "LIKE"
+        };
+        // O operador lógico "AND" só deve ser adicionado a partir da segunda cláusula.
+        if (index > 0) {
+            clause.operadorlogico = "AND";
+        }
+        return clause;
+    });
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
