@@ -57,7 +57,12 @@ const testConnection = async (connection) => {
     const { url, username, password } = connection.credentials;
     let browser = null;
     try {
-        const executablePath = await chromium.executablePath || puppeteer.executablePath();
+        const executablePath = await chromium.executablePath;
+
+        if (!executablePath) {
+            throw new Error('Não foi possível encontrar o executável do Chromium. O pacote "chrome-aws-lambda" pode não estar funcionando corretamente neste ambiente de hospedagem.');
+        }
+
         browser = await puppeteer.launch({
             args: chromium.args,
             executablePath,
@@ -287,7 +292,12 @@ const fetchProducts = async (connection, searchTerm) => {
     let browser = null;
     try {
         console.log('[Dismatal Scraper] Iniciando busca de produtos...');
-        const executablePath = await chromium.executablePath || puppeteer.executablePath();
+        const executablePath = await chromium.executablePath;
+
+        if (!executablePath) {
+            throw new Error('Não foi possível encontrar o executável do Chromium. O pacote "chrome-aws-lambda" pode não estar funcionando corretamente neste ambiente de hospedagem.');
+        }
+
         browser = await puppeteer.launch({
             args: chromium.args,
             executablePath,
