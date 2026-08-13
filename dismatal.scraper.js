@@ -58,7 +58,6 @@ const testConnection = async (connection) => {
     let browser = null;
     try {
         // Define um diretório local para o Chromium, evitando problemas de permissão em /tmp
-        chromium.setHeadless(true);
         chromium.setDownloadPath(path.join(__dirname, 'chromium-data'));
 
         const executablePath = await chromium.executablePath();
@@ -292,7 +291,6 @@ const fetchProducts = async (connection, searchTerm) => {
     try {
         console.log('[Dismatal Scraper] Iniciando busca de produtos...');
         // Define um diretório local para o Chromium, evitando problemas de permissão em /tmp
-        chromium.setHeadless(true);
         chromium.setDownloadPath(path.join(__dirname, 'chromium-data'));
 
         const executablePath = await chromium.executablePath();
