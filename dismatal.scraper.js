@@ -50,7 +50,7 @@ const SELECTORS = {
 const interactWithSelector = async (page, selectors, action, value = '', timeout = 5000) => {
     for (const selector of selectors) {
         try {
-            const element = await page.waitForSelector(selector, { timeout });
+            const element = await page.waitForSelector(selector, { timeout, visible: true });
             if (action === 'type') {
                 await element.type(value);
             } else if (action === 'click') {
