@@ -1,6 +1,9 @@
 const path = require('path');
-const chromium = require('chrome-aws-lambda');
-const puppeteer = require('puppeteer-core');
+// **Solução para o erro EACCES em servidores**
+// Define um diretório de cache local e gravável para o Puppeteer ANTES de importá-lo.
+// Isso força o Puppeteer a baixar e executar o Chromium a partir daqui, evitando o /tmp.
+process.env.PUPPETEER_CACHE_DIR = path.join(__dirname, '.cache', 'puppeteer');
+const puppeteer = require('puppeteer');
 
 /**
  * Seletores CSS e configuração específica para Dismatal B2B Portal
@@ -57,16 +60,9 @@ const testConnection = async (connection) => {
     const { url, username, password } = connection.credentials;
     let browser = null;
     try {
-        const executablePath = await chromium.executablePath;
-
-        if (!executablePath) {
-            throw new Error('Não foi possível encontrar o executável do Chromium. O pacote "chrome-aws-lambda" pode não estar funcionando corretamente neste ambiente de hospedagem.');
-        }
-
         browser = await puppeteer.launch({
-            args: chromium.args,
-            executablePath,
-            headless: chromium.headless,
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
         });
         const page = await browser.newPage();
         await page.goto(url, { waitUntil: 'networkidle2' });
@@ -292,16 +288,9 @@ const fetchProducts = async (connection, searchTerm) => {
     let browser = null;
     try {
         console.log('[Dismatal Scraper] Iniciando busca de produtos...');
-        const executablePath = await chromium.executablePath;
-
-        if (!executablePath) {
-            throw new Error('Não foi possível encontrar o executável do Chromium. O pacote "chrome-aws-lambda" pode não estar funcionando corretamente neste ambiente de hospedagem.');
-        }
-
         browser = await puppeteer.launch({
-            args: chromium.args,
-            executablePath,
-            headless: chromium.headless,
+            headless: true,
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
         });
         const page = await browser.newPage();
 
