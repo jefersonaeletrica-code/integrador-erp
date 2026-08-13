@@ -212,12 +212,30 @@ async function getBlingConnectionStatus(connection, db) {
     }
 }
 
+async function ensureCissPoderTokenIsValid(connection, db) {
+    const { access_token, token_expires_at } = connection.credentials;
+    // Considera o token expirado se não existir, não tiver data de expiração,
+    // ou se a data de expiração já passou (com uma margem de 60 segundos).
+    if (!access_token || !token_expires_at || Date.now() >= token_expires_at - 60000) {
+        console.log(`[CissPoder] Token para conexão ${connection.id} está ausente ou expirado. Renovando...`);
+        try {
+            await refreshCissPoderToken(connection, db);
+            console.log(`[CissPoder] Token para conexão ${connection.id} renovado com sucesso.`);
+        } catch (error) {
+            const errorDetails = error.response ? JSON.stringify(error.response.data) : error.message;
+            console.error(`[CissPoder] Falha ao renovar o token para a conexão ${connection.id}:`, errorDetails);
+            // Lança o erro para que a operação que depende do token falhe explicitamente.
+            throw new Error('Falha ao renovar o token do CissPoder. Verifique as credenciais.');
+        }
+    }
+}
+
 async function getCissPoderConnectionStatus(connection, db) {
-    // Para CissPoder, se tivermos um access_token, consideramos conectado.
-    // A lógica de renovação já é tratada durante a busca de produtos.
-    if (connection.credentials && connection.credentials.access_token) {
+    try {
+        await ensureCissPoderTokenIsValid(connection, db);
         return 'connected';
-    } else {
+    } catch (error) {
+        console.error(`[CissPoder] Verificação de status falhou para conexão ${connection.id}:`, error.message);
         return 'disconnected';
     }
 }
@@ -233,5 +251,6 @@ module.exports = {
     fetchAllCissPoderProducts,
     getBlingConnectionStatus,
     getCissPoderConnectionStatus,
+    ensureCissPoderTokenIsValid, // Exporta a nova função
     axiosInstance // Exporta a instância do axios para ser usada em outros lugares se necessário
 };

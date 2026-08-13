@@ -155,7 +155,7 @@ module.exports = (db, erpConnections) => {
             if (connection.type === 'bling') {
                 await erpService.getBlingConnectionStatus(connection, db);
             } else if (connection.type === 'cisspoder') {
-                await erpService.getCissPoderConnectionStatus(connection, db);
+                await erpService.ensureCissPoderTokenIsValid(connection, db);
             }
 
             const requestedPage = parseInt(req.query.pagina || req.query.page || '1', 10);
