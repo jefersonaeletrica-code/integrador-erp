@@ -12,6 +12,7 @@ const puppeteer = require('puppeteer');
 const SELECTORS = {
     // Seletores de autenticação
     loginButton: ['a.login-btn', 'p.login-btn__click', '#drawer-header-btn', '[data-testid="login-btn"]'],
+    welcomeLoginButton: ['button.btn-login'], // Novo botão no pop-up de boas-vindas
     loginModal: ['[role="dialog"]', '.modal', '.login-modal'],
     usernameInput: ['input[formcontrolname="usuario"]', 'input[name="usuario"]', 'input[placeholder="CNPJ"]', 'input[data-placeholder="CNPJ"]', 'input[placeholder*="Usuário"]'],
     passwordInput: ['input[formcontrolname="senha"]', 'input[name="senha"]', 'input[type="password"]'],
@@ -46,7 +47,7 @@ const SELECTORS = {
  * @param {string} [value] - O valor para a ação 'type'.
  * @param {number} [timeout=3000] - Tempo de espera para cada seletor em milissegundos.
  */
-const interactWithSelector = async (page, selectors, action, value = '', timeout = 3000) => {
+const interactWithSelector = async (page, selectors, action, value = '', timeout = 5000) => {
     for (const selector of selectors) {
         try {
             const element = await page.waitForSelector(selector, { timeout });
@@ -92,20 +93,27 @@ const testConnection = async (connection) => {
 
         // PASSO ADICIONAL: Fechar o pop-up de cookies se ele aparecer.
         try {
-            console.log('[Dismatal Scraper] Tentando fechar pop-up de cookies...');
-            await interactWithSelector(page, SELECTORS.cookieAcceptButton, 'click', '', 3000); // Curto timeout, pois pode não aparecer
-            console.log('[Dismatal Scraper] Pop-up de cookies fechado.');
+            await interactWithSelector(page, SELECTORS.cookieAcceptButton, 'click', '', 5000);
+            console.log('[Dismatal Scraper] Pop-up de cookies fechado com sucesso.');
         } catch (e) {
             console.log('[Dismatal Scraper] Pop-up de cookies não encontrado ou já fechado.');
         }
 
-        // PASSO ADICIONAL: Clicar no botão de login para abrir o pop-up.
-        console.log('[Dismatal Scraper] Procurando e clicando no botão de login para abrir o modal...');
-        await interactWithSelector(page, SELECTORS.loginButton, 'click');
+        // NOVA ESTRATÉGIA: Tenta clicar no botão de login do pop-up de boas-vindas primeiro.
+        try {
+            console.log('[Dismatal Scraper] Estratégia 1: Procurando botão de login no pop-up de boas-vindas...');
+            await interactWithSelector(page, SELECTORS.welcomeLoginButton, 'click', '', 5000);
+            console.log('[Dismatal Scraper] Botão de login do pop-up de boas-vindas clicado.');
+        } catch (e) {
+            // ESTRATÉGIA ANTIGA (Fallback): Se o pop-up não aparecer, clica no botão de login do cabeçalho.
+            console.log('[Dismatal Scraper] Estratégia 2 (Fallback): Pop-up de boas-vindas não encontrado. Procurando botão de login no cabeçalho...');
+            await interactWithSelector(page, SELECTORS.loginButton, 'click');
+            console.log('[Dismatal Scraper] Botão de login do cabeçalho clicado.');
+        }
 
         // PASSO ADICIONAL: Aguardar o pop-up de login aparecer.
         console.log('[Dismatal Scraper] Aguardando o modal de login aparecer...');
-        await page.waitForSelector(SELECTORS.loginModal[0], { visible: true, timeout: 5000 });
+        await page.waitForSelector(SELECTORS.loginModal[0], { visible: true, timeout: 10000 });
 
         await interactWithSelector(page, SELECTORS.usernameInput, 'type', username);
         await interactWithSelector(page, SELECTORS.passwordInput, 'type', password);
@@ -336,20 +344,27 @@ const fetchProducts = async (connection, searchTerm) => {
 
         // PASSO ADICIONAL: Fechar o pop-up de cookies se ele aparecer.
         try {
-            console.log('[Dismatal Scraper] Tentando fechar pop-up de cookies...');
-            await interactWithSelector(page, SELECTORS.cookieAcceptButton, 'click', '', 3000); // Curto timeout, pois pode não aparecer
-            console.log('[Dismatal Scraper] Pop-up de cookies fechado.');
+            await interactWithSelector(page, SELECTORS.cookieAcceptButton, 'click', '', 5000);
+            console.log('[Dismatal Scraper] Pop-up de cookies fechado com sucesso.');
         } catch (e) {
             console.log('[Dismatal Scraper] Pop-up de cookies não encontrado ou já fechado.');
         }
 
-        // PASSO ADICIONAL: Clicar no botão de login para abrir o pop-up.
-        console.log('[Dismatal Scraper] Procurando e clicando no botão de login para abrir o modal...');
-        await interactWithSelector(page, SELECTORS.loginButton, 'click');
+        // NOVA ESTRATÉGIA: Tenta clicar no botão de login do pop-up de boas-vindas primeiro.
+        try {
+            console.log('[Dismatal Scraper] Estratégia 1: Procurando botão de login no pop-up de boas-vindas...');
+            await interactWithSelector(page, SELECTORS.welcomeLoginButton, 'click', '', 5000);
+            console.log('[Dismatal Scraper] Botão de login do pop-up de boas-vindas clicado.');
+        } catch (e) {
+            // ESTRATÉGIA ANTIGA (Fallback): Se o pop-up não aparecer, clica no botão de login do cabeçalho.
+            console.log('[Dismatal Scraper] Estratégia 2 (Fallback): Pop-up de boas-vindas não encontrado. Procurando botão de login no cabeçalho...');
+            await interactWithSelector(page, SELECTORS.loginButton, 'click');
+            console.log('[Dismatal Scraper] Botão de login do cabeçalho clicado.');
+        }
 
         // PASSO ADICIONAL: Aguardar o pop-up de login aparecer.
         console.log('[Dismatal Scraper] Aguardando o modal de login aparecer...');
-        await page.waitForSelector(SELECTORS.loginModal[0], { visible: true, timeout: 5000 });
+        await page.waitForSelector(SELECTORS.loginModal[0], { visible: true, timeout: 10000 });
 
         await interactWithSelector(page, SELECTORS.usernameInput, 'type', username);
         await interactWithSelector(page, SELECTORS.passwordInput, 'type', password);
