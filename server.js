@@ -1,5 +1,5 @@
+// Carrega as variáveis de ambiente do arquivo .env o mais cedo possível.
 require('dotenv').config();
-
 const express = require('express');
 
 const app = express();
