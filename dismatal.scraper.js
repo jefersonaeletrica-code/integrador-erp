@@ -1,4 +1,4 @@
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer-core');
 
 /**
  * Seletores CSS e configuração específica para Dismatal B2B Portal
@@ -55,17 +55,22 @@ const testConnection = async (connection) => {
     const { url, username, password } = connection.credentials;
     let browser = null;
     try {
-        // Use executablePath from environment variable if available
+        // Com puppeteer-core, buscamos o navegador via chrome-for-testing
+        const { executablePath } = await puppeteer.launch({
+            channel: 'chrome-for-testing',
+            headless: true,
+        }).then(async browser => {
+            const path = browser.process()?.spawnfile;
+            await browser.close();
+            if (!path) throw new Error('Não foi possível encontrar o caminho do chrome-for-testing.');
+            return { executablePath: path };
+        });
+
         const launchOptions = {
-            headless: true, // Use 'new' para o novo modo headless, ou true para o antigo
+            executablePath,
+            headless: true,
             args: ['--no-sandbox', '--disable-setuid-sandbox'],
         };
-        if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-            launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
-            console.log(`[Dismatal Scraper] Usando Chrome/Chromium em: ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
-        } else {
-            console.log('[Dismatal Scraper] PUPPETEER_EXECUTABLE_PATH não configurado. Usando o Chromium padrão do Puppeteer.');
-        }
         browser = await puppeteer.launch(launchOptions);
         const page = await browser.newPage();
         await page.goto(url, { waitUntil: 'networkidle2' });
@@ -291,17 +296,22 @@ const fetchProducts = async (connection, searchTerm) => {
     let browser = null;
     try {
         console.log('[Dismatal Scraper] Iniciando busca de produtos...');
-        // Use executablePath from environment variable if available
+        // Com puppeteer-core, buscamos o navegador via chrome-for-testing
+        const { executablePath } = await puppeteer.launch({
+            channel: 'chrome-for-testing',
+            headless: true,
+        }).then(async browser => {
+            const path = browser.process()?.spawnfile;
+            await browser.close();
+            if (!path) throw new Error('Não foi possível encontrar o caminho do chrome-for-testing.');
+            return { executablePath: path };
+        });
+
         const launchOptions = {
-            headless: true, // Use 'new' para o novo modo headless, ou true para o antigo
+            executablePath,
+            headless: true,
             args: ['--no-sandbox', '--disable-setuid-sandbox'],
         };
-        if (process.env.PUPPETEER_EXECUTABLE_PATH) {
-            launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
-            console.log(`[Dismatal Scraper] Usando Chrome/Chromium em: ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
-        } else {
-            console.log('[Dismatal Scraper] PUPPETEER_EXECUTABLE_PATH não configurado. Usando o Chromium padrão do Puppeteer.');
-        }
         browser = await puppeteer.launch(launchOptions);
         const page = await browser.newPage();
 
