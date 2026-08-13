@@ -55,7 +55,18 @@ const testConnection = async (connection) => {
     const { url, username, password } = connection.credentials;
     let browser = null;
     try {
-        browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+        // Use executablePath from environment variable if available
+        const launchOptions = {
+            headless: true, // Use 'new' para o novo modo headless, ou true para o antigo
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        };
+        if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+            launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+            console.log(`[Dismatal Scraper] Usando Chrome/Chromium em: ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
+        } else {
+            console.log('[Dismatal Scraper] PUPPETEER_EXECUTABLE_PATH não configurado. Usando o Chromium padrão do Puppeteer.');
+        }
+        browser = await puppeteer.launch(launchOptions);
         const page = await browser.newPage();
         await page.goto(url, { waitUntil: 'networkidle2' });
 
@@ -280,7 +291,18 @@ const fetchProducts = async (connection, searchTerm) => {
     let browser = null;
     try {
         console.log('[Dismatal Scraper] Iniciando busca de produtos...');
-        browser = await puppeteer.launch({ headless: true, args: ['--no-sandbox', '--disable-setuid-sandbox'] });
+        // Use executablePath from environment variable if available
+        const launchOptions = {
+            headless: true, // Use 'new' para o novo modo headless, ou true para o antigo
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        };
+        if (process.env.PUPPETEER_EXECUTABLE_PATH) {
+            launchOptions.executablePath = process.env.PUPPETEER_EXECUTABLE_PATH;
+            console.log(`[Dismatal Scraper] Usando Chrome/Chromium em: ${process.env.PUPPETEER_EXECUTABLE_PATH}`);
+        } else {
+            console.log('[Dismatal Scraper] PUPPETEER_EXECUTABLE_PATH não configurado. Usando o Chromium padrão do Puppeteer.');
+        }
+        browser = await puppeteer.launch(launchOptions);
         const page = await browser.newPage();
 
         console.log('[Dismatal Scraper] Acessando a página de login...');
