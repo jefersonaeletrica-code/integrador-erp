@@ -5,7 +5,10 @@ const path = require('path');
 // evitando o uso do diretório /tmp, que muitas vezes tem restrições de execução.
 // É crucial que estas variáveis sejam definidas ANTES de importar o puppeteer ou o chromium.
 process.env.PUPPETEER_CACHE_DIR = path.join(__dirname, '.cache', 'puppeteer');
+// Define o diretório onde o Chromium será baixado e extraído
 process.env.CHROMIUM_DOWNLOAD_PATH = path.join(__dirname, '.cache', 'chromium');
+// Define o diretório para arquivos temporários do Puppeteer
+process.env.PUPPETEER_TMPDIR = path.join(__dirname, '.tmp');
 
 const chromium = require('@sparticuz/chromium');
 const puppeteer = require('puppeteer-core');
