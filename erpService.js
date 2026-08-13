@@ -211,14 +211,11 @@ async function getBlingConnectionStatus(connection, db) {
 }
 
 async function getCissPoderConnectionStatus(connection, db) {
-    console.log(`Tentando obter/renovar token para a conexão CissPoder ${connection.id}...`);
-    try {
-        await refreshCissPoderToken(connection, db);
-        console.log(`Token para a conexão CissPoder ${connection.id} obtido/renovado com sucesso.`);
+    // Para CissPoder, se tivermos um access_token, consideramos conectado.
+    // A lógica de renovação já é tratada durante a busca de produtos.
+    if (connection.credentials && connection.credentials.access_token) {
         return 'connected';
-    } catch (error) {
-        const errorDetails = error.response ? JSON.stringify(error.response.data) : error.message;
-        console.error(`Falha ao obter/renovar token para a conexão CissPoder ${connection.id}:`, errorDetails);
+    } else {
         return 'disconnected';
     }
 }
