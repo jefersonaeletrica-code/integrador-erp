@@ -1,9 +1,11 @@
 const path = require('path');
-// Define um diretório local para o Chromium ANTES de carregar o pacote.
-// Isso resolve problemas de permissão em /tmp no servidor.
-process.env.CHROMIUM_DATA_PATH = path.join(__dirname, 'chromium-data');
-// Define o diretório de cache do Puppeteer para um local controlável
-process.env.PUPPETEER_CACHE_DIR = path.join(__dirname, '.puppeteer_cache');
+
+// **Solução para o erro EACCES em servidores**
+// Define um diretório local e gravável para o cache e os executáveis do Chromium,
+// evitando o uso do diretório /tmp, que muitas vezes tem restrições de execução.
+// É crucial que estas variáveis sejam definidas ANTES de importar o puppeteer ou o chromium.
+process.env.PUPPETEER_CACHE_DIR = path.join(__dirname, '.cache', 'puppeteer');
+process.env.CHROMIUM_DOWNLOAD_PATH = path.join(__dirname, '.cache', 'chromium');
 
 const chromium = require('@sparticuz/chromium');
 const puppeteer = require('puppeteer-core');
