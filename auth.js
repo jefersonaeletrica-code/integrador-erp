@@ -169,10 +169,8 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
     try {
         await withRetry(
             async () => {
-                // Se a página recarregou ou navegou, volta para a URL inicial
-                if (!page.url().includes('dismatal.com.br')) {
-                    await page.goto(url, { waitUntil: 'networkidle0' });
-                }
+                // Garante que cada tentativa comece da página inicial para um estado limpo.
+                await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
                 await performLogin(page, credentials, selectors);
             },
             {
