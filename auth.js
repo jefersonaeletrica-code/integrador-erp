@@ -170,7 +170,7 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
         await withRetry(
             async () => {
                 if (page.isClosed()) {
-                    // Se a página foi fechada (ex: por um finally), lança um erro para forçar a reinicialização.
+                    // Se a página foi fechada por um 'finally' externo, precisamos de uma nova.
                     throw new Error('A página foi fechada. A retentativa precisa de uma nova página.');
                 }
                 // Garante que cada tentativa comece da página inicial para um estado limpo.
@@ -181,7 +181,11 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
                 maxAttempts: retryAttempts,
                 delayMs: retryDelayMs,
                 onRetry: (attempt, error) => {
-                    logger.warn(`[Auth] Tentativa ${attempt} de login falhou. Causa: ${error.message}. Tentando novamente...`, {
+                    // Não logar o erro de página fechada como um aviso de login, é um erro de estado.
+                    if (error.message.includes('A página foi fechada')) {
+                        logger.debug(`[Auth] Página fechada detectada na tentativa ${attempt}.`);
+                    }
+                    logger.warn(`[Auth] Tentativa ${attempt} de login falhou. Causa: ${error.message}.`, {
                         requestId,
                         attempt,
                     });

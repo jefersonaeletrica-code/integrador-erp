@@ -70,13 +70,24 @@ export class DismatalScraper {
         const { url, username, password } = connection.credentials;
         try {
             await this.initialize();
-            await this.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-            await authenticate(this.page, {
-                url, // Passa a URL para a função de autenticação
-                credentials: { username, password },
-                retryAttempts: 3,
-                retryDelayMs: 2000,
-            });
+
+            try {
+                await authenticate(this.page, {
+                    url,
+                    credentials: { username, password },
+                    retryAttempts: 3,
+                    retryDelayMs: 2000,
+                });
+            } catch (error) {
+                // Se a autenticação falhou porque a página foi fechada, reinicializa e tenta uma última vez.
+                if (error.message.includes('A página foi fechada')) {
+                    this.logger.warn('[DismatalScraper] Página foi fechada durante a autenticação. Reinicializando e tentando novamente.');
+                    await this.initialize(); // Recria a página
+                    await authenticate(this.page, { url, credentials: { username, password }, retryAttempts: 1 });
+                } else {
+                    throw error; // Re-lança outros erros de autenticação
+                }
+            }
             return { sucesso: true, mensagem: 'Conexão com a Dismatal bem-sucedida!' };
         } catch (error) {
             this.logger.error('[DismatalScraper] Teste de conexão falhou.', error);
@@ -95,15 +106,22 @@ export class DismatalScraper {
         const { url, username, password } = connection.credentials;
         try {
             await this.initialize();
-            await this.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
 
             this.logger.info('[DismatalScraper] Autenticando para busca de produtos...');
-            await authenticate(this.page, {
-                url, // Passa a URL para a função de autenticação
-                credentials: { username, password },
-                retryAttempts: 3,
-                retryDelayMs: 2000,
-            });
+            try {
+                await authenticate(this.page, {
+                    url,
+                    credentials: { username, password },
+                    retryAttempts: 3,
+                    retryDelayMs: 2000,
+                });
+            } catch (error) {
+                if (error.message.includes('A página foi fechada')) {
+                    this.logger.warn('[DismatalScraper] Página foi fechada durante a autenticação. Reinicializando e tentando novamente.');
+                    await this.initialize();
+                    await authenticate(this.page, { url, credentials: { username, password }, retryAttempts: 1 });
+                } else throw error;
+            }
             this.logger.info('[DismatalScraper] Autenticação concluída.');
 
             let produtos = [];
