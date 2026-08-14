@@ -102,15 +102,12 @@ const testConnection = async (connection) => {
 
         // LÓGICA UNIFICADA: Tenta clicar em qualquer botão de login disponível (pop-up ou cabeçalho).
         console.log('[Dismatal Scraper] Procurando por um botão de login (pop-up ou cabeçalho)...');
-        await Promise.all([
-            page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 20000 }).catch(() => console.log('Navegação já concluída ou não iniciada pelo clique, continuando...')),
-            interactWithSelector(page, SELECTORS.loginButton, 'click', '', 15000)
-        ]);
+        await interactWithSelector(page, SELECTORS.loginButton, 'click', '', 15000);
+        console.log('[Dismatal Scraper] Botão de login clicado.');
 
-        console.log('[Dismatal Scraper] Ação de login iniciada e navegação aguardada.');
         // PASSO ADICIONAL: Aguardar o pop-up de login aparecer.
         console.log('[Dismatal Scraper] Aguardando o modal de login aparecer...');
-        await page.waitForSelector(SELECTORS.loginModal[0], { visible: true, timeout: 10000 });
+        await page.waitForSelector(SELECTORS.loginModal[0], { visible: true, timeout: 15000 });
 
         await interactWithSelector(page, SELECTORS.usernameInput, 'type', username);
         await interactWithSelector(page, SELECTORS.passwordInput, 'type', password);
@@ -348,11 +345,8 @@ const fetchProducts = async (connection, searchTerm) => {
 
         // LÓGICA UNIFICADA: Tenta clicar em qualquer botão de login disponível (pop-up ou cabeçalho).
         console.log('[Dismatal Scraper] Procurando por um botão de login (pop-up ou cabeçalho)...');
-        await Promise.all([
-            page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 20000 }).catch(() => console.log('Navegação já concluída ou não iniciada pelo clique, continuando...')),
-            interactWithSelector(page, SELECTORS.loginButton, 'click', '', 15000)
-        ]);
-        console.log('[Dismatal Scraper] Ação de login iniciada e navegação aguardada.');
+        await interactWithSelector(page, SELECTORS.loginButton, 'click', '', 15000);
+        console.log('[Dismatal Scraper] Botão de login clicado.');
 
         // PASSO ADICIONAL: Aguardar o pop-up de login aparecer.
         console.log('[Dismatal Scraper] Aguardando o modal de login aparecer...');
