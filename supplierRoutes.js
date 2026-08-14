@@ -1,5 +1,5 @@
 const express = require('express');
-const dismatalScraper = require('./dismatal.scraper.js');
+const { DismatalScraper } = require('./dismatal.scraper.js');
 
 const router = express.Router();
 
@@ -63,9 +63,12 @@ module.exports = (db, supplierConnections) => {
         if (connection.type !== 'dismatal_webscraper') return res.status(400).json({ sucesso: false, erro: 'Teste disponível apenas para conexões Dismatal.' });
 
         try {
-            const result = await dismatalScraper.testConnection(connection);
+            // Instancia o scraper com a configuração necessária
+            const scraper = new DismatalScraper({ headless: true });
+            const result = await scraper.testConnection(connection);
             res.json(result);
         } catch (e) {
+            console.error('[Dismatal API] Erro no teste de conexão:', e.message);
             res.status(500).json({ sucesso: false, erro: e.message });
         }
     });
@@ -79,7 +82,8 @@ module.exports = (db, supplierConnections) => {
         if (connection.type !== 'dismatal_webscraper') return res.status(400).json({ sucesso: false, erro: 'Busca de produtos disponível apenas para conexões Dismatal.' });
 
         try {
-            const result = await dismatalScraper.fetchProducts(connection, searchTerm);
+            const scraper = new DismatalScraper({ headless: true });
+            const result = await scraper.fetchProducts(connection, searchTerm);
             res.json(result);
         } catch (e) {
             console.error('[Dismatal Scraper] Erro na rota:', e.message);
