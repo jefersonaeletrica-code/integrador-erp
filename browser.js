@@ -1,8 +1,5 @@
-import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import { getLogger } from '../utils/logger.js';
-
-puppeteer.use(StealthPlugin());
+import puppeteer from 'puppeteer';
+import { getLogger } from './logger.js';
 
 const BROWSERLESS_API_KEY = process.env.BROWSERLESS_API_KEY;
 
