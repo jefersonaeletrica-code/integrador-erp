@@ -114,8 +114,16 @@ const testConnection = async (connection) => {
 
         // LÓGICA UNIFICADA: Tenta clicar em qualquer botão de login disponível (pop-up ou cabeçalho).
         console.log('[Dismatal Scraper] Procurando por um botão de login (pop-up ou cabeçalho)...');
-        await interactWithSelector(page, SELECTORS.loginButton, 'click', '', 15000);
-        console.log('[Dismatal Scraper] Botão de login clicado, aguardando modal.');
+        try {
+            await interactWithSelector(page, SELECTORS.loginButton, 'click', '', 15000);
+            console.log('[Dismatal Scraper] Botão de login clicado, aguardando modal.');
+        } catch (e) {
+            if (e.message.includes('Página desanexada')) {
+                console.warn('[Dismatal Scraper] Detecção de página desanexada ao tentar clicar no login. Recarregando e tentando novamente...');
+                await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
+                await interactWithSelector(page, SELECTORS.loginButton, 'click', '', 15000);
+            } else throw e;
+        }
 
         // PASSO ADICIONAL: Aguardar o pop-up de login aparecer.
         console.log('[Dismatal Scraper] Aguardando o modal de login aparecer...');
@@ -357,8 +365,16 @@ const fetchProducts = async (connection, searchTerm) => {
 
         // LÓGICA UNIFICADA: Tenta clicar em qualquer botão de login disponível (pop-up ou cabeçalho).
         console.log('[Dismatal Scraper] Procurando por um botão de login (pop-up ou cabeçalho)...');
-        await interactWithSelector(page, SELECTORS.loginButton, 'click', '', 15000);
-        console.log('[Dismatal Scraper] Botão de login clicado.');
+        try {
+            await interactWithSelector(page, SELECTORS.loginButton, 'click', '', 15000);
+            console.log('[Dismatal Scraper] Botão de login clicado.');
+        } catch (e) {
+            if (e.message.includes('Página desanexada')) {
+                console.warn('[Dismatal Scraper] Detecção de página desanexada ao tentar clicar no login. Recarregando e tentando novamente...');
+                await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
+                await interactWithSelector(page, SELECTORS.loginButton, 'click', '', 15000);
+            } else throw e;
+        }
 
         // PASSO ADICIONAL: Aguardar o pop-up de login aparecer.
         console.log('[Dismatal Scraper] Aguardando o modal de login aparecer...');
