@@ -115,7 +115,7 @@ async function main() {
         const options = parseArgs();
         logger.info('🚀 Iniciando Dismatal B2B Scraper', { options });
 
-        logger.info(' Carregando IDs internos...');
+        logger.info('📂 Carregando IDs internos...');
         const internalIds = await loadInternalIds(options);
         if (internalIds.length === 0) {
             throw new Error('Nenhum ID interno para processar.');
@@ -146,11 +146,11 @@ async function main() {
 
         logger.info('🏁 Execução finalizada.');
         process.exit(0);
-
     } catch (error) {
         logger.error('❌ Erro crítico na execução principal.', error);
         process.exit(1);
     } finally {
+        logger.info('🧹 Limpando recursos...');
         // Garante que os recursos sejam sempre liberados.
         if (adapter) {
             await adapter.disconnect().catch(e => logger.error('Erro ao desconectar adapter.', e));
