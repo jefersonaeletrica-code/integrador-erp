@@ -90,48 +90,57 @@ const getBrowser = async () => {
 const testConnection = async (connection) => {
     const { url, username, password } = connection.credentials;
     let browser = null;
+    let page = null;
+    let retries = 3; // Número máximo de tentativas
+
     try {
         browser = await getBrowser();
-        let page = await browser.newPage();
-        // Usando 'networkidle0' para esperar um carregamento mais completo da página.
-        await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
+        page = await browser.newPage();
 
-        // PASSO ADICIONAL: Fechar o pop-up de cookies se ele aparecer.
-        try {
-            // Clicar no botão de cookies pode causar um recarregamento da página.
-            await interactWithSelector(page, SELECTORS.cookieAcceptButton, 'click', '', 7000);
-            console.log('[Dismatal Scraper] Pop-up de cookies fechado com sucesso.');
-            // Pequena pausa para estabilizar a página após a interação
-            await page.waitForTimeout(2000);
-        } catch (e) {
-            console.log('[Dismatal Scraper] Pop-up de cookies não encontrado ou já fechado, continuando...');
-            if (page.isClosed()) {
-                console.log('[Dismatal Scraper] A página foi fechada após a tentativa de interação com cookies. Recarregando...');
-                page = await browser.newPage();
+        while (retries > 0) {
+            try {
+                console.log(`[Dismatal Scraper] Tentando conectar... (Tentativas restantes: ${retries})`);
+                if (page.isClosed()) page = await browser.newPage();
+
                 await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
+
+                // PASSO ADICIONAL: Fechar o pop-up de cookies se ele aparecer.
+                try {
+                    await interactWithSelector(page, SELECTORS.cookieAcceptButton, 'click', '', 7000);
+                    console.log('[Dismatal Scraper] Pop-up de cookies fechado com sucesso.');
+                    await page.waitForTimeout(2000); // Pausa para estabilização
+                } catch (e) {
+                    if (e.message.includes('Página desanexada')) throw e; // Re-lança para o catch principal
+                    console.log('[Dismatal Scraper] Pop-up de cookies não encontrado ou já fechado.');
+                }
+
+                // LÓGICA UNIFICADA: Tenta clicar no botão de login.
+                console.log('[Dismatal Scraper] Procurando por um botão de login (pop-up ou cabeçalho)...');
+                await interactWithSelector(page, SELECTORS.loginButton, 'click', '', 15000);
+                console.log('[Dismatal Scraper] Botão de login clicado, aguardando modal.');
+
+                // Se chegou até aqui sem erro, sai do loop de tentativas.
+                break;
+
+            } catch (e) {
+                retries--;
+                if (e.message.includes('Página desanexada') && retries > 0) {
+                    console.warn(`[Dismatal Scraper] Detecção de página desanexada. Tentando novamente...`);
+                    if (!page.isClosed()) await page.close();
+                    continue; // Próxima iteração do loop
+                }
+                // Se não for erro de desanexamento ou se as tentativas acabaram, lança o erro.
+                throw e;
             }
         }
-
-        // LÓGICA UNIFICADA: Tenta clicar em qualquer botão de login disponível (pop-up ou cabeçalho).
-        console.log('[Dismatal Scraper] Procurando por um botão de login (pop-up ou cabeçalho)...');
-        try {
-            await interactWithSelector(page, SELECTORS.loginButton, 'click', '', 15000);
-            console.log('[Dismatal Scraper] Botão de login clicado, aguardando modal.');
-        } catch (e) {
-            if (e.message.includes('Página desanexada')) {
-                console.warn('[Dismatal Scraper] Detecção de página desanexada ao tentar clicar no login. Recarregando e tentando novamente...');
-                await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
-                await interactWithSelector(page, SELECTORS.loginButton, 'click', '', 15000);
-            } else throw e;
-        }
-
+        
         // PASSO ADICIONAL: Aguardar o pop-up de login aparecer.
         console.log('[Dismatal Scraper] Aguardando o modal de login aparecer...');
         await page.waitForSelector(SELECTORS.loginModal[0], { visible: true, timeout: 15000 });
 
         await interactWithSelector(page, SELECTORS.usernameInput, 'type', username);
         await interactWithSelector(page, SELECTORS.passwordInput, 'type', password);
-
+        
         // Clica no botão de submit e espera a navegação.
         await interactWithSelector(page, SELECTORS.submitButton, 'click');
         await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 20000 });
@@ -146,7 +155,7 @@ const testConnection = async (connection) => {
         throw new Error(errorMessage.trim());
 
     } finally {
-        if (browser) await browser.close();
+        if (browser && browser.isConnected()) await browser.close();
     }
 };
 
