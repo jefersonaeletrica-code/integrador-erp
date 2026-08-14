@@ -42,7 +42,8 @@ export class DismatalScraper {
      * Inicializa o browser e a página.
      */
     async initialize() {
-        if (this.browser) return;
+        // Se o browser não existe ou não está mais conectado, inicializa um novo.
+        if (this.browser && this.browser.isConnected()) return;
         this.logger.info('[DismatalScraper] Inicializando browser...');
         const browserInstance = await initBrowser(this.config);
         this.browser = browserInstance.browser;
