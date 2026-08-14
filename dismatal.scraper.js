@@ -71,6 +71,7 @@ export class DismatalScraper {
             await this.initialize();
             await this.page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
             await authenticate(this.page, {
+                url, // Passa a URL para a função de autenticação
                 credentials: { username, password },
                 retryAttempts: 3,
                 retryDelayMs: 2000,
@@ -97,6 +98,7 @@ export class DismatalScraper {
 
             this.logger.info('[DismatalScraper] Autenticando para busca de produtos...');
             await authenticate(this.page, {
+                url, // Passa a URL para a função de autenticação
                 credentials: { username, password },
                 retryAttempts: 3,
                 retryDelayMs: 2000,
