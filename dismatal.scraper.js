@@ -1,13 +1,13 @@
-import { initBrowser, closeBrowser } from './core/browser.js';
+import { initBrowser, closeBrowser } from './browser.js';
 import { authenticate, DEFAULT_LOGIN_SELECTORS } from './auth/index.js';
-import { getLogger } from './utils/logger.js';
+import { getLogger } from './logger.js';
 import {
     isProductPageValid,
     validateProduct,
     pageParser,
     listPageParser,
     isValidSKU
-} from './utils/parsers.js';
+} from './parsers.js';
 
 /**
  * @class DismatalScraper
