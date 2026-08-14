@@ -66,7 +66,7 @@ const interactWithSelector = async (page, selectors, action, value = '', timeout
     try {
         const pageContent = await page.content();
         console.error(pageContent);
-    } catch (htmlError) {
+    } catch (htmlError) { // Se a página foi desanexada, o page.content() falhará.
         console.error('Não foi possível obter o conteúdo HTML da página.', htmlError);
     }
 
@@ -88,16 +88,27 @@ const testConnection = async (connection) => {
     let browser = null;
     try {
         browser = await getBrowser();
-        const page = await browser.newPage();
+        let page = await browser.newPage();
         // Usando 'networkidle0' para esperar um carregamento mais completo da página.
         await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
 
         // PASSO ADICIONAL: Fechar o pop-up de cookies se ele aparecer.
         try {
-            await interactWithSelector(page, SELECTORS.cookieAcceptButton, 'click', '', 5000);
+            // Clicar no botão de cookies pode causar um recarregamento da página.
+            // Usamos Promise.race para lidar com a possibilidade de navegação.
+            await Promise.race([
+                interactWithSelector(page, SELECTORS.cookieAcceptButton, 'click', '', 5000),
+                page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 10000 })
+            ]);
             console.log('[Dismatal Scraper] Pop-up de cookies fechado com sucesso.');
+            // Pequena pausa para estabilizar a página após a interação
+            await page.waitForTimeout(1000);
         } catch (e) {
             console.log('[Dismatal Scraper] Pop-up de cookies não encontrado ou já fechado, continuando...');
+            if (page.isClosed()) {
+                page = await browser.newPage();
+                await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
+            }
         }
 
         // LÓGICA UNIFICADA: Tenta clicar em qualquer botão de login disponível (pop-up ou cabeçalho).
