@@ -9,7 +9,7 @@ import { initLogger, getLogger }_from './utils/logger.js';
 import { loadInternalIds }_from './utils/loaders.js';
 import { displayResults, saveReports }_from './utils/reports.js';
 import { initBrowser, closeBrowser }_from './core/browser.js';
-import { authenticate }_from './auth/index.js';
+import { authenticate }_from './auth.js';
 import { DismatalProductPipelineAdapter }_from './core/dismatal-product-adapter.js';
 
 /**
