@@ -1,9 +1,9 @@
-const express = require('express');
-const erpService = require('./erpService.js');
+import express from 'express';
+import erpService from './erpService.js';
 
 const router = express.Router();
 
-module.exports = (db, erpConnections) => {
+export default (db, erpConnections) => {
     // --- ROTAS DE GERENCIAMENTO DE CONEXÕES ERP ---
 
     router.get('/erp-connections', async (req, res) => {

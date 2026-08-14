@@ -1,11 +1,11 @@
-const express = require('express');
-const { DismatalScraper } = require('./dismatal.scraper.js');
+import express from 'express';
+import { DismatalScraper } from './dismatal.scraper.js';
 
 const router = express.Router();
 
-module.exports = (db, supplierConnections) => {
+export default (db, supplierConnections) => {
     // --- ROTAS DE GERENCIAMENTO DE CONEXÕES DE FORNECEDORES ---
-
+    
     router.post('/supplier-connections', async (req, res) => {
         const { name, type, credentials } = req.body;
         if (!name || !type || !credentials) {

@@ -1,16 +1,16 @@
 // Carrega as variáveis de ambiente do arquivo .env o mais cedo possível.
-require('dotenv').config();
-const express = require('express');
+import 'dotenv/config';
+import express from 'express';
 
 const app = express();
 
 // Importa os módulos de rotas e serviços
-const erpRoutes = require('./erpRoutes.js');
-const supplierRoutes = require('./supplierRoutes.js');
-const productRoutes = require('./productRoutes.js');
-const productService = require('./productService.js');
+import erpRoutes from './erpRoutes.js';
+import supplierRoutes from './supplierRoutes.js';
+import productRoutes from './productRoutes.js';
+import productService from './productService.js';
 
-const db = require('./db'); // Carrega o driver de DB imediatamente
+import db from './db.js'; // Carrega o driver de DB imediatamente
 app.use(express.json());
 app.use(express.static('public'));
 
