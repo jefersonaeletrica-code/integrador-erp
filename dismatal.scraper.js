@@ -1,5 +1,5 @@
 import { initBrowser, closeBrowser } from './browser.js';
-import { authenticate, DEFAULT_LOGIN_SELECTORS } from './auth/index.js';
+import { authenticate, DEFAULT_LOGIN_SELECTORS } from './auth.js';
 import { getLogger } from './logger.js';
 import {
     isProductPageValid,
