@@ -17,10 +17,12 @@ export class AuthenticationError extends Error {
 async function withRetry(fn, options) {
     const { maxAttempts = 3, delayMs = 1000, onRetry } = options;
     let attempt = 1;
+    let lastError = null;
     while (attempt <= maxAttempts) {
         try {
-            return await fn();
+            return await fn(attempt, lastError);
         } catch (error) {
+            lastError = error;
             if (attempt === maxAttempts) {
                 throw error;
             }
@@ -125,11 +127,15 @@ async function performLogin(page, credentials, selectors) {
     // 5. Validar se o login foi bem-sucedido
     const logoutSelector = await findSelector(page, selectors.logoutLink);
     if (!logoutSelector) {
-        const pageContent = await page.content();
-        if (pageContent.includes('usuário ou senha inválidos')) {
+        const htmlContent = await page.content();
+        if (htmlContent.includes('usuário ou senha inválidos')) {
             throw new Error('Credenciais inválidas.');
         }
-        throw new Error('Login falhou. Indicador de sucesso (botão de logout) não encontrado após o login.');
+        // Adiciona o conteúdo da página ao erro para facilitar a depuração.
+        const errorMessage = 'Login falhou. Indicador de sucesso (botão de logout) não encontrado após o login.';
+        logger.error(errorMessage, new Error(errorMessage), { pageContent: htmlContent.substring(0, 2000) }); // Loga um trecho do HTML
+
+        throw new Error(errorMessage);
     }
     logger.debug('[Auth] Validação de login bem-sucedida.');
 
@@ -190,7 +196,7 @@ export async function authenticate(browserConfig, options, selectors = DEFAULT_L
                 const instance = await initBrowser(browserConfig);
                 const { page } = instance;
 
-                await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
+                await page.goto(url, { waitUntil: 'networkidle0', timeout: 45000 });
                 await performLogin(page, credentials, selectors);
                 return instance; // Retorna a instância bem-sucedida
             },
