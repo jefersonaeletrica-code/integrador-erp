@@ -17,8 +17,6 @@ export class DismatalScraper {
     constructor(config) {
         this.config = config;
         this.logger = getLogger();
-        this.browser = null;
-        this.page = null;
         this.selectors = {
             ...DEFAULT_LOGIN_SELECTORS,
             // Seletores de busca
@@ -39,52 +37,33 @@ export class DismatalScraper {
     }
 
     /**
-     * Inicializa o browser e a página.
-     */
-    async initialize() {
-        // Se o browser não existe ou não está mais conectado, inicializa um novo.
-        if (this.browser && this.browser.isConnected()) return;
-        this.logger.info('[DismatalScraper] Inicializando browser...');
-        const browserInstance = await initBrowser(this.config);
-        this.browser = browserInstance.browser;
-        this.page = browserInstance.page;
-    }
-
-    /**
-     * Fecha o browser.
-     */
-    async close() {
-        if (this.browser) {
-            this.logger.info('[DismatalScraper] Fechando browser...');
-            await closeBrowser({ browser: this.browser, page: this.page });
-            this.browser = null;
-            this.page = null;
-        }
-    }
-
-    /**
      * Testa a conexão e o login no portal.
      * @param {object} connection - Objeto de conexão com credenciais.
      */
     async testConnection(connection) {
         const { url, username, password } = connection.credentials;
+        let browserInstance = null;
         try {
-            await this.initialize();
+            this.logger.info('[DismatalScraper] Teste de conexão: inicializando browser...');
+            browserInstance = await initBrowser(this.config);
+            const { browser, page } = browserInstance;
 
-            const authResult = await authenticate(this.browser, this.page, {
+            await authenticate(browser, page, {
                 url,
                 credentials: { username, password },
                 retryAttempts: 3,
                 retryDelayMs: 2000,
             });
-            this.page = authResult.page; // Atualiza a página com a retornada pela autenticação
 
             return { sucesso: true, mensagem: 'Conexão com a Dismatal bem-sucedida!' };
         } catch (error) {
             this.logger.error('[DismatalScraper] Teste de conexão falhou.', error);
             throw error; // Re-lança o erro para a rota capturar
         } finally {
-            await this.close();
+            if (browserInstance) {
+                this.logger.info('[DismatalScraper] Teste de conexão: fechando browser...');
+                await closeBrowser(browserInstance);
+            }
         }
     }
 
@@ -95,17 +74,20 @@ export class DismatalScraper {
      */
     async fetchProducts(connection, searchTerm) {
         const { url, username, password } = connection.credentials;
+        let browserInstance = null;
         try {
-            await this.initialize();
+            this.logger.info('[DismatalScraper] Busca de produtos: inicializando browser...');
+            browserInstance = await initBrowser(this.config);
+            let { browser, page } = browserInstance;
 
             this.logger.info('[DismatalScraper] Autenticando para busca de produtos...');
-            const authResult = await authenticate(this.browser, this.page, {
+            const authResult = await authenticate(browser, page, {
                 url,
                 credentials: { username, password },
                 retryAttempts: 3,
                 retryDelayMs: 2000,
             });
-            this.page = authResult.page; // Garante que estamos usando a página mais recente
+            page = authResult.page; // Garante que estamos usando a página mais recente
 
             this.logger.info('[DismatalScraper] Autenticação concluída.');
 
@@ -115,11 +97,11 @@ export class DismatalScraper {
             if (searchTerm && isValidSKU(searchTerm)) {
                 this.logger.info(`[DismatalScraper] Estratégia 1: Navegação direta para SKU ${searchTerm}`);
                 try {
-                    await this.page.goto(`${url}/produtos/${searchTerm}`, { waitUntil: 'networkidle', timeout: 15000 });
+                    await page.goto(`${url}/produtos/${searchTerm}`, { waitUntil: 'networkidle0', timeout: 15000 });
 
-                    if (await isProductPageValid(this.page)) {
+                    if (await isProductPageValid(page)) {
                         this.logger.info('[DismatalScraper] Página de produto válida. Extraindo...');
-                        const produto = await this.page.evaluate(pageParser, this.selectors);
+                        const produto = await page.evaluate(pageParser, this.selectors);
 
                         if (produto) {
                             const validatedProduct = { ...produto, codigo: produto.sku || searchTerm };
@@ -139,17 +121,17 @@ export class DismatalScraper {
             if (produtos.length === 0 && searchTerm && searchTerm.trim() !== '') {
                 this.logger.info(`[DismatalScraper] Estratégia 2: Buscando por "${searchTerm}"`);
                 try {
-                    if (!this.page.url().includes('dismatal.com.br')) {
-                        await this.page.goto(url, { waitUntil: 'networkidle' });
+                    if (!page.url().includes('dismatal.com.br')) {
+                        await page.goto(url, { waitUntil: 'networkidle0' });
                     }
 
-                    const searchInput = await this.page.waitForSelector(this.selectors.searchInput[0], { timeout: 10000 });
+                    const searchInput = await page.waitForSelector(this.selectors.searchInput[0], { timeout: 10000 });
                     await searchInput.fill(searchTerm);
                     await searchInput.press('Enter');
-                    await this.page.waitForNavigation({ waitUntil: 'networkidle', timeout: 20000 });
+                    await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 20000 });
 
                     this.logger.info('[DismatalScraper] Extraindo dados da lista de produtos...');
-                    const produtosDaLista = await this.page.evaluate(listPageParser, this.selectors);
+                    const produtosDaLista = await page.evaluate(listPageParser, this.selectors);
 
                     const produtosValidos = produtosDaLista.filter(p => validateProduct(p).valid);
                     produtos = produtosValidos;
@@ -167,7 +149,10 @@ export class DismatalScraper {
             this.logger.error('[DismatalScraper] Falha ao buscar produtos.', error);
             throw error;
         } finally {
-            await this.close();
+            if (browserInstance) {
+                this.logger.info('[DismatalScraper] Busca de produtos: fechando browser...');
+                await closeBrowser(browserInstance);
+            }
         }
     }
 }
