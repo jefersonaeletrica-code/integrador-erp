@@ -146,17 +146,16 @@ async function performLogin(page, credentials, selectors) {
 
 /**
  * Orquestra a autenticação com retentativas.
- * @param {import('puppeteer').Browser} browser - A instância do browser.
- * @param {import('puppeteer').Page} initialPage - A página inicial (pode ser substituída em retentativas).
+ * @param {object} browserConfig - Configuração para inicializar o browser.
  * @param {object} options
  * @param {string} options.url - A URL base para a qual retornar em caso de redirecionamento.
  * @param {object} options.credentials
  * @param {number} options.retryAttempts
  * @param {number} options.retryDelayMs
  * @param {object} [selectors]
- * @returns {Promise<{success: boolean, timestamp: Date, page: import('puppeteer').Page}>}
+ * @returns {Promise<{success: boolean, timestamp: Date, browserInstance: {browser: import('puppeteer').Browser, page: import('puppeteer').Page}}>}
  */
-export async function authenticate(browser, initialPage, options, selectors = DEFAULT_LOGIN_SELECTORS) {
+export async function authenticate(browserConfig, options, selectors = DEFAULT_LOGIN_SELECTORS) {
     const logger = getLogger();
     const requestId = createRequestId();
     const { url, credentials, retryAttempts, retryDelayMs } = options;
@@ -167,29 +166,26 @@ export async function authenticate(browser, initialPage, options, selectors = DE
         retryAttempts,
     });
 
-    let page = initialPage;
+    let browserInstance = null;
 
     try {
-        const authResult = await withRetry(
-            async (attempt) => {
-                // Se não for a primeira tentativa, reinicializa o navegador para garantir uma conexão limpa.
-                // Isso resolve erros de "Protocol error: Connection closed" e "detached frame".
-                if (attempt > 1) {
-                    logger.info('[Auth] Reinicializando o navegador para a retentativa.');
-                    // A função initBrowser deve ser passada ou importada aqui.
-                    // Assumindo que ela pode ser importada.
-                    const { initBrowser } = await import('./browser.js');
-                    const newInstance = await initBrowser({ headless: true });
-                    browser = newInstance.browser;
-                    page = newInstance.page;
+        const { initBrowser, closeBrowser } = await import('./browser.js');
+
+        browserInstance = await withRetry(
+            async (attempt, lastError) => {
+                // Se houve um erro anterior, fecha a instância antiga antes de criar uma nova.
+                if (lastError && browserInstance) {
+                    logger.info('[Auth] Fechando instância de navegador anterior para retentativa.');
+                    await closeBrowser(browserInstance);
                 }
 
-                // Garante que estamos na URL correta para a tentativa.
-                if (page.url() !== url) {
-                    await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
-                }
+                logger.info(`[Auth] Tentativa ${attempt}: inicializando navegador.`);
+                const instance = await initBrowser(browserConfig);
+                const { page } = instance;
+
+                await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
                 await performLogin(page, credentials, selectors);
-                return { browser, page }; // Retorna as instâncias para a próxima etapa
+                return instance; // Retorna a instância bem-sucedida
             },
             {
                 maxAttempts: retryAttempts,
@@ -211,7 +207,7 @@ export async function authenticate(browser, initialPage, options, selectors = DE
         return {
             success: true,
             timestamp: new Date(),
-            page: authResult.page, // Retorna a página da tentativa bem-sucedida
+            browserInstance, // Retorna a instância do navegador para uso posterior
         };
     } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
@@ -220,6 +216,12 @@ export async function authenticate(browser, initialPage, options, selectors = DE
             action: 'auth_failed',
             requestId,
         });
+
+        // Garante que a última instância falha seja fechada
+        if (browserInstance) {
+            const { closeBrowser } = await import('./browser.js');
+            await closeBrowser(browserInstance);
+        }
 
         throw new AuthenticationError(`Falha de autenticação: ${errorMsg}`, {
             requestId,

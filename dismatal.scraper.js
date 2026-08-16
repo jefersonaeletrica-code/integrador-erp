@@ -43,12 +43,9 @@ export class DismatalScraper {
     async testConnection(connection) {
         const { url, username, password } = connection.credentials;
         let browserInstance = null;
+        this.logger.info('[DismatalScraper] Iniciando teste de conexão...');
         try {
-            this.logger.info('[DismatalScraper] Teste de conexão: inicializando browser...');
-            browserInstance = await initBrowser(this.config);
-            const { browser, page } = browserInstance;
-
-            await authenticate(browser, page, {
+            const authResult = await authenticate(this.config, {
                 url,
                 credentials: { username, password },
                 retryAttempts: 3,
@@ -60,8 +57,9 @@ export class DismatalScraper {
             this.logger.error('[DismatalScraper] Teste de conexão falhou.', error);
             throw error; // Re-lança o erro para a rota capturar
         } finally {
+            // A autenticação agora gerencia a instância, mas precisamos garantir que ela seja fechada.
             if (browserInstance) {
-                this.logger.info('[DismatalScraper] Teste de conexão: fechando browser...');
+                this.logger.info('[DismatalScraper] Finalizando teste de conexão e fechando browser...');
                 await closeBrowser(browserInstance);
             }
         }
@@ -75,19 +73,16 @@ export class DismatalScraper {
     async fetchProducts(connection, searchTerm) {
         const { url, username, password } = connection.credentials;
         let browserInstance = null;
+        this.logger.info('[DismatalScraper] Iniciando busca de produtos...');
         try {
-            this.logger.info('[DismatalScraper] Busca de produtos: inicializando browser...');
-            browserInstance = await initBrowser(this.config);
-            let { browser, page } = browserInstance;
-
-            this.logger.info('[DismatalScraper] Autenticando para busca de produtos...');
-            const authResult = await authenticate(browser, page, {
+            const authResult = await authenticate(this.config, {
                 url,
                 credentials: { username, password },
                 retryAttempts: 3,
                 retryDelayMs: 2000,
             });
-            page = authResult.page; // Garante que estamos usando a página mais recente
+            browserInstance = authResult.browserInstance;
+            const { page } = browserInstance;
 
             this.logger.info('[DismatalScraper] Autenticação concluída.');
 
