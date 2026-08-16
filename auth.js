@@ -170,24 +170,26 @@ export async function authenticate(browser, initialPage, options, selectors = DE
     let page = initialPage;
 
     try {
-        await withRetry(
-            async () => {
-                // Para cada tentativa, garante um estado limpo, recriando a página.
-                // Isso evita erros de "detached frame" se a página anterior foi invalidada pelo site.
-                if (page && !page.isClosed()) {
-                    try {
-                        await page.close();
-                    } catch (e) {
-                        logger.debug('[Auth] Não foi possível fechar a página anterior, pode já ter sido invalidada.');
-                    }
+        const authResult = await withRetry(
+            async (attempt) => {
+                // Se não for a primeira tentativa, reinicializa o navegador para garantir uma conexão limpa.
+                // Isso resolve erros de "Protocol error: Connection closed" e "detached frame".
+                if (attempt > 1) {
+                    logger.info('[Auth] Reinicializando o navegador para a retentativa.');
+                    // A função initBrowser deve ser passada ou importada aqui.
+                    // Assumindo que ela pode ser importada.
+                    const { initBrowser } = await import('./browser.js');
+                    const newInstance = await initBrowser({ headless: true });
+                    browser = newInstance.browser;
+                    page = newInstance.page;
                 }
 
-                logger.debug('[Auth] Criando nova página para a tentativa de login.');
-                page = await browser.newPage();
-                await page.setViewport({ width: 1280, height: 800 });
-
-                await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
+                // Garante que estamos na URL correta para a tentativa.
+                if (page.url() !== url) {
+                    await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
+                }
                 await performLogin(page, credentials, selectors);
+                return { browser, page }; // Retorna as instâncias para a próxima etapa
             },
             {
                 maxAttempts: retryAttempts,
@@ -209,7 +211,7 @@ export async function authenticate(browser, initialPage, options, selectors = DE
         return {
             success: true,
             timestamp: new Date(),
-            page, // Retorna a página potencialmente nova
+            page: authResult.page, // Retorna a página da tentativa bem-sucedida
         };
     } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
