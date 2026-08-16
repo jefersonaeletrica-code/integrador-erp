@@ -25,7 +25,7 @@ async function processQueue() {
         reject(error);
     }
 
-    processQueue(); // Processa o próximo item
+    await processQueue(); // Aguarda a conclusão da próxima tarefa na fila
 }
 
 /**
