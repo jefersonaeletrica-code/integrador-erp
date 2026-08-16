@@ -110,10 +110,17 @@ async function performLogin(page, credentials, selectors) {
     if (!submitSelector) throw new Error('Botão de submit não encontrado no modal.');
 
     logger.debug('[Auth] Submetendo formulário de login...');
-    await Promise.all([
-        page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 20000 }),
-        page.click(submitSelector),
-    ]);
+    // Em vez de esperar por uma navegação específica, esperamos por qualquer mudança
+    // que indique que o login foi processado. Isso é mais robusto.
+    await page.click(submitSelector);
+    try {
+        await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 });
+    } catch (e) {
+        logger.warn('[Auth] A navegação após o login demorou ou não ocorreu. Verificando o estado da página...');
+        // Se a navegação falhar (timeout), não é necessariamente um erro fatal.
+        // O login pode ter sido bem-sucedido via AJAX.
+        // Vamos prosseguir para a validação do logout.
+    }
 
     // 5. Validar se o login foi bem-sucedido
     const logoutSelector = await findSelector(page, selectors.logoutLink);
