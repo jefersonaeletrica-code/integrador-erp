@@ -175,7 +175,7 @@ export async function authenticate(browser, initialPage, options, selectors = DE
                 // Garante que a página esteja aberta e válida para a tentativa.
                 if (!page || page.isClosed()) {
                     logger.debug('[Auth] A página está fechada. Criando uma nova página para a retentativa.');
-                    page = await browser.newPage();
+                    page = await browser.newPage(); // Cria uma nova página a partir do browser existente
                     await page.setViewport({ width: 1280, height: 800 });
                 }
                 // Garante que cada tentativa comece da página inicial para um estado limpo.
