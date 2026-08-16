@@ -146,16 +146,17 @@ async function performLogin(page, credentials, selectors) {
 
 /**
  * Orquestra a autenticação com retentativas.
- * @param {import('puppeteer').Page} page
+ * @param {import('puppeteer').Browser} browser - A instância do browser.
+ * @param {import('puppeteer').Page} initialPage - A página inicial (pode ser substituída em retentativas).
  * @param {object} options
  * @param {string} options.url - A URL base para a qual retornar em caso de redirecionamento.
  * @param {object} options.credentials
  * @param {number} options.retryAttempts
  * @param {number} options.retryDelayMs
  * @param {object} [selectors]
- * @returns {Promise<{success: boolean, timestamp: Date}>}
+ * @returns {Promise<{success: boolean, timestamp: Date, page: import('puppeteer').Page}>}
  */
-export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELECTORS) {
+export async function authenticate(browser, initialPage, options, selectors = DEFAULT_LOGIN_SELECTORS) {
     const logger = getLogger();
     const requestId = createRequestId();
     const { url, credentials, retryAttempts, retryDelayMs } = options;
@@ -166,12 +167,16 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
         retryAttempts,
     });
 
+    let page = initialPage;
+
     try {
         await withRetry(
             async () => {
-                if (page.isClosed()) {
-                    // Se a página foi fechada por um 'finally' externo, precisamos de uma nova.
-                    throw new Error('A página foi fechada. A retentativa precisa de uma nova página.');
+                // Garante que a página esteja aberta e válida para a tentativa.
+                if (!page || page.isClosed()) {
+                    logger.debug('[Auth] A página está fechada. Criando uma nova página para a retentativa.');
+                    page = await browser.newPage();
+                    await page.setViewport({ width: 1280, height: 800 });
                 }
                 // Garante que cada tentativa comece da página inicial para um estado limpo.
                 await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
@@ -181,10 +186,6 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
                 maxAttempts: retryAttempts,
                 delayMs: retryDelayMs,
                 onRetry: (attempt, error) => {
-                    // Não logar o erro de página fechada como um aviso de login, é um erro de estado.
-                    if (error.message.includes('A página foi fechada')) {
-                        logger.debug(`[Auth] Página fechada detectada na tentativa ${attempt}.`);
-                    }
                     logger.warn(`[Auth] Tentativa ${attempt} de login falhou. Causa: ${error.message}.`, {
                         requestId,
                         attempt,
@@ -201,6 +202,7 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
         return {
             success: true,
             timestamp: new Date(),
+            page, // Retorna a página potencialmente nova
         };
     } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
