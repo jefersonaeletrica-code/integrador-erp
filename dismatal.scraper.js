@@ -1,5 +1,5 @@
+import { initBrowser, closeBrowser } from './browser.js';
 import { authenticate, DEFAULT_LOGIN_SELECTORS } from './auth.js';
-import { browserPool } from './browserPool.js';
 import { getLogger } from './logger.js';
 import {
     isProductPageValid,
@@ -42,11 +42,11 @@ export class DismatalScraper {
      */
     async testConnection(connection) {
         const { url, username, password } = connection.credentials;
-        let pooledBrowser = null;
+        let browserInstance = null;
         try {
-            this.logger.info('[DismatalScraper] Teste de conexão: adquirindo browser do pool...');
-            pooledBrowser = await browserPool.acquire();
-            const { browser, page } = pooledBrowser;
+            this.logger.info('[DismatalScraper] Teste de conexão: inicializando browser...');
+            browserInstance = await initBrowser(this.config);
+            const { browser, page } = browserInstance;
 
             await authenticate(browser, page, {
                 url,
@@ -60,8 +60,9 @@ export class DismatalScraper {
             this.logger.error('[DismatalScraper] Teste de conexão falhou.', error);
             throw error; // Re-lança o erro para a rota capturar
         } finally {
-            if (pooledBrowser) {
-                browserPool.release(pooledBrowser);
+            if (browserInstance) {
+                this.logger.info('[DismatalScraper] Teste de conexão: fechando browser...');
+                await closeBrowser(browserInstance);
             }
         }
     }
@@ -73,11 +74,11 @@ export class DismatalScraper {
      */
     async fetchProducts(connection, searchTerm) {
         const { url, username, password } = connection.credentials;
-        let pooledBrowser = null;
+        let browserInstance = null;
         try {
-            this.logger.info('[DismatalScraper] Busca de produtos: adquirindo browser do pool...');
-            pooledBrowser = await browserPool.acquire();
-            let { browser, page } = pooledBrowser;
+            this.logger.info('[DismatalScraper] Busca de produtos: inicializando browser...');
+            browserInstance = await initBrowser(this.config);
+            let { browser, page } = browserInstance;
 
             this.logger.info('[DismatalScraper] Autenticando para busca de produtos...');
             const authResult = await authenticate(browser, page, {
@@ -148,8 +149,9 @@ export class DismatalScraper {
             this.logger.error('[DismatalScraper] Falha ao buscar produtos.', error);
             throw error;
         } finally {
-            if (pooledBrowser) {
-                browserPool.release(pooledBrowser);
+            if (browserInstance) {
+                this.logger.info('[DismatalScraper] Busca de produtos: fechando browser...');
+                await closeBrowser(browserInstance);
             }
         }
     }
