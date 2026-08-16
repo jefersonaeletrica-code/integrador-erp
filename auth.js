@@ -114,7 +114,7 @@ async function performLogin(page, credentials, selectors) {
     // que indique que o login foi processado. Isso é mais robusto.
     await page.click(submitSelector);
     try {
-        await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 });
+        await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 45000 });
     } catch (e) {
         logger.warn('[Auth] A navegação após o login demorou ou não ocorreu. Verificando o estado da página...');
         // Se a navegação falhar (timeout), não é necessariamente um erro fatal.

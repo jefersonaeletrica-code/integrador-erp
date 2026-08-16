@@ -51,6 +51,7 @@ export class DismatalScraper {
                 retryAttempts: 3,
                 retryDelayMs: 2000,
             });
+            browserInstance = authResult.browserInstance;
 
             return { sucesso: true, mensagem: 'Conexão com a Dismatal bem-sucedida!' };
         } catch (error) {
