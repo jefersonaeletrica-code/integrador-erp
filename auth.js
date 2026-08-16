@@ -172,13 +172,20 @@ export async function authenticate(browser, initialPage, options, selectors = DE
     try {
         await withRetry(
             async () => {
-                // Garante que a página esteja aberta e válida para a tentativa.
-                if (!page || page.isClosed()) {
-                    logger.debug('[Auth] A página está fechada. Criando uma nova página para a retentativa.');
-                    page = await browser.newPage(); // Cria uma nova página a partir do browser existente
-                    await page.setViewport({ width: 1280, height: 800 });
+                // Para cada tentativa, garante um estado limpo, recriando a página.
+                // Isso evita erros de "detached frame" se a página anterior foi invalidada pelo site.
+                if (page && !page.isClosed()) {
+                    try {
+                        await page.close();
+                    } catch (e) {
+                        logger.debug('[Auth] Não foi possível fechar a página anterior, pode já ter sido invalidada.');
+                    }
                 }
-                // Garante que cada tentativa comece da página inicial para um estado limpo.
+
+                logger.debug('[Auth] Criando nova página para a tentativa de login.');
+                page = await browser.newPage();
+                await page.setViewport({ width: 1280, height: 800 });
+
                 await page.goto(url, { waitUntil: 'networkidle0', timeout: 20000 });
                 await performLogin(page, credentials, selectors);
             },
