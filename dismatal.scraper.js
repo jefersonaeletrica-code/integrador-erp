@@ -98,7 +98,7 @@ export class DismatalScraper {
                 try {
                     // 1. Navegar para a página inicial para garantir que a barra de busca esteja disponível.
                     this.logger.info(`[DismatalScraper] Navegando para a página inicial: ${url}`);
-                    await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
+                    await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
 
                     // 2. Encontrar e preencher o campo de busca.
                     const searchInputSelector = await findSelector(page, this.selectors.searchInput);
@@ -107,7 +107,7 @@ export class DismatalScraper {
                     }
                     this.logger.info(`[DismatalScraper] Campo de busca encontrado. Inserindo termo: "${searchTerm}"`);
                     await page.type(searchInputSelector, searchTerm);
-                    await page.press(searchInputSelector, 'Enter');
+                    await page.keyboard.press('Enter');
 
                     // 3. Aguardar a página de resultados carregar.
                     this.logger.info('[DismatalScraper] Aguardando resultados da busca...');
