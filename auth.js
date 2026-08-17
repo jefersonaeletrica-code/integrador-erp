@@ -182,25 +182,28 @@ export async function authenticate(browserConfig, options, selectors = DEFAULT_L
         retryAttempts,
     });
 
+    let browserInstance = null; // Variável para manter a instância entre as tentativas
     try {
         const { initBrowser, closeBrowser } = await import('./browser.js'); // Importação dinâmica
 
-        browserInstance = await withRetry(
+        const cookies = await withRetry(
             async (attempt, lastError) => {
                 // Se houve um erro anterior, fecha a instância antiga antes de criar uma nova.
                 if (attempt > 1 && browserInstance) {
                     logger.info('[Auth] Fechando instância de navegador anterior para retentativa.');
                     await closeBrowser(browserInstance);
+                    browserInstance = null; // Reseta a variável
                 }
 
                 logger.info(`[Auth] Tentativa ${attempt}: inicializando navegador.`);
-                const instance = await initBrowser(browserConfig);
-                const { page } = instance;
+                browserInstance = await initBrowser(browserConfig);
+                const { page } = browserInstance;
 
                 await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
                 const cookies = await performLogin(page, credentials, selectors);
 
-                await closeBrowser(instance); // Fecha o navegador de autenticação após o sucesso
+                await closeBrowser(browserInstance); // Fecha o navegador de autenticação após o sucesso
+                browserInstance = null;
                 return cookies; // Retorna apenas os cookies
             },
             {
@@ -216,7 +219,7 @@ export async function authenticate(browserConfig, options, selectors = DEFAULT_L
         );
 
         logger.info('[Auth] Autenticação e extração de cookies bem-sucedidas.', { action: 'auth_success', requestId });
-        return browserInstance; // Retorna os cookies obtidos
+        return cookies; // Retorna os cookies obtidos
     } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
 
@@ -224,6 +227,11 @@ export async function authenticate(browserConfig, options, selectors = DEFAULT_L
             action: 'auth_failed',
             requestId,
         });
+
+        // Garante que a última instância do navegador seja fechada em caso de falha final
+        if (browserInstance) {
+            await closeBrowser(browserInstance);
+        }
 
         throw new AuthenticationError(`Falha de autenticação: ${errorMsg}`, {
             requestId,
