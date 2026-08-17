@@ -77,11 +77,16 @@ async function performLogin(page, credentials, selectors) {
     logger.debug(`[Auth] Botão de login clicado: ${loginButtonSelector}`);
 
     // 3. Aguardar o modal de login e preencher os campos
-    const modalSelector = await findSelector(page, selectors.loginModal);
-    if (!modalSelector) {
-        throw new Error('Modal de login não apareceu.');
+    try {
+        logger.debug('[Auth] Aguardando o modal de login aparecer...');
+        await page.waitForSelector(selectors.loginModal.join(','), { visible: true, timeout: 10000 });
+    } catch (e) {
+        throw new Error('Modal de login não apareceu após clicar no botão.');
     }
     logger.debug('[Auth] Modal de login visível.');
+
+    // Aguarda um pequeno delay para garantir que os campos dentro do modal estejam prontos para receber input.
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
     const usernameSelector = await findSelector(page, selectors.usernameInput);
     if (!usernameSelector) throw new Error('Input de usuário não encontrado no modal.');
