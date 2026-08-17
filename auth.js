@@ -153,7 +153,7 @@ async function performLogin(page, credentials, selectors) {
         logger.debug('[Auth] Nenhum modal de boas-vindas encontrado.');
     }
 
-    return true; // Retorna sucesso, pois a página agora está logada.
+    return page; // Retorna a instância da página logada.
 }
 
 /**
@@ -161,6 +161,7 @@ async function performLogin(page, credentials, selectors) {
  * @param {import('puppeteer').Page} page - A página do Puppeteer para executar o login.
  * @param {object} options
  * @returns {Promise<boolean>}
+ * @returns {Promise<import('puppeteer').Page>} A instância da página autenticada.
  */
 export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELECTORS) {
     const logger = getLogger();
@@ -174,7 +175,7 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
     });
 
     try {
-        await withRetry(
+        const finalPage = await withRetry(
             async (attempt, lastError) => {
                 logger.info(`[Auth] Tentativa ${attempt}: navegando para a URL de login.`);
                 // Garante que a página esteja aberta, recriando-a se necessário.
@@ -184,8 +185,7 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
                     page = await page.browser().newPage();
                 }
                 await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
-                await performLogin(page, credentials, selectors);
-                return true;
+                return await performLogin(page, credentials, selectors);
             },
             {
                 maxAttempts: retryAttempts,
@@ -200,7 +200,7 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
         );
 
         logger.info('[Auth] Autenticação na página bem-sucedida.', { action: 'auth_success', requestId });
-        return true;
+        return finalPage;
     } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
 

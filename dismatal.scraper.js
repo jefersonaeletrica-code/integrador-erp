@@ -79,12 +79,12 @@ export class DismatalScraper {
         try {
             // 1. Iniciar o navegador e a página
             this.logger.info('[DismatalScraper] Iniciando navegador para a operação completa...');
-            browserInstance = await initBrowser(this.config);
-            const { page } = browserInstance;
+            browserInstance = await initBrowser(this.config); // browserInstance contém { browser, page }
+            let { page } = browserInstance;
 
             // 2. Autenticar diretamente na página
             this.logger.info('[DismatalScraper] Executando autenticação na página...');
-            await authenticate(page, {
+            page = await authenticate(page, { // Reatribui a página, caso ela tenha sido recriada durante a autenticação
                 url,
                 credentials: { username, password },
                 retryAttempts: 3,
