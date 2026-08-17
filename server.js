@@ -29,6 +29,8 @@ const startServer = async () => {
         console.log('Verificando variáveis de ambiente para conexão com DB...');
         console.log('----------------------------------------------------');
 
+        await db.initialize(); // Garante que o módulo de DB esteja carregado
+
         const currentDb = await db.readDb();
 
         // Carrega as conexões e produtos na memória
