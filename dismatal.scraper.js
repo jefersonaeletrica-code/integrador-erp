@@ -31,11 +31,11 @@ export class DismatalScraper {
             promoPrice: ['[data-promo-price]', '.promotional-price', '.sale-price'],
             stock: ['.stock-info', '.product-stock', '#stock', '[data-stock]'],
             // Seletores de lista de produtos
-            productListItem: ['.product-item'],
-            listItemName: ['.product-name'],
-            listItemSKU: ['.product-sku'],
-            listItemPrice: ['.product-price'],
-            listItemStock: ['.product-stock'],
+            productListItem: ['.product-item', '.product-card', '.product-tile', 'div[role="listitem"]'],
+            listItemName: ['.product-name', '.product-title', 'h3', 'a.link'],
+            listItemSKU: ['.product-sku', '.product-code', '[data-sku]'],
+            listItemPrice: ['.product-price', '.price', '.price-tag', '[data-price]'],
+            listItemStock: ['.product-stock', '.stock-status', '[data-stock-status]'],
         };
     }
 
@@ -91,35 +91,29 @@ export class DismatalScraper {
 
             let produtos = [];
 
-            // Estratégia de busca: Simular o comportamento do usuário usando a barra de pesquisa.
-            // A navegação direta para a URL do produto está sendo bloqueada pelo portal.
+            // Estratégia de Navegação Direta Aprimorada
             if (searchTerm && isValidSKU(searchTerm)) {
-                this.logger.info(`[DismatalScraper] Iniciando busca por SKU: ${searchTerm}`);
+                this.logger.info(`[DismatalScraper] Iniciando busca por navegação direta para o SKU: ${searchTerm}`);
                 try {
-                    // 1. Navegar para a página inicial para garantir que a barra de busca esteja disponível.
-                    this.logger.info(`[DismatalScraper] Navegando para a página inicial: ${url}`);
+                    // 1. Navegar para a página inicial primeiro para estabelecer a sessão com os cookies.
+                    this.logger.info(`[DismatalScraper] Estabelecendo sessão na página inicial: ${url}`);
                     await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
+                    
+                    // 2. Pausa para garantir que scripts de inicialização da página rodem.
+                    await new Promise(resolve => setTimeout(resolve, 2000));
 
-                    // 2. Encontrar e preencher o campo de busca.
-                    const searchInputSelector = await findSelector(page, this.selectors.searchInput);
-                    if (!searchInputSelector) {
-                        throw new Error('Campo de busca não foi encontrado na página inicial.');
-                    }
-                    this.logger.info(`[DismatalScraper] Campo de busca encontrado. Inserindo termo: "${searchTerm}"`);
-                    await page.type(searchInputSelector, searchTerm);
-                    await page.keyboard.press('Enter');
+                    // 3. Agora, navegar diretamente para a URL do produto na mesma aba.
+                    const productUrl = `${url}/produtos/${searchTerm}`;
+                    this.logger.info(`[DismatalScraper] Navegando para a URL do produto: ${productUrl}`);
+                    await page.goto(productUrl, { waitUntil: 'networkidle0', timeout: 30000 });
 
-                    // 3. Aguardar a página de resultados carregar.
-                    this.logger.info('[DismatalScraper] Aguardando resultados da busca...');
-                    await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 });
-
-                    // 4. Verificar se a busca levou a uma página de produto válida.
-                    this.logger.info(`[DismatalScraper] URL após a busca: ${page.url()}`);
+                    // 4. Extrair os dados da página.
+                    this.logger.info(`[DismatalScraper] URL final: ${page.url()}`);
                     produtos = await this.extractProductData(page, searchTerm);
 
                 } catch (e) {
-                    this.logger.error(`[DismatalScraper] Falha na estratégia de busca.`, e);
-                    throw new Error(`Falha ao buscar por "${searchTerm}" no portal.`);
+                    this.logger.error(`[DismatalScraper] Falha na estratégia de navegação direta.`, e);
+                    throw new Error(`Falha ao navegar para o produto "${searchTerm}" no portal.`);
                 }
             }
 
