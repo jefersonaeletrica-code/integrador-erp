@@ -1,4 +1,5 @@
 import { getLogger, createRequestId } from './logger.js';
+import { findSelector } from './parsers.js';
 
 /**
  * Erro customizado para falhas de autenticação.
@@ -47,21 +48,6 @@ export const DEFAULT_LOGIN_SELECTORS = {
     logoutLink: ['a[href*="sair"]', '[data-testid="logout"]'],
     cookieAcceptButton: ['button[data-test="COOKIE-POPUP-CLOSE-BTN"]', '.cookie-popup__button'],
 };
-
-/**
- * Encontra o primeiro seletor visível de uma lista.
- */
-async function findSelector(page, selectors) {
-    for (const selector of selectors) {
-        try {
-            await page.waitForSelector(selector, { visible: true, timeout: 3000 });
-            return selector;
-        } catch (e) {
-            // Continua para o próximo seletor
-        }
-    }
-    return null;
-}
 
 /**
  * Executa o fluxo de login.

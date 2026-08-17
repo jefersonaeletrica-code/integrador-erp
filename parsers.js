@@ -1,4 +1,22 @@
 /**
+ * Encontra o primeiro seletor visível de uma lista.
+ * @param {import('puppeteer').Page} page
+ * @param {string[]} selectors
+ * @returns {Promise<string|null>}
+ */
+export async function findSelector(page, selectors) {
+    for (const selector of selectors) {
+        try {
+            await page.waitForSelector(selector, { visible: true, timeout: 3000 });
+            return selector;
+        } catch (e) {
+            // Continua para o próximo seletor
+        }
+    }
+    return null;
+}
+
+/**
  * Verifica se a página de produto é válida, procurando por indicadores de erro.
  * @param {import('puppeteer').Page} page
  * @returns {Promise<boolean>}

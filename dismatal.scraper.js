@@ -2,6 +2,7 @@ import { initBrowser, closeBrowser } from './browser.js';
 import { authenticate, DEFAULT_LOGIN_SELECTORS } from './auth.js';
 import { getLogger } from './logger.js';
 import {
+    findSelector,
     isProductPageValid,
     validateProduct,
     pageParser,
@@ -119,7 +120,11 @@ export class DismatalScraper {
                     this.logger.info(`[DismatalScraper] Navegando para a página inicial para garantir que a barra de busca esteja presente.`);
                     await page.goto(url, { waitUntil: 'networkidle0' });
 
-                    const searchInput = await page.waitForSelector(this.selectors.searchInput[0], { timeout: 10000 });
+                    const searchInputSelector = await findSelector(page, this.selectors.searchInput);
+                    if (!searchInputSelector) {
+                        throw new Error('Campo de busca não foi encontrado na página inicial.');
+                    }
+                    const searchInput = await page.$(searchInputSelector);
                     await searchInput.fill(searchTerm);
                     await searchInput.press('Enter');
                     await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 20000 });
