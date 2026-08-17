@@ -119,7 +119,14 @@ async function performLogin(page, credentials, selectors) {
         logger.debug('[Auth] Aguardando o modal de login desaparecer...');
         await page.waitForSelector(modalSelector, { hidden: true, timeout: 25000 });
     } catch (e) {
-        throw new Error('O modal de login não desapareceu após a submissão, o login provavelmente falhou.');
+        let modalText = 'Não foi possível obter o conteúdo do modal.';
+        try {
+            // Tenta extrair o texto do modal para depuração
+            modalText = await page.$eval(modalSelector, el => el.innerText);
+        } catch (evalError) {
+            logger.debug('[Auth] Falha ao extrair texto do modal para depuração.');
+        }
+        throw new Error(`O modal de login não desapareceu após a submissão. Conteúdo do modal: "${modalText.substring(0, 100)}..."`);
     }
 
     // 5. Validar se o login foi bem-sucedido
@@ -192,7 +199,7 @@ export async function authenticate(browserConfig, options, selectors = DEFAULT_L
                 const instance = await initBrowser(browserConfig);
                 const { page } = instance;
 
-                await page.goto(url, { waitUntil: 'networkidle0', timeout: 45000 });
+                await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
                 await performLogin(page, credentials, selectors);
                 return instance; // Retorna a instância bem-sucedida
             },
