@@ -7,7 +7,7 @@
 export async function findSelector(page, selectors) {
     for (const selector of selectors) {
         try {
-            await page.waitForSelector(selector, { visible: true, timeout: 7000 });
+            await page.waitForSelector(selector, { visible: true, timeout: 15000 }); // Increased timeout
             return selector;
         } catch (e) {
             // Continua para o próximo seletor

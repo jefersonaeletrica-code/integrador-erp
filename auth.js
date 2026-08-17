@@ -87,6 +87,9 @@ async function performLogin(page, credentials, selectors) {
     }
     logger.debug('[Auth] Modal de login visível.');
 
+    // Aguarda o DOM estar completamente carregado dentro do modal.
+    await page.waitForLoadState('domcontentloaded', { timeout: 10000 });
+
     // Aguarda um pequeno delay para garantir que os campos dentro do modal estejam prontos para receber input.
     await new Promise(resolve => setTimeout(resolve, 1000));
 
