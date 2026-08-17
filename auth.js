@@ -112,33 +112,31 @@ async function performLogin(page, credentials, selectors) {
     if (!submitSelector) throw new Error('Botão de submit não encontrado no modal.');
 
     logger.debug('[Auth] Submetendo formulário de login...');
-    // Para SPAs, em vez de esperar por navegação, esperamos por uma mudança no DOM.
-    // O sinal mais confiável de que o login foi processado é o modal desaparecer.
     await page.click(submitSelector);
-    try {
-        logger.debug('[Auth] Aguardando o modal de login desaparecer...');
-        await page.waitForSelector(modalSelector, { hidden: true, timeout: 25000 });
-    } catch (e) {
-        let modalText = 'Não foi possível obter o conteúdo do modal.';
-        try {
-            // Tenta extrair o texto do modal para depuração
-            modalText = await page.$eval(modalSelector, el => el.innerText);
-        } catch (evalError) {
-            logger.debug('[Auth] Falha ao extrair texto do modal para depuração.');
-        }
-        throw new Error(`O modal de login não desapareceu após a submissão. Conteúdo do modal: "${modalText.substring(0, 100)}..."`);
-    }
 
-    // 5. Validar se o login foi bem-sucedido
+    // Para SPAs, a melhor abordagem é esperar por múltiplos resultados possíveis.
+    // Usamos Promise.race para aguardar o primeiro evento que ocorrer.
     try {
-        logger.debug('[Auth] Aguardando o indicador de sucesso (link de logout) aparecer...');
-        // Espera ativamente pelo indicador de sucesso, que é a melhor forma de validar o login em uma SPA.
-        await page.waitForSelector(selectors.logoutLink.join(', '), { visible: true, timeout: 15000 });
+        logger.debug('[Auth] Aguardando resultado do login (sucesso ou erro)...');
+        const errorSelector = '.message-label.error'; // Seletor para mensagens de erro no modal
+
+        const result = await Promise.race([
+            page.waitForSelector(selectors.logoutLink.join(', '), { visible: true, timeout: 25000 }).then(() => 'success'),
+            page.waitForSelector(errorSelector, { visible: true, timeout: 25000 }).then(async () => {
+                const errorMessage = await page.$eval(errorSelector, el => el.innerText);
+                return `error: ${errorMessage}`;
+            }),
+        ]);
+
+        if (result.startsWith('error')) {
+            throw new Error(`Erro de login retornado pelo site: ${result.replace('error: ', '')}`);
+        }
+
+        // Se chegamos aqui, result foi 'success'
+        logger.debug('[Auth] Indicador de sucesso encontrado. Login bem-sucedido.');
+
     } catch (e) {
-        const htmlContent = await page.content();
-        const errorMessage = 'Login falhou. Indicador de sucesso (botão de logout) não encontrado após o login.';
-        logger.error(errorMessage, new Error(errorMessage), { pageContent: htmlContent.substring(0, 2000) }); // Loga um trecho do HTML
-        throw new Error(errorMessage);
+        throw new Error(`Login falhou. Nenhum indicador de sucesso ou erro conhecido apareceu. Causa: ${e.message}`);
     }
     logger.debug('[Auth] Validação de login bem-sucedida.');
 
