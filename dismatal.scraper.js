@@ -133,7 +133,8 @@ export class DismatalScraper {
             return { sucesso: true, produtos };
         } catch (error) {
             this.logger.error('[DismatalScraper] Falha ao buscar produtos.', error);
-            throw error;
+            // Em vez de lançar o erro, retorna no formato padrão
+            return { sucesso: false, erro: error.message, produtos: [] };
         } finally {
             if (browserInstance) {
                 this.logger.info('[DismatalScraper] Busca de produtos: fechando browser...');

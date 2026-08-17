@@ -46,7 +46,8 @@ export const DEFAULT_LOGIN_SELECTORS = {
     submitButton: ['button.btn-login', 'button[type="submit"]'],
     loginModal: ['[role="dialog"]', '.modal', '.login-modal'],
     logoutLink: ['a[href*="sair"]', '[data-testid="logout"]'],
-    cookieAcceptButton: ['button[data-test="COOKIE-POPUP-CLOSE-BTN"]', '.cookie-popup__button'],
+    cookieAcceptButton: ['button[data-test="COOKIE-POPUP-CLOSE-BTN"]', '.cookie-popup__button', '#onetrust-accept-btn-handler'],
+    welcomeModalCloseButton: ['button:has-text("Continuar e fechar")', 'button[aria-label*="Fechar"]', '.modal-close'],
 };
 
 /**
@@ -55,13 +56,13 @@ export const DEFAULT_LOGIN_SELECTORS = {
 async function performLogin(page, credentials, selectors) {
     const logger = getLogger();
 
-    // 1. Fechar pop-up de cookies, se existir
+    // PASSO 1: Fechar pop-up de cookies, se existir
     try {
         const cookieBtnSelector = await findSelector(page, selectors.cookieAcceptButton);
         if (cookieBtnSelector) {
             logger.debug('[Auth] Fechando pop-up de cookies.');
             await page.click(cookieBtnSelector);
-            await new Promise(resolve => setTimeout(resolve, 1500)); // Espera para estabilizar
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Espera para estabilizar
         }
     } catch (e) {
         logger.debug('[Auth] Pop-up de cookies não encontrado ou já fechado.');
@@ -76,7 +77,7 @@ async function performLogin(page, credentials, selectors) {
     await page.click(loginButtonSelector);
     logger.debug(`[Auth] Botão de login clicado: ${loginButtonSelector}`);
 
-    // 3. Aguardar o modal de login e preencher os campos
+    // PASSO 3: Aguardar o modal de login e preencher os campos
     try {
         logger.debug('[Auth] Aguardando o modal de login aparecer...');
         await page.waitForSelector(selectors.loginModal.join(','), { visible: true, timeout: 10000 });
@@ -98,12 +99,14 @@ async function performLogin(page, credentials, selectors) {
     await page.type(usernameSelector, credentials.username);
     await page.type(passwordSelector, credentials.password);
 
-    // 4. Clicar no botão de submit e aguardar a navegação
+    // PASSO 4: Clicar no botão de submit e aguardar o resultado
     const submitSelector = await findSelector(page, selectors.submitButton);
     if (!submitSelector) throw new Error('Botão de submit não encontrado no modal.');
 
     logger.debug('[Auth] Submetendo formulário de login...');
-    await page.click(submitSelector);
+    // Clica no botão de submit, mas não espera pela navegação aqui.
+    // A espera será feita de forma sincronizada no passo seguinte.
+    page.click(submitSelector);
 
     // Abordagem híbrida: espera por uma navegação OU por um indicador de sucesso/erro.
     // Isso lida tanto com SPAs quanto com redirecionamentos tradicionais, e evita timeouts de inatividade.
@@ -114,18 +117,18 @@ async function performLogin(page, credentials, selectors) {
         const errorSelector = '.message-label.error'; // Seletor para mensagens de erro no modal
 
         const result = await Promise.race([
-            page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000, signal }).then(() => 'navigation'),
-            page.waitForSelector(selectors.logoutLink.join(', '), { visible: true, timeout: 25000, signal }).then(() => 'success'),
-            page.waitForSelector(errorSelector, { visible: true, timeout: 25000, signal }).then(async () => {
+            page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 45000, signal }).then(() => 'navigation_success'),
+            page.waitForSelector(selectors.logoutLink.join(', '), { visible: true, timeout: 40000, signal }).then(() => 'element_success'),
+            page.waitForSelector(errorSelector, { visible: true, timeout: 40000, signal }).then(async () => {
                 const errorMessage = await page.$eval(errorSelector, el => el.innerText);
-                return `error: ${errorMessage}`;
+                return `login_error: ${errorMessage || 'Erro desconhecido'}`;
             }),
         ]);
 
         abortController.abort(); // Cancela todas as outras esperas pendentes de forma limpa.
 
-        if (result.startsWith('error')) {
-            throw new Error(`Erro de login retornado pelo site: ${result.replace('error: ', '')}`);
+        if (result.startsWith('login_error')) {
+            throw new Error(`Credenciais inválidas ou erro no login: ${result.replace('login_error: ', '')}`);
         }
         logger.debug(`[Auth] Login processado com resultado: ${result}. Verificando estado final...`);
     } catch (e) {
@@ -133,24 +136,19 @@ async function performLogin(page, credentials, selectors) {
     }
     logger.debug('[Auth] Validação de login bem-sucedida.');
 
-    // Extrai os cookies imediatamente após a validação do login, antes que a página possa se recarregar.
+    // PASSO 5: Extrair cookies
     logger.debug('[Auth] Extraindo cookies de sessão...');
     const cookies = await page.cookies();
 
-    // Adiciona uma pausa extra para garantir que qualquer script pós-login (ex: tracking, modais) seja carregado.
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // 6. Fechar modal de boas-vindas (se houver)
+    // PASSO 6: Fechar modal de boas-vindas (se houver)
+    // Adiciona uma pausa para dar tempo ao modal de aparecer.
+    await new Promise(resolve => setTimeout(resolve, 1500));
     try {
-        const closeModalSelectors = [
-            'button:has-text("Continuar e fechar")',
-            'button[aria-label*="Fechar"]',
-            '.modal-close',
-        ];
-        const closeModalSelector = await findSelector(page, closeModalSelectors);
+        const closeModalSelector = await findSelector(page, selectors.welcomeModalCloseButton);
         if (closeModalSelector) {
             logger.debug('[Auth] Fechando modal de boas-vindas.');
             await page.click(closeModalSelector);
+            // Espera um pouco para o modal fechar completamente
             await new Promise(resolve => setTimeout(resolve, 1000));
         }
     } catch (e) {
