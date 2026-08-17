@@ -8,7 +8,7 @@ const app = express();
 import erpRoutes from './erpRoutes.js';
 import supplierRoutes from './supplierRoutes.js';
 import productRoutes from './productRoutes.js';
-import productService from './productService.js';
+import * as productService from './productService.js';
 
 import db from './db.js'; // Carrega o driver de DB imediatamente
 app.use(express.json());
@@ -39,8 +39,7 @@ const startServer = async () => {
         supplierConnections.splice(0, supplierConnections.length); // Limpa o array
         (Array.isArray(currentDb.supplierConnections) ? currentDb.supplierConnections : []).forEach(conn => supplierConnections.push(conn));
 
-        productService.produtosImportados = currentDb.produtos; // Atualiza o estado no productService
-
+        productService.loadProdutosImportados(currentDb.produtos); // Atualiza o estado no productService
 
         console.log(`${erpConnections.length} conexões ERP carregadas.`);
         console.log(`${supplierConnections.length} conexões de fornecedores carregadas.`);
