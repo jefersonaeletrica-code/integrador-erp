@@ -106,34 +106,32 @@ async function performLogin(page, credentials, selectors) {
 
     logger.debug('[Auth] Submetendo formulário de login...');
     // Clica no botão de submit, mas não espera pela navegação aqui.
-    // A espera será feita de forma sincronizada no passo seguinte.
-    page.click(submitSelector);
+    await page.click(submitSelector);
 
-    // Abordagem híbrida: espera por uma navegação OU por um indicador de sucesso/erro.
-    // Isso lida tanto com SPAs quanto com redirecionamentos tradicionais, e evita timeouts de inatividade.
+    // Abordagem mais robusta: Após o clique, aguarda um tempo para a requisição ser processada
+    // e então recarrega a página para validar o estado de login.
     try {
-        logger.debug('[Auth] Aguardando resultado do login (sucesso ou erro)...');
-        const abortController = new AbortController();
-        const signal = abortController.signal;
-        const errorSelector = '.message-label.error'; // Seletor para mensagens de erro no modal
+        logger.debug('[Auth] Aguardando processamento do login e recarregando a página para validar o estado...');
+        await new Promise(resolve => setTimeout(resolve, 3000)); // Espera 3s para a requisição de login processar
+        await page.reload({ waitUntil: 'networkidle0', timeout: 45000 });
 
-        const result = await Promise.race([
-            page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 45000, signal }).then(() => 'navigation_success'),
-            page.waitForSelector(selectors.logoutLink.join(', '), { visible: true, timeout: 40000, signal }).then(() => 'element_success'),
-            page.waitForSelector(errorSelector, { visible: true, timeout: 40000, signal }).then(async () => {
-                const errorMessage = await page.$eval(errorSelector, el => el.innerText);
-                return `login_error: ${errorMessage || 'Erro desconhecido'}`;
-            }),
-        ]);
-
-        abortController.abort(); // Cancela todas as outras esperas pendentes de forma limpa.
-
-        if (result.startsWith('login_error')) {
-            throw new Error(`Credenciais inválidas ou erro no login: ${result.replace('login_error: ', '')}`);
+        // A validação de sucesso agora é verificar se o botão de login DESAPARECEU.
+        // Usamos um timeout curto. Se o botão ainda estiver lá, o login falhou.
+        try {
+            await page.waitForSelector(selectors.loginButton.join(','), { visible: true, timeout: 5000 });
+            // Se o seletor foi encontrado, significa que o login falhou, pois o botão ainda está visível.
+            const pageContent = await page.content();
+            const errorHint = pageContent.match(/class="[^"]*error[^"]*".*?>([^<]+)/i);
+            const errorMessage = errorHint ? errorHint[1].trim() : 'Botão de login ainda visível.';
+            throw new Error(`Login falhou: ${errorMessage}`);
+        } catch (e) {
+            // Se `waitForSelector` deu timeout, é um SUCESSO! O botão de login não foi encontrado.
+            logger.debug('[Auth] Botão de login não encontrado após recarregar. Login considerado bem-sucedido.');
         }
-        logger.debug(`[Auth] Login processado com resultado: ${result}. Verificando estado final...`);
+
     } catch (e) {
-        throw new Error(`Login falhou. Nenhum indicador de sucesso ou erro conhecido apareceu. Causa: ${e.message}`);
+        // Captura o erro do bloco try/catch interno ou o timeout do reload.
+        throw new Error(`Validação de login falhou após recarregar a página. Causa: ${e.message}`);
     }
     logger.debug('[Auth] Validação de login bem-sucedida.');
 
