@@ -1,6 +1,5 @@
 import { getLogger, createRequestId } from './logger.js';
 import { findSelector } from './parsers.js';
-import { initBrowser, closeBrowser } from './browser.js'; // Importação estática
 
 /**
  * Erro customizado para falhas de autenticação.
@@ -154,21 +153,16 @@ async function performLogin(page, credentials, selectors) {
         logger.debug('[Auth] Nenhum modal de boas-vindas encontrado.');
     }
 
-    return cookies;
+    return true; // Retorna sucesso, pois a página agora está logada.
 }
 
 /**
  * Orquestra a autenticação com retentativas.
- * @param {object} browserConfig - Configuração para inicializar o browser.
+ * @param {import('puppeteer').Page} page - A página do Puppeteer para executar o login.
  * @param {object} options
- * @param {string} options.url - A URL base para a qual retornar em caso de redirecionamento.
- * @param {object} options.credentials
- * @param {number} options.retryAttempts
- * @param {number} options.retryDelayMs
- * @param {object} [selectors]
- * @returns {Promise<object[]>} Um array de objetos de cookie do Puppeteer.
+ * @returns {Promise<boolean>}
  */
-export async function authenticate(browserConfig, options, selectors = DEFAULT_LOGIN_SELECTORS) {
+export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELECTORS) {
     const logger = getLogger();
     const requestId = createRequestId();
     const { url, credentials, retryAttempts, retryDelayMs } = options;
@@ -179,27 +173,13 @@ export async function authenticate(browserConfig, options, selectors = DEFAULT_L
         retryAttempts,
     });
 
-    let browserInstance = null; // Variável para manter a instância entre as tentativas
     try {
-        const cookies = await withRetry(
+        await withRetry(
             async (attempt, lastError) => {
-                // Se houve um erro anterior, fecha a instância antiga antes de criar uma nova.
-                if (attempt > 1 && browserInstance) {
-                    logger.info('[Auth] Fechando instância de navegador anterior para retentativa.');
-                    await closeBrowser(browserInstance);
-                    browserInstance = null; // Reseta a variável
-                }
-
-                logger.info(`[Auth] Tentativa ${attempt}: inicializando navegador.`);
-                browserInstance = await initBrowser(browserConfig);
-                const { page } = browserInstance;
-
+                logger.info(`[Auth] Tentativa ${attempt}: navegando para a URL de login.`);
                 await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
-                const cookies = await performLogin(page, credentials, selectors);
-
-                await closeBrowser(browserInstance); // Fecha o navegador de autenticação após o sucesso
-                browserInstance = null;
-                return cookies; // Retorna apenas os cookies
+                await performLogin(page, credentials, selectors);
+                return true;
             },
             {
                 maxAttempts: retryAttempts,
@@ -213,20 +193,15 @@ export async function authenticate(browserConfig, options, selectors = DEFAULT_L
             }
         );
 
-        logger.info('[Auth] Autenticação e extração de cookies bem-sucedidas.', { action: 'auth_success', requestId });
-        return cookies; // Retorna os cookies obtidos
+        logger.info('[Auth] Autenticação na página bem-sucedida.', { action: 'auth_success', requestId });
+        return true;
     } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
 
-        logger.error('[Auth] Extração de cookies falhou após todas as tentativas.', error, {
+        logger.error('[Auth] Autenticação falhou após todas as tentativas.', error, {
             action: 'auth_failed',
             requestId,
         });
-
-        // Garante que a última instância do navegador seja fechada em caso de falha final
-        if (browserInstance) {
-            await closeBrowser(browserInstance);
-        }
 
         throw new AuthenticationError(`Falha de autenticação: ${errorMsg}`, {
             requestId,

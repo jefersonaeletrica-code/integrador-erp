@@ -77,21 +77,20 @@ export class DismatalScraper {
         let browserInstance = null;
         this.logger.info('[DismatalScraper] Iniciando busca de produtos...');
         try {
-            // 1. Obter cookies de sessão
-            const cookies = await authenticate(this.config, {
+            // 1. Iniciar o navegador e a página
+            this.logger.info('[DismatalScraper] Iniciando navegador para a operação completa...');
+            browserInstance = await initBrowser(this.config);
+            const { page } = browserInstance;
+
+            // 2. Autenticar diretamente na página
+            this.logger.info('[DismatalScraper] Executando autenticação na página...');
+            await authenticate(page, {
                 url,
                 credentials: { username, password },
                 retryAttempts: 3,
                 retryDelayMs: 2000,
             });
-            this.logger.info('[DismatalScraper] Autenticação e obtenção de cookies concluídas.');
-
-            // 2. Iniciar um navegador novo e limpo para o scraping
-            this.logger.info('[DismatalScraper] Iniciando novo navegador para a busca de produtos...');
-            browserInstance = await initBrowser(this.config);
-            const { page } = browserInstance;
-            await page.setCookie(...cookies);
-            this.logger.info('[DismatalScraper] Cookies de sessão aplicados ao novo navegador.');
+            this.logger.info('[DismatalScraper] Página autenticada com sucesso.');
 
             let produtos = [];
 
@@ -99,8 +98,6 @@ export class DismatalScraper {
             if (searchTerm && isValidSKU(searchTerm)) {
                 this.logger.info(`[DismatalScraper] Iniciando busca por navegação direta para o SKU: ${searchTerm}`);
                 try {
-                    // Estratégia simplificada: Navegar diretamente para a URL do produto.
-                    // Os cookies de sessão já foram aplicados, então o servidor deve nos reconhecer.
                     const productUrl = `${url}/produtos/${searchTerm}`;
                     this.logger.info(`[DismatalScraper] Navegando para a URL do produto: ${productUrl}`);
                     // Abordagem mais robusta para SPAs: iniciar o goto e esperar a navegação de forma síncrona.
