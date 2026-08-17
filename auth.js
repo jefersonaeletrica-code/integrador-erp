@@ -177,6 +177,12 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
         await withRetry(
             async (attempt, lastError) => {
                 logger.info(`[Auth] Tentativa ${attempt}: navegando para a URL de login.`);
+                // Garante que a página esteja aberta, recriando-a se necessário.
+                // Isso é crucial para se recuperar de erros como "detached frame".
+                if (page.isClosed()) {
+                    logger.warn('[Auth] A página foi fechada. Tentando reabrir uma nova página para a retentativa...');
+                    page = await page.browser().newPage();
+                }
                 await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
                 await performLogin(page, credentials, selectors);
                 return true;
