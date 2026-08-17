@@ -1,5 +1,5 @@
 import express from 'express';
-import erpService from './erpService.js';
+import * as erpService from './erpService.js';
 
 const router = express.Router();
 

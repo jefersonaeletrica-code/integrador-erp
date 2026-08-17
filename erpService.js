@@ -1,5 +1,5 @@
-const axios = require('axios');
-const https = require('https');
+import axios from 'axios';
+import https from 'https';
 
 // Cria uma instância do axios com configurações reutilizáveis
 const axiosInstance = axios.create({
@@ -11,7 +11,7 @@ const axiosInstance = axios.create({
 const CISSPODER_CLIENT_ID = 'cisspoder-oauth';
 const CISSPODER_CLIENT_SECRET = 'poder7547';
 
-async function refreshAccessToken(connection, db) {
+export async function refreshAccessToken(connection, db) {
     if (connection.type !== 'bling' || !connection.credentials.refresh_token) {
         throw new Error('Apenas conexões Bling com refresh token podem ser atualizadas.');
     }
@@ -28,7 +28,7 @@ async function refreshAccessToken(connection, db) {
     await db.updateDb({ connection: { id: connection.id, credentials: connection.credentials } });
 }
 
-const buildBlingProductUrl = (page, searchParams = {}) => {
+export const buildBlingProductUrl = (page, searchParams = {}) => {
     const params = new URLSearchParams();
     params.set('pagina', String(page));
     params.set('limite', '100');
@@ -43,7 +43,7 @@ const buildBlingProductUrl = (page, searchParams = {}) => {
     return `https://api.bling.com.br/Api/v3/produtos?${params.toString()}`;
 };
 
-const fetchBlingProductPage = async (connection, page, searchParams = {}) => {
+export const fetchBlingProductPage = async (connection, page, searchParams = {}) => {
     const url = buildBlingProductUrl(page, searchParams);
     console.log('[BlingURL]', url);
 
@@ -51,13 +51,13 @@ const fetchBlingProductPage = async (connection, page, searchParams = {}) => {
     return response.data;
 };
 
-const normalizeNameForBling = (name) => {
+export const normalizeNameForBling = (name) => {
     const words = (name || '').trim().split(/\s+/);
     const cleanName = words.join(' ');
     return cleanName;
 };
 
-const fetchBlingProductsByName = async (connection, name, pagina = 1) => {
+export const fetchBlingProductsByName = async (connection, name, pagina = 1) => {
     const searchTerm = normalizeNameForBling(name);
     const searchParams = {
         criterio: '5', // Critério para "Contém"
@@ -67,7 +67,7 @@ const fetchBlingProductsByName = async (connection, name, pagina = 1) => {
     return fetchBlingProductPage(connection, pagina, searchParams);
 };
 
-const fetchBlingProductsByCode = async (connection, code, pagina = 1) => {
+export const fetchBlingProductsByCode = async (connection, code, pagina = 1) => {
     const searchParams = {
         criterio: '5',
         tipo: 'T&codigo',
@@ -76,14 +76,14 @@ const fetchBlingProductsByCode = async (connection, code, pagina = 1) => {
     return fetchBlingProductPage(connection, pagina, searchParams);
 };
 
-const fetchAllBlingProductsPaginated = async (connection, pagina = 1) => {
+export const fetchAllBlingProductsPaginated = async (connection, pagina = 1) => {
     const searchParams = { criterio: 2 }; // Usa criterio=2 para buscar produtos ativos
     return fetchBlingProductPage(connection, pagina, searchParams);
 };
 
 // --- Funções para CissPoder ---
 
-async function refreshCissPoderToken(connection, db) {
+export async function refreshCissPoderToken(connection, db) {
     let { auth_url, username, password } = connection.credentials;
 
     // Usa o construtor URL para garantir a manipulação correta.
@@ -107,7 +107,7 @@ async function refreshCissPoderToken(connection, db) {
     await db.updateDb({ connection: { id: connection.id, credentials: connection.credentials } });
 }
 
-const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
+export const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
     // Usa o construtor URL para derivação segura da URL de serviço.
     const authUrlObject = new URL(connection.credentials.auth_url);
     // Voltando a usar o endpoint 'cad_produtos' que temos permissão para acessar.
@@ -156,7 +156,7 @@ const fetchCissPoderProductPage = async (connection, page, clausulas = []) => {
     }
 };
 
-const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
+export const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
     // Para uma busca mais flexível, criamos uma cláusula LIKE para cada palavra.
     // Isso permite que "cabo acabamento" encontre "ACABAMENTO ... CABO".
     // O valor da busca será a soma das palavras, por exemplo para "cabo flex" o valor deve ser "%cabo%flex%"
@@ -171,19 +171,19 @@ const fetchCissPoderProductsByName = async (connection, name, pagina = 1) => {
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
-const fetchCissPoderProductsByCode = async (connection, code, pagina = 1) => {
+export const fetchCissPoderProductsByCode = async (connection, code, pagina = 1) => {
     const clausulas = [{ campo: "idsubproduto", valor: code, operadorlogico: "AND", operador: "IGUAL" }];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
-const fetchAllCissPoderProducts = async (connection, pagina = 1) => {
+export const fetchAllCissPoderProducts = async (connection, pagina = 1) => {
     const clausulas = [
         { campo: "flaginativo", valor: "F", operadorlogico: "AND", operador: "IGUAL" }
     ];
     return fetchCissPoderProductPage(connection, pagina, clausulas);
 };
 
-async function getBlingConnectionStatus(connection, db) {
+export async function getBlingConnectionStatus(connection, db) {
     if (!connection.credentials || !connection.credentials.access_token) {
         return 'requires_auth';
     }
@@ -212,7 +212,7 @@ async function getBlingConnectionStatus(connection, db) {
     }
 }
 
-async function ensureCissPoderTokenIsValid(connection, db) {
+export async function ensureCissPoderTokenIsValid(connection, db) {
     const { access_token, token_expires_at } = connection.credentials;
     // Considera o token expirado se não existir, não tiver data de expiração,
     // ou se a data de expiração já passou (com uma margem de 60 segundos).
@@ -230,7 +230,7 @@ async function ensureCissPoderTokenIsValid(connection, db) {
     }
 }
 
-async function getCissPoderConnectionStatus(connection, db) {
+export async function getCissPoderConnectionStatus(connection, db) {
     try {
         await ensureCissPoderTokenIsValid(connection, db);
         return 'connected';
@@ -239,18 +239,3 @@ async function getCissPoderConnectionStatus(connection, db) {
         return 'disconnected';
     }
 }
-
-module.exports = {
-    refreshAccessToken,
-    fetchBlingProductsByName,
-    fetchBlingProductsByCode,
-    fetchAllBlingProductsPaginated,
-    refreshCissPoderToken,
-    fetchCissPoderProductsByName,
-    fetchCissPoderProductsByCode,
-    fetchAllCissPoderProducts,
-    getBlingConnectionStatus,
-    getCissPoderConnectionStatus,
-    ensureCissPoderTokenIsValid, // Exporta a nova função
-    axiosInstance // Exporta a instância do axios para ser usada em outros lugares se necessário
-};

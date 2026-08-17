@@ -1,14 +1,14 @@
-const mysql = require('mysql2/promise');
+import mysql from 'mysql2/promise';
 
 // Estrutura de dados padrão para consistência
 // Removido, pois a nova estrutura é mais dinâmica.
-const DEFAULT_DB = {
+export const DEFAULT_DB = {
   produtos: []
 };
 let pool;
 let initializationPromise = null;
 
-const getPool = () => {
+export const getPool = () => {
   if (!pool) {
     // Suporte para ambos os padrões de variáveis de ambiente (MYSQL_ e DB_)
     const HOST = process.env.MYSQL_HOST || process.env.DB_HOST;
@@ -45,7 +45,7 @@ const getPool = () => {
   return pool;
 };
 
-const initializeDatabase = async () => {
+export const initializeDatabase = async () => {
   const connection = await getPool().getConnection(); // Pega uma conexão do pool
   try {
     console.log('Verificando e inicializando o banco de dados MySQL...');
@@ -88,14 +88,14 @@ const initializeDatabase = async () => {
 };
 
 // Função que garante que a inicialização ocorra apenas uma vez.
-const ensureInitialized = () => {
+export const ensureInitialized = () => {
   if (!initializationPromise) {
     initializationPromise = initializeDatabase();
   }
   return initializationPromise;
 };
 
-const readDb = async () => {
+export const readDb = async () => {
   await ensureInitialized(); // Garante que a inicialização terminou
   const connection = await getPool().getConnection();
   try {
@@ -121,7 +121,7 @@ const readDb = async () => {
   }
 };
 
-const updateDb = async (partial) => {
+export const updateDb = async (partial) => {
   // Esta função agora será mais específica para cada tipo de atualização
   // A lógica principal de CRUD será movida para o server.js
   await ensureInitialized(); // Garante que a inicialização terminou
@@ -158,12 +158,4 @@ const updateDb = async (partial) => {
   } finally {
     connection.release();
   }
-};
-
-module.exports = {
-  getPool,
-  DEFAULT_DB,
-  initialize: ensureInitialized, // Exporta a função de controle
-  readDb,
-  updateDb,
 };
