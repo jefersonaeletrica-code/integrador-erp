@@ -75,7 +75,7 @@ async function performLogin(page, credentials, selectors) {
         if (cookieBtnSelector) {
             logger.debug('[Auth] Fechando pop-up de cookies.');
             await page.click(cookieBtnSelector);
-            await page.waitForTimeout(1500); // Espera para estabilizar
+            await new Promise(resolve => setTimeout(resolve, 1500)); // Espera para estabilizar
         }
     } catch (e) {
         logger.debug('[Auth] Pop-up de cookies não encontrado ou já fechado.');
@@ -138,7 +138,7 @@ async function performLogin(page, credentials, selectors) {
     logger.debug('[Auth] Validação de login bem-sucedida.');
 
     // Adiciona uma pausa extra para garantir que qualquer script pós-login (ex: tracking, modais) seja carregado.
-    await page.waitForTimeout(2000);
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     // 6. Fechar modal de boas-vindas (se houver)
     try {
@@ -151,7 +151,7 @@ async function performLogin(page, credentials, selectors) {
         if (closeModalSelector) {
             logger.debug('[Auth] Fechando modal de boas-vindas.');
             await page.click(closeModalSelector);
-            await page.waitForTimeout(1000);
+            await new Promise(resolve => setTimeout(resolve, 1000));
         }
     } catch (e) {
         logger.debug('[Auth] Nenhum modal de boas-vindas encontrado.');
