@@ -91,6 +91,9 @@ export class DismatalScraper {
             this.logger.info('[DismatalScraper] Fechando página de autenticação...');
             await authPage.close();
 
+            // Adiciona uma pequena pausa para garantir que o navegador se estabilize após fechar a página.
+            await new Promise(resolve => setTimeout(resolve, 500));
+
             this.logger.info('[DismatalScraper] Criando nova página para a busca de produtos...');
             const page = await browser.newPage();
 
