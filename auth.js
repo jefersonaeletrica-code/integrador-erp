@@ -137,6 +137,9 @@ async function performLogin(page, credentials, selectors) {
     }
     logger.debug('[Auth] Validação de login bem-sucedida.');
 
+    // Adiciona uma pausa extra para garantir que qualquer script pós-login (ex: tracking, modais) seja carregado.
+    await page.waitForTimeout(2000);
+
     // 6. Fechar modal de boas-vindas (se houver)
     try {
         const closeModalSelectors = [

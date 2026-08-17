@@ -20,8 +20,8 @@ const logger = {
     error: (message, error, context) => {
         const errorContext = {
             ...context,
-            errorMessage: error.message,
-            stack: error.stack,
+            errorMessage: error?.message || 'Objeto de erro inválido ou nulo.',
+            stack: error?.stack || 'Stack não disponível.',
         };
         log('ERROR', message, errorContext);
     },
