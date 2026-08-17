@@ -96,7 +96,7 @@ export class DismatalScraper {
                 this.logger.info(`[DismatalScraper] Estratégia 1: Navegação direta para SKU ${searchTerm}`);
                 try {
                     // Tentando um formato de URL mais comum para páginas de produto.
-                    const productUrl = `${url}/produto/${searchTerm}`;
+                    const productUrl = `${url}/produtos/${searchTerm}`;
                     this.logger.info(`[DismatalScraper] Navegando para: ${productUrl}`);
                     await page.goto(productUrl, { waitUntil: 'networkidle0', timeout: 20000 });
 
