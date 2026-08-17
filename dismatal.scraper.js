@@ -83,9 +83,19 @@ export class DismatalScraper {
                 retryDelayMs: 2000,
             });
             browserInstance = authResult.browserInstance;
-            const { page } = browserInstance; // Usaremos a página retornada diretamente
+            const { browser, page: authPage } = browserInstance; // Renomeia a página de autenticação
 
             this.logger.info('[DismatalScraper] Autenticação concluída.');
+
+            // Fecha a página de autenticação para evitar instabilidade e scripts em segundo plano.
+            this.logger.info('[DismatalScraper] Fechando página de autenticação...');
+            await authPage.close();
+
+            // Adiciona uma pequena pausa para garantir que o navegador se estabilize após fechar a página.
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            this.logger.info('[DismatalScraper] Criando nova página para a busca de produtos...');
+            const page = await browser.newPage();
 
             let produtos = [];
 
