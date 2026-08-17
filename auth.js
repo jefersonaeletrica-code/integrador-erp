@@ -1,5 +1,6 @@
 import { getLogger, createRequestId } from './logger.js';
 import { findSelector } from './parsers.js';
+import { initBrowser, closeBrowser } from './browser.js'; // Importação estática
 
 /**
  * Erro customizado para falhas de autenticação.
@@ -182,8 +183,6 @@ export async function authenticate(browserConfig, options, selectors = DEFAULT_L
 
     let browserInstance = null; // Variável para manter a instância entre as tentativas
     try {
-        const { initBrowser, closeBrowser } = await import('./browser.js'); // Importação dinâmica
-
         const cookies = await withRetry(
             async (attempt, lastError) => {
                 // Se houve um erro anterior, fecha a instância antiga antes de criar uma nova.
