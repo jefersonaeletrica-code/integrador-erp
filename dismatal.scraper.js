@@ -45,24 +45,18 @@ export class DismatalScraper {
         let browserInstance = null;
         this.logger.info('[DismatalScraper] Iniciando teste de conexão...');
         try {
-            const authResult = await authenticate(this.config, {
+            // Apenas autentica para validar as credenciais. O navegador é fechado dentro de authenticate.
+            await authenticate(this.config, {
                 url,
                 credentials: { username, password },
                 retryAttempts: 3,
                 retryDelayMs: 2000,
             });
-            browserInstance = authResult.browserInstance;
 
             return { sucesso: true, mensagem: 'Conexão com a Dismatal bem-sucedida!' };
         } catch (error) {
             this.logger.error('[DismatalScraper] Teste de conexão falhou.', error);
             throw error; // Re-lança o erro para a rota capturar
-        } finally {
-            // A autenticação agora gerencia a instância, mas precisamos garantir que ela seja fechada.
-            if (browserInstance) {
-                this.logger.info('[DismatalScraper] Finalizando teste de conexão e fechando browser...');
-                await closeBrowser(browserInstance);
-            }
         }
     }
 
@@ -76,26 +70,21 @@ export class DismatalScraper {
         let browserInstance = null;
         this.logger.info('[DismatalScraper] Iniciando busca de produtos...');
         try {
-            const authResult = await authenticate(this.config, {
+            // 1. Obter cookies de sessão
+            const cookies = await authenticate(this.config, {
                 url,
                 credentials: { username, password },
                 retryAttempts: 3,
                 retryDelayMs: 2000,
             });
-            browserInstance = authResult.browserInstance;
-            const { browser, page: authPage } = browserInstance; // Renomeia a página de autenticação
+            this.logger.info('[DismatalScraper] Autenticação e obtenção de cookies concluídas.');
 
-            this.logger.info('[DismatalScraper] Autenticação concluída.');
-            
-            // Fecha a página de autenticação para evitar instabilidade e scripts em segundo plano.
-            this.logger.info('[DismatalScraper] Fechando página de autenticação...');
-            await authPage.close();
-
-            // Adiciona uma pequena pausa para garantir que o navegador se estabilize após fechar a página.
-            await new Promise(resolve => setTimeout(resolve, 500));
-
-            this.logger.info('[DismatalScraper] Criando nova página para a busca de produtos...');
-            const page = await browser.newPage();
+            // 2. Iniciar um navegador novo e limpo para o scraping
+            this.logger.info('[DismatalScraper] Iniciando novo navegador para a busca de produtos...');
+            browserInstance = await initBrowser(this.config);
+            const { page } = browserInstance;
+            await page.setCookie(...cookies);
+            this.logger.info('[DismatalScraper] Cookies de sessão aplicados ao novo navegador.');
 
             let produtos = [];
 

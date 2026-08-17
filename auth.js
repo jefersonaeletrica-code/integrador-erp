@@ -172,7 +172,7 @@ async function performLogin(page, credentials, selectors) {
  * @param {number} options.retryAttempts
  * @param {number} options.retryDelayMs
  * @param {object} [selectors]
- * @returns {Promise<{success: boolean, timestamp: Date, browserInstance: {browser: import('puppeteer').Browser, page: import('puppeteer').Page}}>}
+ * @returns {Promise<object[]>} Um array de objetos de cookie do Puppeteer.
  */
 export async function authenticate(browserConfig, options, selectors = DEFAULT_LOGIN_SELECTORS) {
     const logger = getLogger();
@@ -186,6 +186,7 @@ export async function authenticate(browserConfig, options, selectors = DEFAULT_L
     });
 
     let browserInstance = null;
+    const { initBrowser, closeBrowser } = await import('./browser.js');
 
     try {
         const { initBrowser, closeBrowser } = await import('./browser.js');
@@ -193,7 +194,7 @@ export async function authenticate(browserConfig, options, selectors = DEFAULT_L
         browserInstance = await withRetry(
             async (attempt, lastError) => {
                 // Se houve um erro anterior, fecha a instância antiga antes de criar uma nova.
-                if (lastError && browserInstance) {
+                if (attempt > 1 && browserInstance) {
                     logger.info('[Auth] Fechando instância de navegador anterior para retentativa.');
                     await closeBrowser(browserInstance);
                 }
@@ -204,7 +205,12 @@ export async function authenticate(browserConfig, options, selectors = DEFAULT_L
 
                 await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
                 await performLogin(page, credentials, selectors);
-                return instance; // Retorna a instância bem-sucedida
+
+                logger.info('[Auth] Extraindo cookies de sessão...');
+                const cookies = await page.cookies();
+
+                await closeBrowser(instance); // Fecha o navegador de autenticação
+                return cookies; // Retorna apenas os cookies
             },
             {
                 maxAttempts: retryAttempts,
@@ -218,20 +224,12 @@ export async function authenticate(browserConfig, options, selectors = DEFAULT_L
             }
         );
 
-        logger.info('[Auth] Autenticação bem-sucedida.', {
-            action: 'auth_success',
-            requestId,
-        });
-
-        return {
-            success: true,
-            timestamp: new Date(),
-            browserInstance, // Retorna a instância do navegador para uso posterior
-        };
+        logger.info('[Auth] Autenticação e extração de cookies bem-sucedidas.', { action: 'auth_success', requestId });
+        return browserInstance; // Agora contém os cookies
     } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
 
-        logger.error('[Auth] Autenticação falhou após todas as tentativas.', error, {
+        logger.error('[Auth] Extração de cookies falhou após todas as tentativas.', error, {
             action: 'auth_failed',
             requestId,
         });
