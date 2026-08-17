@@ -114,27 +114,24 @@ async function performLogin(page, credentials, selectors) {
     logger.debug('[Auth] Submetendo formulário de login...');
     await page.click(submitSelector);
 
-    // Para SPAs, a melhor abordagem é esperar por múltiplos resultados possíveis.
-    // Usamos Promise.race para aguardar o primeiro evento que ocorrer.
+    // Abordagem híbrida: espera por uma navegação OU por um indicador de sucesso/erro.
+    // Isso lida tanto com SPAs quanto com redirecionamentos tradicionais, e evita timeouts de inatividade.
     try {
         logger.debug('[Auth] Aguardando resultado do login (sucesso ou erro)...');
         const errorSelector = '.message-label.error'; // Seletor para mensagens de erro no modal
 
         const result = await Promise.race([
+            page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).then(() => 'navigation'),
             page.waitForSelector(selectors.logoutLink.join(', '), { visible: true, timeout: 25000 }).then(() => 'success'),
             page.waitForSelector(errorSelector, { visible: true, timeout: 25000 }).then(async () => {
                 const errorMessage = await page.$eval(errorSelector, el => el.innerText);
                 return `error: ${errorMessage}`;
             }),
         ]);
-
         if (result.startsWith('error')) {
             throw new Error(`Erro de login retornado pelo site: ${result.replace('error: ', '')}`);
         }
-
-        // Se chegamos aqui, result foi 'success'
-        logger.debug('[Auth] Indicador de sucesso encontrado. Login bem-sucedido.');
-
+        logger.debug(`[Auth] Login processado com resultado: ${result}. Verificando estado final...`);
     } catch (e) {
         throw new Error(`Login falhou. Nenhum indicador de sucesso ou erro conhecido apareceu. Causa: ${e.message}`);
     }
