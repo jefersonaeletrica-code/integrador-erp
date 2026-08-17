@@ -1,7 +1,7 @@
-const { MongoClient } = require('mongodb');
+import { MongoClient } from 'mongodb';
 
 // O DEFAULT_DB define a estrutura inicial dos seus dados.
-const DEFAULT_DB = {
+export const DEFAULT_DB = {
   config: {
     BLING_CLIENT_ID: '',
     BLING_CLIENT_SECRET: '',
@@ -31,7 +31,7 @@ let dbInstance;
  * Conecta ao banco de dados e retorna a coleção de configurações.
  * Gerencia uma única instância de conexão.
  */
-async function getCollection() {
+async function getCollection() { // Mantida como função interna, não precisa exportar
   if (!dbInstance) {
     await client.connect();
     // Você pode nomear seu banco de dados e coleção como preferir.
@@ -47,7 +47,7 @@ async function getCollection() {
  * Lê os dados de configuração do MongoDB.
  * Se nenhum dado for encontrado, insere e retorna os dados padrão.
  */
-async function readDb() {
+export async function readDb() {
   const collection = await getCollection();
   let data = await collection.findOne({ _id: SETTINGS_ID });
 
@@ -69,7 +69,7 @@ async function readDb() {
  * Atualiza os dados de configuração no MongoDB.
  * Usa $set para atualizar apenas os campos fornecidos.
  */
-async function updateDb(partial) {
+export async function updateDb(partial) {
   const collection = await getCollection();
   const updatePayload = {};
 
@@ -82,9 +82,3 @@ async function updateDb(partial) {
   const result = await collection.updateOne({ _id: SETTINGS_ID }, { $set: updatePayload }, { upsert: true });
   return result;
 }
-
-module.exports = {
-  DEFAULT_DB,
-  readDb,
-  updateDb,
-};

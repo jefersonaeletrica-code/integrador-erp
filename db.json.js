@@ -1,10 +1,12 @@
-const fs = require('fs');
-const path = require('path');
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const DB_FILE = process.env.DB_FILE || path.join(DATA_DIR, 'database.json');
 
-const DEFAULT_DB = {
+export const DEFAULT_DB = {
   config: {
     BLING_CLIENT_ID: '',
     BLING_CLIENT_SECRET: '',
@@ -19,7 +21,7 @@ const DEFAULT_DB = {
   produtos: []
 };
 
-const ensureStore = () => {
+export const ensureStore = () => {
   if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
   }
@@ -29,7 +31,7 @@ const ensureStore = () => {
   }
 };
 
-const readDb = () => {
+export const readDb = () => {
   ensureStore();
 
   try {
@@ -47,12 +49,12 @@ const readDb = () => {
   }
 };
 
-const writeDb = (data) => {
+export const writeDb = (data) => {
   ensureStore();
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2), 'utf8');
 };
 
-const updateDb = (partial) => {
+export const updateDb = (partial) => {
   const current = readDb();
   const next = {
     config: { ...current.config, ...(partial.config || {}) },
@@ -62,13 +64,4 @@ const updateDb = (partial) => {
 
   writeDb(next);
   return next;
-};
-
-module.exports = {
-  DB_FILE,
-  DEFAULT_DB,
-  ensureStore,
-  readDb,
-  writeDb,
-  updateDb
 };
