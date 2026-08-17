@@ -91,57 +91,42 @@ export class DismatalScraper {
 
             let produtos = [];
 
-            // Estratégia 1: Navegação Direta (se o termo de busca parece um SKU)
+            // Estratégia 1: Navegação Direta por SKU. Esta será a única estratégia.
             if (searchTerm && isValidSKU(searchTerm)) {
                 this.logger.info(`[DismatalScraper] Estratégia 1: Navegação direta para SKU ${searchTerm}`);
                 try {
-                    await page.goto(`${url}/produtos/${searchTerm}`, { waitUntil: 'networkidle0', timeout: 15000 });
+                    // Tentando um formato de URL mais comum para páginas de produto.
+                    const productUrl = `${url}/produto/${searchTerm}`;
+                    this.logger.info(`[DismatalScraper] Navegando para: ${productUrl}`);
+                    await page.goto(productUrl, { waitUntil: 'networkidle0', timeout: 20000 });
 
                     if (await isProductPageValid(page)) {
                         this.logger.info('[DismatalScraper] Página de produto válida. Extraindo...');
                         const produto = await page.evaluate(pageParser, this.selectors);
 
                         if (produto) {
-                            const validatedProduct = { ...produto, codigo: produto.sku || searchTerm };
+                            const validatedProduct = { ...produto, codigo: produto.sku || searchTerm.toString() };
                             const validation = validateProduct(validatedProduct);
                             if (validation.valid) {
                                 produtos.push(validatedProduct);
                                 this.logger.info('[DismatalScraper] Estratégia 1 bem-sucedida.');
+                            } else {
+                                this.logger.warn('[DismatalScraper] Produto extraído, mas inválido.', { errors: validation.errors });
                             }
+                        } else {
+                            this.logger.warn('[DismatalScraper] Página de produto parece válida, mas o parser não retornou dados.');
                         }
+                    } else {
+                        this.logger.warn('[DismatalScraper] A página do produto não é válida ou não foi encontrada.');
                     }
                 } catch (e) {
-                    this.logger.warn(`[DismatalScraper] Estratégia 1 falhou. Tentando Estratégia 2.`, { errorMessage: e.message, stack: e.stack });
+                    this.logger.error(`[DismatalScraper] Estratégia 1 falhou durante a navegação ou extração.`, e);
+                    throw new Error(`Falha ao tentar acessar a página do produto para o SKU ${searchTerm}.`);
                 }
             }
 
-            // Estratégia 2: Busca no Portal
-            if (produtos.length === 0 && searchTerm && searchTerm.trim() !== '') {
-                this.logger.info(`[DismatalScraper] Estratégia 2: Buscando por "${searchTerm}"`);
-                try {
-                    this.logger.info(`[DismatalScraper] Navegando para a página inicial para garantir que a barra de busca esteja presente.`);
-                    await page.goto(url, { waitUntil: 'networkidle0' });
-
-                    const searchInputSelector = await findSelector(page, this.selectors.searchInput);
-                    if (!searchInputSelector) {
-                        throw new Error('Campo de busca não foi encontrado na página inicial.');
-                    }
-                    const searchInput = await page.$(searchInputSelector);
-                    await searchInput.type(searchTerm);
-                    await searchInput.press('Enter');
-                    await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 20000 });
-
-                    this.logger.info('[DismatalScraper] Extraindo dados da lista de produtos...');
-                    const produtosDaLista = await page.evaluate(listPageParser, this.selectors);
-
-                    const produtosValidos = produtosDaLista.filter(p => validateProduct(p).valid);
-                    produtos = produtosValidos;
-
-                    this.logger.info(`[DismatalScraper] Estratégia 2 encontrou ${produtos.length} produtos válidos.`);
-                } catch (e) {
-                    this.logger.error(`[DismatalScraper] Estratégia 2 falhou.`, e);
-                    throw new Error(`Falha ao buscar por "${searchTerm}" no portal.`);
-                }
+            if (produtos.length === 0) {
+                this.logger.warn(`[DismatalScraper] Nenhum produto encontrado para o SKU "${searchTerm}".`);
             }
 
             this.logger.info(`[DismatalScraper] Busca concluída. Total de produtos: ${produtos.length}.`);
