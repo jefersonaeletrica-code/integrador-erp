@@ -127,7 +127,7 @@ export class DismatalScraper {
                         throw new Error('Campo de busca não foi encontrado na página inicial.');
                     }
                     const searchInput = await page.$(searchInputSelector);
-                    await searchInput.fill(searchTerm);
+                    await searchInput.type(searchTerm);
                     await searchInput.press('Enter');
                     await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 20000 });
 
