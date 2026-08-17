@@ -148,22 +148,34 @@ export class DismatalScraper {
      * @returns {Promise<Array>}
      */
     async extractProductData(page, searchTerm) {
-        const produtos = [];
-        if (await isProductPageValid(page)) {
-            this.logger.info('[DismatalScraper] Página de produto válida. Extraindo dados...');
+        let produtos = [];
+        const currentUrl = page.url();
+
+        // Verifica se a URL indica uma página de lista de resultados de busca
+        if (currentUrl.includes('/busca')) {
+            this.logger.info('[DismatalScraper] Detectada página de lista de produtos. Usando listPageParser...');
+            const produtosDaLista = await page.evaluate(listPageParser, this.selectors);
+            
+            if (produtosDaLista.length > 0) {
+                this.logger.info(`[DismatalScraper] Encontrados ${produtosDaLista.length} produtos na lista.`);
+                // Filtra e valida os produtos da lista
+                produtos = produtosDaLista
+                    .map(p => ({ ...p, codigo: p.codigo || searchTerm.toString() }))
+                    .filter(p => validateProduct(p).valid);
+            }
+        } else if (await isProductPageValid(page)) {
+            // Se não for uma página de busca, verifica se é uma página de produto individual
+            this.logger.info('[DismatalScraper] Detectada página de produto individual. Usando pageParser...');
             const produto = await page.evaluate(pageParser, this.selectors);
 
-            if (produto) {
-                const validatedProduct = { ...produto, codigo: produto.sku || searchTerm.toString() };
-                const validation = validateProduct(validatedProduct);
-                if (validation.valid) {
-                    produtos.push(validatedProduct);
-                    this.logger.info('[DismatalScraper] Extração do produto bem-sucedida.');
-                } else {
-                    this.logger.warn('[DismatalScraper] Produto extraído, mas dados inválidos.', { errors: validation.errors });
-                }
+            if (produto && validateProduct(produto).valid) {
+                produtos.push({ ...produto, codigo: produto.sku || searchTerm.toString() });
+                this.logger.info('[DismatalScraper] Extração do produto bem-sucedida.');
+            } else if (produto) {
+                this.logger.warn('[DismatalScraper] Produto extraído, mas dados inválidos.');
             }
         }
+
         return produtos;
     }
 }
