@@ -109,10 +109,17 @@ export class DismatalScraper {
                     this.logger.info(`[DismatalScraper] Navegando para a URL do produto: ${productUrl}`);
                     await page.goto(productUrl, { waitUntil: 'networkidle0', timeout: 30000 });
 
-                    // Em vez de esperar pelo container, espera por um elemento final (preço),
-                    // que é um indicador mais forte de que o conteúdo dinâmico foi carregado.
-                    this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar...`);
-                    await page.waitForSelector(this.selectors.productPrice.join(','), { timeout: 20000 });
+                    try {
+                        // Em vez de esperar pelo container, espera por um elemento final (preço),
+                        // que é um indicador mais forte de que o conteúdo dinâmico foi carregado.
+                        this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar...`);
+                        await page.waitForSelector(this.selectors.productPrice.join(','), { timeout: 20000 });
+                    } catch (waitError) {
+                        this.logger.error('[DismatalScraper] Timeout ao esperar pelo conteúdo do produto. A página pode não ter carregado os dados dinamicamente ou os seletores estão incorretos.', waitError);
+                        const screenshot = await page.screenshot({ encoding: 'base64' });
+                        this.logger.info('[DismatalScraper] Screenshot da página no momento do erro.', { screenshot: `data:image/png;base64,${screenshot}` });
+                        throw new Error('O conteúdo do produto não foi carregado na página.');
+                    }
 
                     // 4. Extrair os dados da página.
                     this.logger.info(`[DismatalScraper] URL final: ${page.url()}`);
