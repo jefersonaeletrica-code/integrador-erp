@@ -91,37 +91,35 @@ export class DismatalScraper {
 
             let produtos = [];
 
-            // Estratégia 1: Navegação Direta por SKU. Esta será a única estratégia.
+            // Estratégia de busca: Simular o comportamento do usuário usando a barra de pesquisa.
+            // A navegação direta para a URL do produto está sendo bloqueada pelo portal.
             if (searchTerm && isValidSKU(searchTerm)) {
-                this.logger.info(`[DismatalScraper] Estratégia 1: Navegação direta para SKU ${searchTerm}`);
+                this.logger.info(`[DismatalScraper] Iniciando busca por SKU: ${searchTerm}`);
                 try {
-                    // Tentando um formato de URL mais comum para páginas de produto.
-                    const productUrl = `${url}/produtos/${searchTerm}`;
-                    this.logger.info(`[DismatalScraper] Navegando para: ${productUrl}`);
-                    await page.goto(productUrl, { waitUntil: 'networkidle0', timeout: 20000 });
+                    // 1. Navegar para a página inicial para garantir que a barra de busca esteja disponível.
+                    this.logger.info(`[DismatalScraper] Navegando para a página inicial: ${url}`);
+                    await page.goto(url, { waitUntil: 'networkidle0', timeout: 30000 });
 
-                    if (await isProductPageValid(page)) {
-                        this.logger.info('[DismatalScraper] Página de produto válida. Extraindo...');
-                        const produto = await page.evaluate(pageParser, this.selectors);
-
-                        if (produto) {
-                            const validatedProduct = { ...produto, codigo: produto.sku || searchTerm.toString() };
-                            const validation = validateProduct(validatedProduct);
-                            if (validation.valid) {
-                                produtos.push(validatedProduct);
-                                this.logger.info('[DismatalScraper] Estratégia 1 bem-sucedida.');
-                            } else {
-                                this.logger.warn('[DismatalScraper] Produto extraído, mas inválido.', { errors: validation.errors });
-                            }
-                        } else {
-                            this.logger.warn('[DismatalScraper] Página de produto parece válida, mas o parser não retornou dados.');
-                        }
-                    } else {
-                        this.logger.warn('[DismatalScraper] A página do produto não é válida ou não foi encontrada.');
+                    // 2. Encontrar e preencher o campo de busca.
+                    const searchInputSelector = await findSelector(page, this.selectors.searchInput);
+                    if (!searchInputSelector) {
+                        throw new Error('Campo de busca não foi encontrado na página inicial.');
                     }
+                    this.logger.info(`[DismatalScraper] Campo de busca encontrado. Inserindo termo: "${searchTerm}"`);
+                    await page.type(searchInputSelector, searchTerm);
+                    await page.press(searchInputSelector, 'Enter');
+
+                    // 3. Aguardar a página de resultados carregar.
+                    this.logger.info('[DismatalScraper] Aguardando resultados da busca...');
+                    await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 });
+
+                    // 4. Verificar se a busca levou a uma página de produto válida.
+                    this.logger.info(`[DismatalScraper] URL após a busca: ${page.url()}`);
+                    produtos = await this.extractProductData(page, searchTerm);
+
                 } catch (e) {
-                    this.logger.error(`[DismatalScraper] Estratégia 1 falhou durante a navegação ou extração.`, e);
-                    throw new Error(`Falha ao tentar acessar a página do produto para o SKU ${searchTerm}.`);
+                    this.logger.error(`[DismatalScraper] Falha na estratégia de busca.`, e);
+                    throw new Error(`Falha ao buscar por "${searchTerm}" no portal.`);
                 }
             }
 
@@ -141,5 +139,31 @@ export class DismatalScraper {
                 await closeBrowser(browserInstance);
             }
         }
+    }
+
+    /**
+     * Extrai dados do produto da página atual.
+     * @param {import('puppeteer').Page} page
+     * @param {string} searchTerm
+     * @returns {Promise<Array>}
+     */
+    async extractProductData(page, searchTerm) {
+        const produtos = [];
+        if (await isProductPageValid(page)) {
+            this.logger.info('[DismatalScraper] Página de produto válida. Extraindo dados...');
+            const produto = await page.evaluate(pageParser, this.selectors);
+
+            if (produto) {
+                const validatedProduct = { ...produto, codigo: produto.sku || searchTerm.toString() };
+                const validation = validateProduct(validatedProduct);
+                if (validation.valid) {
+                    produtos.push(validatedProduct);
+                    this.logger.info('[DismatalScraper] Extração do produto bem-sucedida.');
+                } else {
+                    this.logger.warn('[DismatalScraper] Produto extraído, mas dados inválidos.', { errors: validation.errors });
+                }
+            }
+        }
+        return produtos;
     }
 }
