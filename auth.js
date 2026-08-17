@@ -118,21 +118,16 @@ async function performLogin(page, credentials, selectors) {
     // Isso lida tanto com SPAs quanto com redirecionamentos tradicionais, e evita timeouts de inatividade.
     try {
         logger.debug('[Auth] Aguardando resultado do login (sucesso ou erro)...');
-        const abortController = new AbortController();
-        const signal = abortController.signal;
         const errorSelector = '.message-label.error'; // Seletor para mensagens de erro no modal
 
         const result = await Promise.race([
-            page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000, signal }).then(() => 'navigation'),
-            page.waitForSelector(selectors.logoutLink.join(', '), { visible: true, timeout: 25000, signal }).then(() => 'success'),
-            page.waitForSelector(errorSelector, { visible: true, timeout: 25000, signal }).then(async () => {
+            page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 30000 }).then(() => 'navigation'),
+            page.waitForSelector(selectors.logoutLink.join(', '), { visible: true, timeout: 25000 }).then(() => 'success'),
+            page.waitForSelector(errorSelector, { visible: true, timeout: 25000 }).then(async () => {
                 const errorMessage = await page.$eval(errorSelector, el => el.innerText);
                 return `error: ${errorMessage}`;
             }),
         ]);
-
-        abortController.abort(); // Cancela todas as outras esperas pendentes
-
         if (result.startsWith('error')) {
             throw new Error(`Erro de login retornado pelo site: ${result.replace('error: ', '')}`);
         }
