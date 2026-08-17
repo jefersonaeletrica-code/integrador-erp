@@ -40,9 +40,9 @@ async function withRetry(fn, options) {
  * Seletores padrão para o fluxo de login.
  */
 export const DEFAULT_LOGIN_SELECTORS = {
-    loginButton: ['a.login-btn', '#drawer-header-btn', '[data-testid="login-btn"]', 'button.btn-login'],
-    usernameInput: ['input[formcontrolname="usuario"]', 'input[name="usuario"]', 'input[placeholder*="Usuário"]'],
-    passwordInput: ['input[formcontrolname="senha"]', 'input[name="senha"]', 'input[type="password"]'],
+    loginButton: ['p.login-btn__hello', 'a.login-btn', '#drawer-header-btn', '[data-testid="login-btn"]', 'button.btn-login'],
+    usernameInput: ['input[formcontrolname="usuario"]', 'input[placeholder="CNPJ"]', 'input[name="usuario"]'],
+    passwordInput: ['input[formcontrolname="senha"]', 'input[placeholder="Senha"]', 'input[type="password"]'],
     submitButton: ['button.btn-login', 'button[type="submit"]'],
     loginModal: ['[role="dialog"]', '.modal', '.login-modal'],
     logoutLink: ['a[href*="sair"]', '[data-testid="logout"]'],
