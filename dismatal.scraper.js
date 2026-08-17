@@ -107,6 +107,10 @@ export class DismatalScraper {
                     this.logger.info(`[DismatalScraper] Navegando para a URL do produto: ${productUrl}`);
                     await page.goto(productUrl, { waitUntil: 'networkidle0', timeout: 30000 });
 
+                    // Adiciona uma espera explícita para um elemento chave da página do produto.
+                    this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar...`);
+                    await page.waitForSelector(this.selectors.productName.join(','), { timeout: 20000 });
+
                     // 4. Extrair os dados da página.
                     this.logger.info(`[DismatalScraper] URL final: ${page.url()}`);
                     produtos = await this.extractProductData(page, searchTerm);
