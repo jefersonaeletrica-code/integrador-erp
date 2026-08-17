@@ -63,21 +63,29 @@ export function validateProduct(productData) {
  * @returns {object|null}
  */
 export const pageParser = (selectors) => {
-    const extractText = (doc, sel) => doc.querySelector(sel)?.textContent.trim() || null;
+    // Helper que tenta múltiplos seletores e retorna o texto do primeiro que funcionar.
+    const extractText = (doc, selArray) => {
+        for (const sel of selArray) {
+            const element = doc.querySelector(sel);
+            if (element) return element.textContent.trim();
+        }
+        return null;
+    };
+
     const parsePrice = (text) => {
         if (!text) return null;
         const cleaned = text.replace(/R\$\s*/, '').replace(/\./g, '').replace(',', '.');
         const price = parseFloat(cleaned);
         return isNaN(price) ? null : price;
     };
-
-    const nome = extractText(document, selectors.productName[0]);
-    const sku = extractText(document, selectors.productSKU[0]);
-    const precoText = extractText(document, selectors.productPrice[0]);
-    const estoqueText = extractText(document, selectors.stock[0]);
-
+    
+    const nome = extractText(document, selectors.productName);
+    const sku = extractText(document, selectors.productSKU);
+    const precoText = extractText(document, selectors.productPrice) || extractText(document, selectors.promoPrice);
+    const estoqueText = extractText(document, selectors.stock);
+    
     const preco = parsePrice(precoText);
-    const estoque = estoqueText ? parseInt(estoqueText.match(/\d+/)?.[0] || '0', 10) : 0;
+    const estoque = estoqueText ? parseInt(estoqueText.replace(/\D/g, ''), 10) : 0;
 
     if (!nome || !preco) return null;
 
@@ -91,27 +99,35 @@ export const pageParser = (selectors) => {
  */
 export const listPageParser = (selectors) => {
     const items = [];
+    // Helper que tenta múltiplos seletores dentro de um elemento pai.
+    const extractTextFromElement = (el, selArray) => {
+        for (const sel of selArray) {
+            const element = el.querySelector(sel);
+            if (element) return element.innerText.trim();
+        }
+        return null;
+    };
+
     const parsePrice = (text) => {
         if (!text) return null;
         const cleaned = text.replace(/R\$\s*/, '').replace(/\./g, '').replace(',', '.');
         const price = parseFloat(cleaned);
         return isNaN(price) ? null : price;
     };
+    
+    // Itera sobre cada seletor de item de lista para encontrar o container principal dos produtos.
+    for (const listItemSelector of selectors.productListItem) {
+        document.querySelectorAll(listItemSelector).forEach(el => {
+            const nome = extractTextFromElement(el, selectors.listItemName);
+            const codigo = extractTextFromElement(el, selectors.listItemSKU);
+            const precoText = extractTextFromElement(el, selectors.listItemPrice);
 
-    document.querySelectorAll(selectors.productListItem[0]).forEach(el => {
-        const nome = el.querySelector(selectors.listItemName[0])?.innerText.trim();
-        const codigo = el.querySelector(selectors.listItemSKU[0])?.innerText.trim();
-        const precoText = el.querySelector(selectors.listItemPrice[0])?.innerText;
-
-        if (nome && codigo) {
-            items.push({
-                nome,
-                codigo,
-                preco: parsePrice(precoText),
-                estoque: null, // Estoque geralmente não está na lista
-            });
-        }
-    });
+            if (nome && codigo) {
+                items.push({ nome, codigo, preco: parsePrice(precoText), estoque: null });
+            }
+        });
+        if (items.length > 0) break; // Se encontrou produtos, não precisa tentar outros seletores de item de lista.
+    }
     return items;
 };
 
