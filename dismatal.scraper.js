@@ -24,6 +24,8 @@ export class DismatalScraper {
             // O erro "Campo de busca não foi encontrado na página inicial" indica que nenhum desses seletores
             // está correspondendo ao campo de busca real no portal Dismatal. Adicionado seletor com base no placeholder.
             searchInput: ['input[placeholder="O que você está procurando?"]', 'input[name="descricao"]', 'input[placeholder*="produto"]', 'input[type="search"]'],
+            // Seletor para o container principal dos detalhes do produto
+            productDetailContainer: ['.product-details', '.product-info', '.product-summary', 'div[role="main"]'],
             // Seletores de página de produto (individual) - Adicionando mais alternativas
             productName: ['h1.product-name', 'h1.product-title', '[data-product-name]', 'h1', '.product-details__name'],
             productSKU: ['[data-sku]', '.product-sku', '.sku', '[itemprop="sku"]', '.product-details__sku'],
@@ -109,7 +111,7 @@ export class DismatalScraper {
 
                     // Adiciona uma espera explícita para um elemento chave da página do produto.
                     this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar...`);
-                    await page.waitForSelector(this.selectors.productName.join(','), { timeout: 20000 });
+                    await page.waitForSelector(this.selectors.productDetailContainer.join(','), { timeout: 20000 });
 
                     // 4. Extrair os dados da página.
                     this.logger.info(`[DismatalScraper] URL final: ${page.url()}`);
