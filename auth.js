@@ -231,12 +231,6 @@ export async function authenticate(browserConfig, options, selectors = DEFAULT_L
             requestId,
         });
 
-        // Garante que a última instância falha seja fechada
-        if (browserInstance) {
-            const { closeBrowser } = await import('./browser.js');
-            await closeBrowser(browserInstance);
-        }
-
         throw new AuthenticationError(`Falha de autenticação: ${errorMsg}`, {
             requestId,
             credentials: { username: credentials.username },
