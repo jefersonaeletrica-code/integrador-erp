@@ -116,9 +116,8 @@ export class DismatalScraper {
             if (produtos.length === 0 && searchTerm && searchTerm.trim() !== '') {
                 this.logger.info(`[DismatalScraper] Estratégia 2: Buscando por "${searchTerm}"`);
                 try {
-                    if (!page.url().includes('dismatal.com.br')) {
-                        await page.goto(url, { waitUntil: 'networkidle0' });
-                    }
+                    this.logger.info(`[DismatalScraper] Navegando para a página inicial para garantir que a barra de busca esteja presente.`);
+                    await page.goto(url, { waitUntil: 'networkidle0' });
 
                     const searchInput = await page.waitForSelector(this.selectors.searchInput[0], { timeout: 10000 });
                     await searchInput.fill(searchTerm);
