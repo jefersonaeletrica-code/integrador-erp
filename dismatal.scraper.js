@@ -101,7 +101,11 @@ export class DismatalScraper {
                     // Os cookies de sessão já foram aplicados, então o servidor deve nos reconhecer.
                     const productUrl = `${url}/produtos/${searchTerm}`;
                     this.logger.info(`[DismatalScraper] Navegando para a URL do produto: ${productUrl}`);
-                    await page.goto(productUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
+                    // Abordagem mais robusta para SPAs: iniciar o goto e esperar a navegação de forma síncrona.
+                    await Promise.all([
+                        page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 45000 }),
+                        page.goto(productUrl, { timeout: 45000 }),
+                    ]);
 
                     try {
                         // Em vez de esperar pelo container, espera por um elemento final (preço),
