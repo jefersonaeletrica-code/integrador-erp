@@ -24,10 +24,10 @@ export class DismatalScraper {
             // O erro "Campo de busca não foi encontrado na página inicial" indica que nenhum desses seletores
             // está correspondendo ao campo de busca real no portal Dismatal. Adicionado seletor com base no placeholder.
             searchInput: ['input[placeholder="O que você está procurando?"]', 'input[name="descricao"]', 'input[placeholder*="produto"]', 'input[type="search"]'],
-            // Seletores de página de produto (individual)
-            productName: ['h1.product-name', 'h1.product-title', '[data-product-name]', 'h1'],
-            productSKU: ['[data-sku]', '.product-sku', '.sku', '[itemprop="sku"]'],
-            productPrice: ['[data-price]', '.price-group__unity-price', '.product-price', '.price'],
+            // Seletores de página de produto (individual) - Adicionando mais alternativas
+            productName: ['h1.product-name', 'h1.product-title', '[data-product-name]', 'h1', '.product-details__name'],
+            productSKU: ['[data-sku]', '.product-sku', '.sku', '[itemprop="sku"]', '.product-details__sku'],
+            productPrice: ['[data-price]', '.price-group__unity-price', '.product-price', '.price', '.product-details__price'],
             promoPrice: ['[data-promo-price]', '.promotional-price', '.sale-price'],
             stock: ['.stock-info', '.product-stock', '#stock', '[data-stock]'],
             // Seletores de lista de produtos
@@ -119,6 +119,9 @@ export class DismatalScraper {
 
             if (produtos.length === 0) {
                 this.logger.warn(`[DismatalScraper] Nenhum produto encontrado para o SKU "${searchTerm}".`);
+                // Adiciona log do conteúdo da página para depuração
+                const pageContent = await page.content();
+                this.logger.info(`[DismatalScraper] Conteúdo da página onde o produto não foi encontrado (URL: ${page.url()})`, { pageContent: pageContent.substring(0, 5000) + '...' });
             }
 
             this.logger.info(`[DismatalScraper] Busca concluída. Total de produtos: ${produtos.length}.`);
