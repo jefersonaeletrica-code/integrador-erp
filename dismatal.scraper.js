@@ -21,7 +21,9 @@ export class DismatalScraper {
         this.selectors = {
             ...DEFAULT_LOGIN_SELECTORS,
             // Seletores de busca
-            searchInput: ['input[name="descricao"]', 'input[placeholder*="produto"]', 'input[type="search"]'],
+            // O erro "Campo de busca não foi encontrado na página inicial" indica que nenhum desses seletores
+            // está correspondendo ao campo de busca real no portal Dismatal. Adicionado seletor com base no placeholder.
+            searchInput: ['input[placeholder="O que você está procurando?"]', 'input[name="descricao"]', 'input[placeholder*="produto"]', 'input[type="search"]'],
             // Seletores de página de produto (individual)
             productName: ['h1.product-name', 'h1.product-title', '[data-product-name]', 'h1'],
             productSKU: ['[data-sku]', '.product-sku', '.sku', '[itemprop="sku"]'],
