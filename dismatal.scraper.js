@@ -119,7 +119,7 @@ export class DismatalScraper {
                         }
                     }
                 } catch (e) {
-                    this.logger.warn(`[DismatalScraper] Estratégia 1 falhou: ${e.message}. Tentando Estratégia 2.`);
+                    this.logger.warn(`[DismatalScraper] Estratégia 1 falhou. Tentando Estratégia 2.`, { errorMessage: e.message, stack: e.stack });
                 }
             }
 
@@ -144,7 +144,7 @@ export class DismatalScraper {
 
                     this.logger.info(`[DismatalScraper] Estratégia 2 encontrou ${produtos.length} produtos válidos.`);
                 } catch (e) {
-                    this.logger.error(`[DismatalScraper] Estratégia 2 falhou: ${e.message}`);
+                    this.logger.error(`[DismatalScraper] Estratégia 2 falhou.`, e);
                     throw new Error(`Falha ao buscar por "${searchTerm}" no portal.`);
                 }
             }
