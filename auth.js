@@ -133,6 +133,10 @@ async function performLogin(page, credentials, selectors) {
     }
     logger.debug('[Auth] Validação de login bem-sucedida.');
 
+    // Extrai os cookies imediatamente após a validação do login, antes que a página possa se recarregar.
+    logger.debug('[Auth] Extraindo cookies de sessão...');
+    const cookies = await page.cookies();
+
     // Adiciona uma pausa extra para garantir que qualquer script pós-login (ex: tracking, modais) seja carregado.
     await new Promise(resolve => setTimeout(resolve, 2000));
 
@@ -152,6 +156,8 @@ async function performLogin(page, credentials, selectors) {
     } catch (e) {
         logger.debug('[Auth] Nenhum modal de boas-vindas encontrado.');
     }
+
+    return cookies;
 }
 
 /**
@@ -176,11 +182,8 @@ export async function authenticate(browserConfig, options, selectors = DEFAULT_L
         retryAttempts,
     });
 
-    let browserInstance = null;
-    const { initBrowser, closeBrowser } = await import('./browser.js');
-
     try {
-        const { initBrowser, closeBrowser } = await import('./browser.js');
+        const { initBrowser, closeBrowser } = await import('./browser.js'); // Importação dinâmica
 
         browserInstance = await withRetry(
             async (attempt, lastError) => {
@@ -195,12 +198,9 @@ export async function authenticate(browserConfig, options, selectors = DEFAULT_L
                 const { page } = instance;
 
                 await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
-                await performLogin(page, credentials, selectors);
+                const cookies = await performLogin(page, credentials, selectors);
 
-                logger.info('[Auth] Extraindo cookies de sessão...');
-                const cookies = await page.cookies();
-
-                await closeBrowser(instance); // Fecha o navegador de autenticação
+                await closeBrowser(instance); // Fecha o navegador de autenticação após o sucesso
                 return cookies; // Retorna apenas os cookies
             },
             {
@@ -216,7 +216,7 @@ export async function authenticate(browserConfig, options, selectors = DEFAULT_L
         );
 
         logger.info('[Auth] Autenticação e extração de cookies bem-sucedidas.', { action: 'auth_success', requestId });
-        return browserInstance; // Agora contém os cookies
+        return browserInstance; // Retorna os cookies obtidos
     } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
 
