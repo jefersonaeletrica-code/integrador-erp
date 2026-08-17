@@ -97,17 +97,11 @@ export class DismatalScraper {
             if (searchTerm && isValidSKU(searchTerm)) {
                 this.logger.info(`[DismatalScraper] Iniciando busca por navegação direta para o SKU: ${searchTerm}`);
                 try {
-                    // 1. Navegar para a página inicial primeiro para estabelecer a sessão com os cookies.
-                    this.logger.info(`[DismatalScraper] Estabelecendo sessão na página inicial: ${url}`);
-                    await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
-                    
-                    // 2. Pausa para garantir que scripts de inicialização da página rodem.
-                    await new Promise(resolve => setTimeout(resolve, 2000));
-
-                    // 3. Agora, navegar diretamente para a URL do produto na mesma aba.
+                    // Estratégia simplificada: Navegar diretamente para a URL do produto.
+                    // Os cookies de sessão já foram aplicados, então o servidor deve nos reconhecer.
                     const productUrl = `${url}/produtos/${searchTerm}`;
                     this.logger.info(`[DismatalScraper] Navegando para a URL do produto: ${productUrl}`);
-                    await page.goto(productUrl, { waitUntil: 'networkidle0', timeout: 30000 });
+                    await page.goto(productUrl, { waitUntil: 'domcontentloaded', timeout: 45000 });
 
                     try {
                         // Em vez de esperar pelo container, espera por um elemento final (preço),
