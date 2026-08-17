@@ -123,16 +123,14 @@ async function performLogin(page, credentials, selectors) {
     }
 
     // 5. Validar se o login foi bem-sucedido
-    const logoutSelector = await findSelector(page, selectors.logoutLink);
-    if (!logoutSelector) {
+    try {
+        logger.debug('[Auth] Aguardando o indicador de sucesso (link de logout) aparecer...');
+        // Espera ativamente pelo indicador de sucesso, que é a melhor forma de validar o login em uma SPA.
+        await page.waitForSelector(selectors.logoutLink.join(', '), { visible: true, timeout: 15000 });
+    } catch (e) {
         const htmlContent = await page.content();
-        if (htmlContent.includes('usuário ou senha inválidos')) {
-            throw new Error('Credenciais inválidas.');
-        }
-        // Adiciona o conteúdo da página ao erro para facilitar a depuração.
         const errorMessage = 'Login falhou. Indicador de sucesso (botão de logout) não encontrado após o login.';
         logger.error(errorMessage, new Error(errorMessage), { pageContent: htmlContent.substring(0, 2000) }); // Loga um trecho do HTML
-
         throw new Error(errorMessage);
     }
     logger.debug('[Auth] Validação de login bem-sucedida.');
