@@ -83,9 +83,12 @@ export class DismatalScraper {
                 retryDelayMs: 2000,
             });
             browserInstance = authResult.browserInstance;
-            const { page } = browserInstance;
+            const { browser } = browserInstance;
 
             this.logger.info('[DismatalScraper] Autenticação concluída.');
+
+            this.logger.info('[DismatalScraper] Criando nova página para a busca de produtos...');
+            const page = await browser.newPage();
 
             let produtos = [];
 
