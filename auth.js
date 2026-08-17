@@ -112,16 +112,14 @@ async function performLogin(page, credentials, selectors) {
     if (!submitSelector) throw new Error('Botão de submit não encontrado no modal.');
 
     logger.debug('[Auth] Submetendo formulário de login...');
-    // Em vez de esperar por uma navegação específica, esperamos por qualquer mudança
-    // que indique que o login foi processado. Isso é mais robusto.
+    // Para SPAs, em vez de esperar por navegação, esperamos por uma mudança no DOM.
+    // O sinal mais confiável de que o login foi processado é o modal desaparecer.
     await page.click(submitSelector);
     try {
-        await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 45000 });
+        logger.debug('[Auth] Aguardando o modal de login desaparecer...');
+        await page.waitForSelector(modalSelector, { hidden: true, timeout: 25000 });
     } catch (e) {
-        logger.warn('[Auth] A navegação após o login demorou ou não ocorreu. Verificando o estado da página...');
-        // Se a navegação falhar (timeout), não é necessariamente um erro fatal.
-        // O login pode ter sido bem-sucedido via AJAX.
-        // Vamos prosseguir para a validação do logout.
+        throw new Error('O modal de login não desapareceu após a submissão, o login provavelmente falhou.');
     }
 
     // 5. Validar se o login foi bem-sucedido
