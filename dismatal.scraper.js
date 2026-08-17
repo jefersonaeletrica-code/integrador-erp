@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { initBrowser, closeBrowser } from './browser.js';
 import { authenticate, DEFAULT_LOGIN_SELECTORS } from './auth.js';
 import { getLogger } from './logger.js';
@@ -102,11 +104,8 @@ export class DismatalScraper {
                     const productUrl = `${url}/produtos/${searchTerm}`;
                     this.logger.info(`[DismatalScraper] Navegando para a URL do produto: ${productUrl}`);
                     // Abordagem mais robusta para SPAs: iniciar o goto e esperar a navegação de forma síncrona.
-                    await Promise.all([
-                        page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 45000 }),
-                        page.goto(productUrl, { timeout: 45000 }),
-                    ]);
-
+                    await page.goto(productUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+ 
                     try {
                         // Em vez de esperar pelo container, espera por um elemento final (preço),
                         // que é um indicador mais forte de que o conteúdo dinâmico foi carregado.
@@ -114,8 +113,12 @@ export class DismatalScraper {
                         await page.waitForSelector(this.selectors.productPrice.join(','), { timeout: 20000 });
                     } catch (waitError) {
                         this.logger.error('[DismatalScraper] Timeout ao esperar pelo conteúdo do produto. A página pode não ter carregado os dados dinamicamente ou os seletores estão incorretos.', waitError);
-                        const screenshot = await page.screenshot({ encoding: 'base64' });
-                        this.logger.info('[DismatalScraper] Screenshot da página no momento do erro.', { screenshot: `data:image/png;base64,${screenshot}` });
+                        // Salva o screenshot em um arquivo para facilitar a depuração.
+                        const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
+                        fs.mkdirSync(screenshotDir, { recursive: true });
+                        const screenshotPath = path.join(screenshotDir, `dismatal-product-error-${Date.now()}.png`);
+                        await page.screenshot({ path: screenshotPath, fullPage: true });
+                        this.logger.info(`[DismatalScraper] Screenshot do erro salvo em: ${screenshotPath}`);
                         throw new Error('O conteúdo do produto não foi carregado na página.');
                     }
 
@@ -140,6 +143,18 @@ export class DismatalScraper {
             return { sucesso: true, produtos };
         } catch (error) {
             this.logger.error('[DismatalScraper] Falha ao buscar produtos.', error);
+            // Captura um screenshot no momento de qualquer falha, se o navegador estiver ativo.
+            if (browserInstance && browserInstance.page && !browserInstance.page.isClosed()) {
+                try {
+                    const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
+                    fs.mkdirSync(screenshotDir, { recursive: true });
+                    const screenshotPath = path.join(screenshotDir, `dismatal-general-failure-${Date.now()}.png`);
+                    await browserInstance.page.screenshot({ path: screenshotPath, fullPage: true });
+                    this.logger.info(`[DismatalScraper] Screenshot da falha salvo em: ${screenshotPath}`);
+                } catch (screenshotError) {
+                    this.logger.error('[DismatalScraper] Falha ao tentar capturar o screenshot.', screenshotError);
+                }
+            }
             // Em vez de lançar o erro, retorna no formato padrão
             return { sucesso: false, erro: error.message, produtos: [] };
         } finally {
