@@ -18,12 +18,13 @@ export class AuthenticationError extends Error {
  * Utilitário para executar uma função com retentativas.
  */
 async function withRetry(fn, options) {
-    const { maxAttempts = 3, delayMs = 1000, onRetry } = options;
+    const { maxAttempts = 3, delayMs = 1000, onRetry, context = {} } = options;
     let attempt = 1;
     let lastError = null;
     while (attempt <= maxAttempts) {
         try {
-            return await fn(attempt, lastError);
+            // Passa o contexto para a função a ser executada
+            return await fn(attempt, lastError, context);
         } catch (error) {
             lastError = error;
             if (attempt === maxAttempts) {
@@ -222,6 +223,8 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
                 maxAttempts: retryAttempts,
                 delayMs: retryDelayMs,
                 onRetry: (attempt, error) => logger.warn(`[Auth] Tentativa ${attempt} de login completo falhou. Causa: ${error.message}.`, { requestId, attempt }),
+                // Inicializa o contexto com a página atual
+                context: { page }
             }
         );
         
