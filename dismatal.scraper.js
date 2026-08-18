@@ -84,12 +84,22 @@ export class DismatalScraper {
 
             // 2. Autenticar diretamente na página
             this.logger.info('[DismatalScraper] Executando autenticação na página...');
-            page = await authenticate(page, { // Reatribui a página, caso ela tenha sido recriada durante a autenticação
+            const authResult = await authenticate(page, {
                 url,
                 credentials: { username, password },
+                cookies: connection.cookies, // Passa os cookies salvos para a função de autenticação
                 retryAttempts: 3,
                 retryDelayMs: 2000,
             });
+            
+            page = authResult.page; // Atualiza a referência da página
+
+            // Se a autenticação gerou novos cookies, atualiza a conexão
+            if (authResult.cookies) {
+                connection.cookies = authResult.cookies;
+                // Aqui, você precisaria de uma função para persistir a conexão atualizada no DB.
+                // Ex: await db.updateSupplierConnection(connection);
+            }
             this.logger.info('[DismatalScraper] Página autenticada com sucesso.');
 
             let produtos = [];

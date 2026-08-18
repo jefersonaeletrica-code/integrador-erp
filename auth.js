@@ -153,7 +153,7 @@ async function performLogin(page, credentials, selectors) {
         logger.debug('[Auth] Nenhum modal de boas-vindas encontrado.');
     }
 
-    return page; // Retorna a instância da página logada.
+    return { page, cookies }; // Retorna a página e os cookies extraídos
 }
 
 /**
@@ -165,10 +165,10 @@ async function performLogin(page, credentials, selectors) {
  */
 export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELECTORS) {
     const logger = getLogger();
-    const requestId = createRequestId();
-    const { url, credentials, retryAttempts, retryDelayMs } = options;
+    const { url, credentials, cookies, retryAttempts, retryDelayMs } = options;
+    const requestId = createRequestId();    
 
-    logger.info('[Auth] Iniciando autenticação...', {
+    logger.info('[Auth] Iniciando orquestração de autenticação...', {
         action: 'auth_start',
         requestId,
         retryAttempts,
