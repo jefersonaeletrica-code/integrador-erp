@@ -67,7 +67,7 @@ export const initializeDatabase = async () => {
         type VARCHAR(50) NOT NULL, -- 'dismatal_webscraper', etc.
         credentials JSON NOT NULL,
         cookies JSON DEFAULT NULL, -- Adicionado para armazenar cookies de sessão
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
