@@ -1,5 +1,7 @@
 import { getLogger, createRequestId } from './logger.js';
 import { findSelector } from './parsers.js';
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Erro customizado para falhas de autenticação.
@@ -126,6 +128,16 @@ async function performLogin(page, credentials, selectors) {
         } catch (e) {
             // Se `waitForSelector` deu timeout, é um SUCESSO! O botão de login não foi encontrado.
             logger.debug('[Auth] Botão de login não encontrado após recarregar. Login considerado bem-sucedido.');
+            // Salva um screenshot da página logada para depuração.
+            try {
+                const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
+                fs.mkdirSync(screenshotDir, { recursive: true });
+                const screenshotPath = path.join(screenshotDir, `dismatal-login-success-${Date.now()}.png`);
+                await page.screenshot({ path: screenshotPath, fullPage: true });
+                logger.info(`[Auth] Screenshot de login bem-sucedido salvo em: ${screenshotPath}`);
+            } catch (screenshotError) {
+                logger.error('[Auth] Falha ao capturar screenshot de sucesso.', screenshotError);
+            }
         }
 
     } catch (e) {
