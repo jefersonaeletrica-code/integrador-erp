@@ -175,40 +175,62 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
     });
 
     try {
-        const finalPage = await withRetry(
-            async (attempt, lastError) => {
-                logger.info(`[Auth] Tentativa ${attempt}: navegando para a URL de login.`);
-                // Garante que a página esteja aberta, recriando-a se necessário.
-                // Isso é crucial para se recuperar de erros como "detached frame".
+        // ETAPA 1: Tentar usar cookies existentes, se disponíveis
+        if (cookies && cookies.length > 0) {
+            logger.info('[Auth] Tentando validar sessão com cookies existentes...');
+            try {
+                await page.setCookie(...cookies);
+                await page.goto(url, { waitUntil: 'networkidle0', timeout: 45000 });
+
+                // Valida se o login está ativo verificando se o botão de login NÃO existe.
+                await page.waitForSelector(selectors.loginButton.join(','), { hidden: true, timeout: 10000 });
+
+                logger.info('[Auth] Sessão com cookies validada com sucesso.');
+                return { page, cookies }; // Retorna a página e os cookies originais, pois são válidos
+            } catch (e) {
+                logger.warn(`[Auth] Sessão com cookies falhou ou expirou. Causa: ${e.message}. Prosseguindo para login completo.`);
+                // Limpa os cookies inválidos antes de tentar o login completo
+                try {
+                    const client = await page.target().createCDPSession();
+                    await client.send('Network.clearBrowserCookies');
+                } catch (clearError) {
+                    logger.warn('[Auth] Não foi possível limpar os cookies do navegador. Pode ser que a página já tenha sido fechada.', clearError);
+                }
+            }
+        } else {
+            logger.info('[Auth] Nenhum cookie para validar. Prosseguindo para login completo.');
+        }
+
+        // ETAPA 2: Se os cookies falharam ou não existem, fazer login completo
+        logger.info('[Auth] Executando fluxo de login completo com usuário e senha.');
+        const authResult = await withRetry(
+            async (attempt) => {
+                logger.info(`[Auth] Tentativa de login completo ${attempt}: navegando para a URL.`);
                 if (page.isClosed()) {
-                    logger.warn('[Auth] A página foi fechada. Tentando reabrir uma nova página para a retentativa...');
+                    logger.warn('[Auth] A página foi fechada. Reabrindo para a retentativa...');
                     page = await page.browser().newPage();
                 }
                 await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
-                return await performLogin(page, credentials, selectors);
+                // A função performLogin retorna { page, cookies }
+                const result = await performLogin(page, credentials, selectors);
+                return { ...result, page }; // Garante que a instância de `page` seja propagada
             },
             {
                 maxAttempts: retryAttempts,
                 delayMs: retryDelayMs,
-                onRetry: (attempt, error) => {
-                    logger.warn(`[Auth] Tentativa ${attempt} de login falhou. Causa: ${error.message}.`, {
-                        requestId,
-                        attempt,
-                    });
-                },
+                onRetry: (attempt, error) => logger.warn(`[Auth] Tentativa ${attempt} de login completo falhou. Causa: ${error.message}.`, { requestId, attempt }),
             }
         );
 
-        logger.info('[Auth] Autenticação na página bem-sucedida.', { action: 'auth_success', requestId });
-        return finalPage;
+        logger.info('[Auth] Autenticação completa bem-sucedida.', { action: 'auth_success', requestId });
+        return authResult; // Retorna { page, cookies }
+
     } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);
-
-        logger.error('[Auth] Autenticação falhou após todas as tentativas.', error, {
+        logger.error('[Auth] Orquestração de autenticação falhou após todas as tentativas.', error, {
             action: 'auth_failed',
             requestId,
         });
-
         throw new AuthenticationError(`Falha de autenticação: ${errorMsg}`, {
             requestId,
             credentials: { username: credentials.username },

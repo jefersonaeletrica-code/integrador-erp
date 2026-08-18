@@ -122,6 +122,28 @@ export const readDb = async () => {
   }
 };
 
+export const updateSupplierConnection = async (connection) => {
+  await ensureInitialized();
+  const conn = await getPool().getConnection();
+  try {
+    const { id, name, credentials, cookies } = connection;
+    await conn.execute(
+      'UPDATE supplier_connections SET name = ?, credentials = ?, cookies = ? WHERE id = ?',
+      [
+        name,
+        JSON.stringify(credentials),
+        cookies ? JSON.stringify(cookies) : null,
+        id
+      ]
+    );
+  } catch (error) {
+    console.error(`Erro ao atualizar a conexão de fornecedor (ID: ${connection.id}) no MySQL:`, error);
+    throw error;
+  } finally {
+    conn.release();
+  }
+};
+
 export const updateDb = async (partial) => {
   // Esta função agora será mais específica para cada tipo de atualização
   // A lógica principal de CRUD será movida para o server.js

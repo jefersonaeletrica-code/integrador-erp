@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import db from './db.js';
 import { initBrowser, closeBrowser } from './browser.js';
 import { authenticate, DEFAULT_LOGIN_SELECTORS } from './auth.js';
 import { getLogger } from './logger.js';
@@ -97,8 +98,7 @@ export class DismatalScraper {
             // Se a autenticação gerou novos cookies, atualiza a conexão
             if (authResult.cookies) {
                 connection.cookies = authResult.cookies;
-                // Aqui, você precisaria de uma função para persistir a conexão atualizada no DB.
-                // Ex: await db.updateSupplierConnection(connection);
+                await db.updateSupplierConnection(connection);
             }
             this.logger.info('[DismatalScraper] Página autenticada com sucesso.');
 
