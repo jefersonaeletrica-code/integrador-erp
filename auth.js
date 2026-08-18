@@ -205,26 +205,24 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
         // ETAPA 2: Se os cookies falharam ou não existem, fazer login completo
         logger.info('[Auth] Executando fluxo de login completo com usuário e senha.');
         const authResult = await withRetry(
-            async (attempt, lastError, context) => {
-                // Usa a página do contexto, que é atualizada a cada tentativa
-                let currentPage = context.page;
+            async (attempt) => {
                 logger.info(`[Auth] Tentativa de login completo ${attempt}: navegando para a URL.`);
-                if (currentPage.isClosed()) {
+                // Verifica e recria a página se ela foi fechada na tentativa anterior.
+                if (page.isClosed()) {
                     logger.warn('[Auth] A página foi fechada. Reabrindo para a retentativa...');
-                    currentPage = await currentPage.browser().newPage();
-                    context.page = currentPage; // Atualiza a página no contexto para a próxima tentativa
+                    page = await page.browser().newPage();
                 }
-                await currentPage.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
+
+                await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
                 // A função performLogin retorna { page, cookies }
-                const result = await performLogin(currentPage, credentials, selectors);
-                return { ...result, page: currentPage }; // Garante que a instância de `page` seja propagada
+                const result = await performLogin(page, credentials, selectors);
+                // Retorna o resultado completo, incluindo a instância da página usada.
+                return { ...result, page };
             },
             {
                 maxAttempts: retryAttempts,
                 delayMs: retryDelayMs,
                 onRetry: (attempt, error) => logger.warn(`[Auth] Tentativa ${attempt} de login completo falhou. Causa: ${error.message}.`, { requestId, attempt }),
-                // Inicializa o contexto com a página atual
-                context: { page }
             }
         );
         
