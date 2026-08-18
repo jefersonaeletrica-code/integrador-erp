@@ -106,43 +106,31 @@ async function performLogin(page, credentials, selectors) {
     if (!submitSelector) throw new Error('Botão de submit não encontrado no modal.');
 
     logger.debug('[Auth] Submetendo formulário de login...');
-    // Clica no botão de submit, mas não espera pela navegação aqui.
-    await page.click(submitSelector);
-
-    // Abordagem mais robusta: Após o clique, aguarda um tempo para a requisição ser processada
-    // e então recarrega a página para validar o estado de login.
+    // Clica no botão de submit e espera por um indicador de que a página mudou (login bem-sucedido).
+    // Em vez de esperar por uma navegação completa, que pode ser instável,
+    // esperamos que o botão de login original desapareça.
     try {
-        logger.debug('[Auth] Aguardando processamento do login e recarregando a página para validar o estado...');
-        await new Promise(resolve => setTimeout(resolve, 3000)); // Espera 3s para a requisição de login processar
-        await page.reload({ waitUntil: 'networkidle0', timeout: 45000 });
+        await page.click(submitSelector);
+        logger.debug('[Auth] Formulário enviado. Aguardando validação de sucesso (desaparecimento do botão de login)...');
 
-        // A validação de sucesso agora é verificar se o botão de login DESAPARECEU.
-        // Usamos um timeout curto. Se o botão ainda estiver lá, o login falhou.
+        // A validação de sucesso é esperar o botão de login sumir.
+        // Usamos `waitForSelector` com a opção `hidden: true`.
+        await page.waitForSelector(selectors.loginButton.join(','), { hidden: true, timeout: 25000 });
+        logger.debug('[Auth] Botão de login não está mais visível. Login considerado bem-sucedido.');
+
+        // Salva um screenshot da página logada para depuração.
         try {
-            await page.waitForSelector(selectors.loginButton.join(','), { visible: true, timeout: 5000 });
-            // Se o seletor foi encontrado, significa que o login falhou, pois o botão ainda está visível.
-            const pageContent = await page.content();
-            const errorHint = pageContent.match(/class="[^"]*error[^"]*".*?>([^<]+)/i);
-            const errorMessage = errorHint ? errorHint[1].trim() : 'Botão de login ainda visível.';
-            throw new Error(`Login falhou: ${errorMessage}`);
-        } catch (e) {
-            // Se `waitForSelector` deu timeout, é um SUCESSO! O botão de login não foi encontrado.
-            logger.debug('[Auth] Botão de login não encontrado após recarregar. Login considerado bem-sucedido.');
-            // Salva um screenshot da página logada para depuração.
-            try {
-                const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
-                fs.mkdirSync(screenshotDir, { recursive: true });
-                const screenshotPath = path.join(screenshotDir, `dismatal-login-success-${Date.now()}.png`);
-                await page.screenshot({ path: screenshotPath, fullPage: true });
-                logger.info(`[Auth] Screenshot de login bem-sucedido salvo em: ${screenshotPath}`);
-            } catch (screenshotError) {
-                logger.error('[Auth] Falha ao capturar screenshot de sucesso.', screenshotError);
-            }
+            const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
+            fs.mkdirSync(screenshotDir, { recursive: true });
+            const screenshotPath = path.join(screenshotDir, `dismatal-login-success-${Date.now()}.png`);
+            await page.screenshot({ path: screenshotPath, fullPage: true });
+            logger.info(`[Auth] Screenshot de login bem-sucedido salvo em: ${screenshotPath}`);
+        } catch (screenshotError) {
+            logger.error('[Auth] Falha ao capturar screenshot de sucesso.', screenshotError);
         }
 
     } catch (e) {
-        // Captura o erro do bloco try/catch interno ou o timeout do reload.
-        throw new Error(`Validação de login falhou após recarregar a página. Causa: ${e.message}`);
+        throw new Error(`Validação de login falhou. O login pode não ter sido bem-sucedido ou a página demorou para responder. Causa: ${e.message}`);
     }
     logger.debug('[Auth] Validação de login bem-sucedida.');
 

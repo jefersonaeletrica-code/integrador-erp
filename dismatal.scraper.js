@@ -100,13 +100,23 @@ export class DismatalScraper {
                 try {
                     const productUrl = `${url}/produtos/${searchTerm}`;
                     this.logger.info(`[DismatalScraper] Navegando para a URL do produto: ${productUrl}`);
-                    // Abordagem mais robusta para SPAs: iniciar o goto e esperar a navegação de forma síncrona.
-                    await page.goto(productUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+                    await page.goto(productUrl, { waitUntil: 'networkidle0', timeout: 60000 });
  
+                    // Adiciona o screenshot solicitado logo após a navegação para a página do produto.
+                    try {
+                        const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
+                        fs.mkdirSync(screenshotDir, { recursive: true });
+                        const screenshotPath = path.join(screenshotDir, `dismatal-after-product-nav-${Date.now()}.png`);
+                        await page.screenshot({ path: screenshotPath, fullPage: true });
+                        this.logger.info(`[DismatalScraper] Screenshot após navegação para produto salvo em: ${screenshotPath}`);
+                    } catch (screenshotError) {
+                        this.logger.error('[DismatalScraper] Falha ao capturar screenshot após navegação.', screenshotError);
+                    }
+
                     try {
                         // Em vez de esperar pelo container, espera por um elemento final (preço),
                         // que é um indicador mais forte de que o conteúdo dinâmico foi carregado.
-                        this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar...`);
+                        this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
                         await page.waitForSelector(this.selectors.productPrice.join(','), { timeout: 20000 });
                     } catch (waitError) {
                         this.logger.error('[DismatalScraper] Timeout ao esperar pelo conteúdo do produto. A página pode não ter carregado os dados dinamicamente ou os seletores estão incorretos.', waitError);
