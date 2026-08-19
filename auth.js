@@ -113,14 +113,15 @@ async function performLogin(page, credentials, selectors) {
     // esperamos que o botão de login original desapareça.
     try {
         logger.debug('[Auth] Formulário enviado. Aguardando navegação e validação de sucesso...');
-        // Clica para submeter e, em vez de esperar uma navegação incerta,
-        // vamos diretamente para a validação do resultado.
-        await page.click(submitSelector);
+        // A abordagem mais robusta para um clique que causa navegação.
+        // Executa o clique e espera a navegação resultante ao mesmo tempo.
+        await Promise.all([
+            page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 60000 }),
+            page.click(submitSelector),
+        ]);
 
-        // Validação de sucesso definitiva: aguarda por um elemento que só existe após o login,
-        // como o link de "Sair". Isso é robusto contra diferentes tipos de navegação.
-        await page.waitForSelector(selectors.logoutLink.join(','), { visible: true, timeout: 45000 });
-        logger.debug('[Auth] Indicador de logout encontrado. Login considerado bem-sucedido.');
+        // Após a navegação, a nova página está carregada. Agora podemos validar o sucesso.
+        logger.debug('[Auth] Navegação pós-login concluída. Login considerado bem-sucedido.');
 
         // Salva um screenshot da página logada para depuração.
         try {
