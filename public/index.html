@@ -538,11 +538,16 @@
 
             // Adiciona os event listeners UMA ÚNICA VEZ quando a página carrega.
             document.getElementById('listaConexoesFornecedores').addEventListener('click', function(event) {
-                const button = event.target.closest('button[data-action]');
-                if (!button) return;
+            const targetButton = event.target.closest('button[data-action]');
+            if (!targetButton) return;
 
-                const action = button.dataset.action;
-                const id = button.parentElement.dataset.connectionId;
+            // Previne múltiplos cliques desabilitando o botão
+            if (targetButton.disabled) {
+                return;
+            }
+
+            const action = targetButton.dataset.action;
+            const id = targetButton.closest('[data-connection-id]').dataset.connectionId;
 
                 switch (action) {
                     case 'authenticate':
@@ -563,6 +568,9 @@
 
         // Função de requisição para autenticação, para ser chamada pelo event listener.
         async function performAuthenticationRequest(id) {
+            const button = document.querySelector(`div[data-connection-id="${id}"] button[data-action="authenticate"]`);
+            if (button) button.disabled = true;
+
             console.log(`Iniciando autenticação para a conexão ${id}...`);
             showSpinner();
             try {
@@ -581,6 +589,7 @@
                 alert('Erro de rede: ' + e.message);
             } finally {
                 hideSpinner();
+                if (button) button.disabled = false;
                 console.log(`Autenticação para a conexão ${id} finalizada.`);
             }
         }
@@ -847,6 +856,9 @@
          * @param {string} id - O ID da conexão de fornecedor.
          */
         async function validateAuthentication(id) {
+            const button = document.querySelector(`div[data-connection-id="${id}"] button[data-action="validate"]`);
+            if (button) button.disabled = true;
+
             console.log(`Iniciando validação de sessão para a conexão ${id}...`);
             showSpinner();
             try {
@@ -864,6 +876,7 @@
                 alert('Erro de rede: ' + error.message);
             } finally {
                 hideSpinner();
+                if (button) button.disabled = false;
                 console.log(`Validação de sessão para a conexão ${id} finalizada.`);
             }
         }
