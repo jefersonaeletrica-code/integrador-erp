@@ -4,9 +4,6 @@ import { addToQueue } from './scraperQueue.js';
 
 const router = express.Router();
 
-// Cria um "lock" para controlar operações em andamento e prevenir duplicidade.
-const activeOperations = new Set();
-
 export default (db, supplierConnections) => {
     // --- ROTAS DE GERENCIAMENTO DE CONEXÕES DE FORNECEDORES ---
     
@@ -66,22 +63,15 @@ export default (db, supplierConnections) => {
         if (!connection) return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
         if (connection.type !== 'dismatal_webscraper') return res.status(400).json({ sucesso: false, erro: 'Função disponível apenas para conexões Dismatal.' });
 
-        const operationKey = `auth-${id}`;
-        if (activeOperations.has(operationKey)) {
-            return res.status(429).json({ sucesso: false, erro: 'Uma autenticação para esta conexão já está em andamento.' });
-        }
-
         try {
-            activeOperations.add(operationKey); // Bloqueia a operação
-            // Executa a autenticação diretamente, sem adicionar à fila, pois é uma ação única.
+            // Adiciona a tarefa de autenticação à fila e responde imediatamente
+            // para evitar timeouts de requisição em tarefas longas.
             const scraper = new DismatalScraper({ headless: true });
-            const result = await scraper.performAuthentication(connection);
-            res.json(result);
+            addToQueue(() => scraper.performAuthentication(connection));
+            res.status(202).json({ sucesso: true, mensagem: 'Tarefa de autenticação iniciada. A sessão será salva em segundo plano.' });
         } catch (e) {
             console.error('[Dismatal API] Erro na autenticação:', e.message);
             res.status(500).json({ sucesso: false, erro: e.message });
-        } finally {
-            activeOperations.delete(operationKey); // Libera o bloqueio
         }
     });
 
@@ -92,22 +82,14 @@ export default (db, supplierConnections) => {
         if (!connection) return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
         if (connection.type !== 'dismatal_webscraper') return res.status(400).json({ sucesso: false, erro: 'Função disponível apenas para conexões Dismatal.' });
 
-        const operationKey = `validate-${id}`;
-        if (activeOperations.has(operationKey)) {
-            return res.status(429).json({ sucesso: false, erro: 'Uma validação para esta conexão já está em andamento.' });
-        }
-
         try {
-            activeOperations.add(operationKey); // Bloqueia a operação
-            // Executa a validação diretamente, sem adicionar à fila.
+            // A validação também pode ser demorada, então usamos a fila.
             const scraper = new DismatalScraper({ headless: true });
-            const result = await scraper.validateAuthentication(connection);
-            res.json(result);
+            addToQueue(() => scraper.validateAuthentication(connection));
+            res.status(202).json({ sucesso: true, mensagem: 'Tarefa de validação iniciada. O resultado aparecerá no console do servidor.' });
         } catch (e) {
             console.error('[Dismatal API] Erro na validação de autenticação:', e.message);
             res.status(500).json({ sucesso: false, erro: e.message });
-        } finally {
-            activeOperations.delete(operationKey); // Libera o bloqueio
         }
     });
 

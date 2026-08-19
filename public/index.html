@@ -579,7 +579,7 @@
                 });
                 const data = await res.json();
 
-                if (res.ok && data.sucesso) {
+                if (data.sucesso) {
                     alert('Sucesso: ' + data.mensagem);
                 } else {
                     alert(`Falha na autenticação: ${data.erro}`);
@@ -866,7 +866,7 @@
                     method: 'POST',
                 });
                 const result = await response.json();
-                if (result.sucesso) {
+                if (response.ok && result.sucesso) {
                     alert('Sucesso: ' + result.mensagem);
                 } else {
                     alert('Falha na validação: ' + result.erro);
