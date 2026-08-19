@@ -27,8 +27,8 @@ export class DismatalScraper {
             // O erro "Campo de busca não foi encontrado na página inicial" indica que nenhum desses seletores
             // está correspondendo ao campo de busca real no portal Dismatal. Adicionado seletor com base no placeholder.
             searchInput: ['input[placeholder="O que você está procurando?"]', 'input[name="descricao"]', 'input[placeholder*="produto"]', 'input[type="search"]'],
-            // Seletor para o container principal dos detalhes do produto
-            productDetailContainer: ['.product-details', '.product-info', '.product-summary', 'div[role="main"]'],
+            // Seletor para o container principal dos detalhes do produto. Usar o componente Angular é mais robusto.
+            productDetailContainer: ['app-product-details', '.product-info', '.product-details'],
             // Seletores de página de produto (individual) - Adicionando mais alternativas
             productName: ['span.title-product', 'h1.product-name', 'h1.product-title'],
             productSKU: ['[data-sku]', '.product-sku', '.sku', '[itemprop="sku"]', '.product-details__sku'],
@@ -155,16 +155,19 @@ export class DismatalScraper {
             this.logger.error('[DismatalScraper] Falha ao capturar screenshot após fechar o modal.', screenshotError);
         }
 
-        // Adiciona log detalhado do HTML para depuração dos seletores.
         try {
+            // A validação de sucesso será pelo container principal do produto.
+            this.logger.info(`[DismatalScraper] Aguardando o container de detalhes do produto carregar (URL: ${page.url()})...`);
+            await page.waitForSelector(this.selectors.productDetailContainer.join(','), { timeout: 60000 });
+
+            // Adiciona log detalhado do HTML para depuração dos seletores, APÓS o container aparecer.
             const productContainerSelector = await findSelector(page, this.selectors.productDetailContainer);
             if (productContainerSelector) {
                 const productContainerHTML = await page.$eval(productContainerSelector, el => el.outerHTML);
                 this.logger.info(`[DismatalScraper] Conteúdo do container do produto (${productContainerSelector}) encontrado para extração:`, { html: productContainerHTML.substring(0, 4000) + '...' });
             } else {
-                this.logger.warn('[DismatalScraper] Nenhum container de detalhes do produto encontrado com os seletores atuais. Logando o body inteiro.');
-                const bodyHTML = await page.evaluate(() => document.body.outerHTML);
-                this.logger.info('[DismatalScraper] Conteúdo do body:', { html: bodyHTML.substring(0, 5000) + '...' });
+                // Isso não deve acontecer se o waitForSelector acima funcionar.
+                this.logger.warn('[DismatalScraper] Nenhum container de detalhes do produto encontrado após a espera.');
             }
         } catch (logError) {
             this.logger.error('[DismatalScraper] Erro ao tentar logar o conteúdo da página para depuração.', logError);
@@ -172,10 +175,10 @@ export class DismatalScraper {
 
         try {
             // A validação de sucesso será pelo preço, pois ele só aparece se o usuário estiver logado.
-            this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
+            this.logger.info(`[DismatalScraper] Verificando se o preço está visível dentro do container...`);
             await page.waitForSelector(this.selectors.productPrice.join(','), { timeout: 60000 });
         } catch (waitError) {
-            this.logger.error('[DismatalScraper] Timeout ao esperar pelo conteúdo do produto.', waitError);
+            this.logger.error('[DismatalScraper] Timeout ao esperar pelo preço do produto.', waitError);
             // Salva o screenshot em um arquivo para facilitar a depuração.
             const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
             fs.mkdirSync(screenshotDir, { recursive: true });
