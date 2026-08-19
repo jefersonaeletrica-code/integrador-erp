@@ -936,17 +936,17 @@
             }
 
             lista.innerHTML = conexoesFornecedoresGlobais.map(conn => `
-                <div class="p-3 border rounded-lg bg-gray-50 space-y-3">
+                <div class="p-3 border rounded-lg bg-gray-50 space-y-3" data-connection-id="${conn.id}">
                     <div class="flex justify-between items-start">
                         <p class="font-bold">${conn.name}</p>
-                        <div class="flex gap-2 items-center" data-connection-id="${conn.id}">
+                        <div class="flex gap-2 items-center">
                             ${conn.type === 'dismatal_webscraper' ? `<button data-action="authenticate" class="text-sm font-medium text-blue-600 hover:underline" title="Força um novo login com usuário/senha e salva a sessão.">Autenticar</button>` : ''}
                             ${conn.type === 'dismatal_webscraper' ? `<button data-action="validate" class="text-sm font-medium text-green-600 hover:underline" title="Testa se a sessão salva (cookies) ainda está ativa.">Validar Autenticação</button>` : ''}
                             <button data-action="remove" class="text-sm font-medium text-red-600 hover:underline">Remover</button>
                         </div>
                     </div>
                     ${conn.type === 'dismatal_webscraper' ? `
-                    <div class="flex items-center gap-2" data-connection-id="${conn.id}">
+                    <div class="flex items-center gap-2">
                         <input type="text" data-action="search-input" placeholder="Buscar produto por SKU no portal..." class="w-full p-2 border rounded-lg text-sm" onkeydown="if(event.key === 'Enter') buscarProdutosFornecedor(${conn.id})">
                         <button data-action="search" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 whitespace-nowrap">Buscar Produtos</button>
                     </div>
