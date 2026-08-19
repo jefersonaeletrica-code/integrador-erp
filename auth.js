@@ -171,7 +171,7 @@ async function performLogin(page, credentials, selectors) {
  */
 export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELECTORS) {
     const logger = getLogger();
-    const { url, credentials, cookies, retryAttempts, retryDelayMs, browserConfig } = options;
+    let { url, credentials, cookies, retryAttempts, retryDelayMs, browserConfig } = options;
     const requestId = createRequestId();    
 
     logger.info('[Auth] Iniciando orquestração de autenticação...', {
@@ -192,6 +192,16 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
                 await page.waitForSelector(selectors.loginButton.join(','), { hidden: true, timeout: 10000 });
 
                 logger.info('[Auth] Sessão com cookies validada com sucesso.');
+                // Salva um screenshot da página logada com cookies para depuração.
+                try {
+                    const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
+                    fs.mkdirSync(screenshotDir, { recursive: true });
+                    const screenshotPath = path.join(screenshotDir, `dismatal-cookie-login-success-${Date.now()}.png`);
+                    await page.screenshot({ path: screenshotPath, fullPage: true });
+                    logger.info(`[Auth] Screenshot de login com cookies bem-sucedido salvo em: ${screenshotPath}`);
+                } catch (screenshotError) {
+                    logger.error('[Auth] Falha ao capturar screenshot de login com cookies.', screenshotError);
+                }
                 return { page, cookies }; // Retorna a página e os cookies originais, pois são válidos
             } catch (e) {
                 logger.warn(`[Auth] Sessão com cookies falhou ou expirou. Causa: ${e.message}. Prosseguindo para login completo.`);
