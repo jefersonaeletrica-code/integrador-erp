@@ -180,7 +180,7 @@ async function performLogin(page, credentials, selectors) {
  * @param {object} selectors
  * @returns {Promise<{page: import('puppeteer').Page, sessionData: object}>}
  */
-async function tryCookieAuth(page, url, sessionData, selectors) {
+export async function tryCookieAuth(page, url, sessionData, selectors) {
     const logger = getLogger();
     logger.info('[Auth] Tentando validar sessão com dados salvos...');
 
