@@ -94,7 +94,10 @@ export class DismatalScraper {
                 browserConfig: this.config, // Passa a config para permitir a recriação do browser
             });
             
-            page = authResult.page; // Atualiza a referência da página
+            // **CORREÇÃO CRÍTICA**: Garante que a variável `page` local seja
+            // sempre a instância mais recente retornada pela autenticação,
+            // que pode ter sido recriada.
+            page = authResult.page; 
 
             // Se a autenticação gerou novos cookies, atualiza a conexão
             if (authResult.sessionData) {
