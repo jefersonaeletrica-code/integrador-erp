@@ -251,7 +251,7 @@ export class DismatalScraper {
                 await this._withTargetClosedRetry(async () => {
                     // A cada tentativa, garante que a página está autenticada.
                     // A função `authenticate` é inteligente e usará cookies se a sessão ainda for válida.
-                    const freshAuthResult = await authenticate(page, { url, credentials, sessionData: connection.cookies, retryAttempts: 1 });
+                    const freshAuthResult = await authenticate(page, { url, credentials: connection.credentials, sessionData: connection.cookies, retryAttempts: 1 });
                     page = freshAuthResult.page; // Usa a página mais recente
 
                     const extractedProducts = await this._fetchProductPage(page, url, searchTerm);
