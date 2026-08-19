@@ -80,7 +80,10 @@ export const initializeDatabase = async () => {
       console.log("Coluna 'cookies' renomeada para 'session_data' na tabela 'supplier_connections'.");
     } catch (error) {
       if (error.code === 'ER_DUP_FIELDNAME') {
-        // A coluna já existe, o que é esperado na maioria das vezes. Ignora o erro.
+        // A coluna 'session_data' já existe, o que é esperado. Ignora o erro.
+      } else if (error.code === 'ER_BAD_FIELD_ERROR') {
+        // A coluna 'cookies' não existe, o que significa que a renomeação já foi feita. Ignora o erro.
+        console.log("Coluna 'cookies' não encontrada, migração para 'session_data' provavelmente já concluída.");
       } else {
         throw error; // Lança outros erros inesperados.
       }
@@ -126,7 +129,13 @@ export const readDb = async () => {
 
     return {
       connections: connections.map(c => ({...c, credentials: typeof c.credentials === 'string' ? JSON.parse(c.credentials) : c.credentials })),
-      supplierConnections: supplierConnections.map(c => ({...c, credentials: typeof c.credentials === 'string' ? JSON.parse(c.credentials) : c.credentials })),
+      supplierConnections: supplierConnections.map(c => ({
+        ...c, 
+        credentials: typeof c.credentials === 'string' ? JSON.parse(c.credentials) : c.credentials,
+        // Garante que os dados da sessão também sejam parseados do JSON.
+        // O campo no DB é 'session_data', mas o app usa 'cookies' internamente.
+        cookies: typeof c.session_data === 'string' ? JSON.parse(c.session_data) : c.session_data
+      })),
       produtos: produtos.map(p => ({ ...p, preco: parseFloat(p.preco) })) // Garante que o preço seja número
     };
   } catch (error) {
