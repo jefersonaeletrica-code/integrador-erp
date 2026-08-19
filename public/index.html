@@ -794,26 +794,59 @@
             }
         }
 
-        async function testarConexaoFornecedor(id) {
+        /**
+         * Chama o endpoint para forçar uma nova autenticação e salvar a sessão.
+         * @param {string} id - O ID da conexão de fornecedor.
+         */
+        async function authenticateConnection(id) {
             const conn = conexoesFornecedoresGlobais.find(c => c.id === id);
             if (!conn) return;
 
+            console.log(`Iniciando autenticação para a conexão ${id}...`);
             showSpinner();
             try {
-                const res = await fetch(`/api/supplier-connections/${id}/test`, {
+                const res = await fetch(`/api/supplier-connections/${id}/authenticate`, {
                     method: 'POST'
                 });
                 const data = await res.json();
 
                 if (res.ok) {
-                    alert(data.mensagem);
+                    alert('Sucesso: ' + data.mensagem);
                 } else {
-                    alert(`Falha no teste: ${data.erro}`);
+                    alert(`Falha na autenticação: ${data.erro}`);
                 }
             } catch (e) {
-                alert('Ocorreu um erro inesperado ao tentar testar a conexão.');
+                console.error('Erro de rede ao tentar autenticar:', e);
+                alert('Erro de rede: ' + e.message);
             } finally {
                 hideSpinner();
+                console.log(`Autenticação para a conexão ${id} finalizada.`);
+            }
+        }
+
+        /**
+         * Chama o endpoint para validar se a sessão salva ainda está ativa.
+         * @param {string} id - O ID da conexão de fornecedor.
+         */
+        async function validateAuthentication(id) {
+            console.log(`Iniciando validação de sessão para a conexão ${id}...`);
+            showSpinner();
+            try {
+                const response = await fetch(`/api/supplier-connections/${id}/validate-authentication`, {
+                    method: 'POST',
+                });
+                const result = await response.json();
+                if (result.sucesso) {
+                    alert('Sucesso: ' + result.mensagem);
+                } else {
+                    alert('Falha na validação: ' + result.erro);
+                }
+            } catch (error) {
+                console.error('Erro de rede ao tentar validar a sessão:', error);
+                alert('Erro de rede: ' + error.message);
+            } finally {
+                hideSpinner();
+                console.log(`Validação de sessão para a conexão ${id} finalizada.`);
             }
         }
 
@@ -875,7 +908,8 @@
                     <div class="flex justify-between items-start">
                         <p class="font-bold">${conn.name}</p>
                         <div class="flex gap-2">
-                            ${conn.type === 'dismatal_webscraper' ? `<button onclick="testarConexaoFornecedor(${conn.id})" class="text-sm font-medium text-blue-600 hover:underline">Testar</button>` : ''}
+                            ${conn.type === 'dismatal_webscraper' ? `<button onclick="authenticateConnection(${conn.id})" class="text-sm font-medium text-blue-600 hover:underline" title="Força um novo login com usuário/senha e salva a sessão.">Autenticar</button>` : ''}
+                            ${conn.type === 'dismatal_webscraper' ? `<button onclick="validateAuthentication(${conn.id})" class="text-sm font-medium text-green-600 hover:underline" title="Testa se a sessão salva (cookies) ainda está ativa.">Validar Autenticação</button>` : ''}
                             <button onclick="removerConexaoFornecedor(${conn.id})" class="text-sm font-medium text-red-600 hover:underline">Remover</button>
                         </div>
                     </div>
