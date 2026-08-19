@@ -4,9 +4,6 @@ import { addToQueue } from './scraperQueue.js';
 
 const router = express.Router();
 
-// Cria um "lock" para controlar operações em andamento e prevenir duplicidade.
-const activeOperations = new Set();
-
 export default (db, supplierConnections) => {
     // --- ROTAS DE GERENCIAMENTO DE CONEXÕES DE FORNECEDORES ---
     
