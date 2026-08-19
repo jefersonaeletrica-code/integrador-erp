@@ -235,7 +235,7 @@ async function tryCookieAuth(page, url, sessionData, selectors) {
  * @param {object} selectors
  * @returns {Promise<{page: import('puppeteer').Page, sessionData: object}>}
  */
-async function tryPasswordLogin(page, options, selectors) {
+export async function tryPasswordLogin(page, options, selectors) {
     const logger = getLogger();
     const { url, credentials, retryAttempts, retryDelayMs, browserConfig, requestId } = options;
 

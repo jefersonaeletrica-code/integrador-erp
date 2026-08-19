@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import db from './db.js';
 import { initBrowser, closeBrowser } from './browser.js';
-import { authenticate, DEFAULT_LOGIN_SELECTORS } from './auth.js';
+import { authenticate, tryPasswordLogin, DEFAULT_LOGIN_SELECTORS } from './auth.js';
 import { getLogger } from './logger.js';
 import {
     findSelector,
@@ -56,14 +56,14 @@ export class DismatalScraper {
             browserInstance = await initBrowser(this.config);
             const { page } = browserInstance;
 
-            const authResult = await authenticate(page, {
+            // Chama diretamente a função de login por senha, ignorando a validação de cookies.
+            const authResult = await tryPasswordLogin(page, {
                 url,
                 credentials: { username, password },
-                sessionData: null, // Força o login por senha ignorando cookies existentes
                 retryAttempts: 3,
                 retryDelayMs: 2000,
                 browserConfig: this.config,
-            });
+            }, this.selectors);
 
             if (authResult.sessionData) {
                 connection.cookies = authResult.sessionData;
