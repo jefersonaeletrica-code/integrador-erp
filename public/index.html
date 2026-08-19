@@ -537,18 +537,20 @@
             carregarConexoesFornecedores();
 
             // Adiciona os event listeners UMA ÚNICA VEZ quando a página carrega.
-            document.getElementById('listaConexoesFornecedores').addEventListener('click', function(event) {
-            const targetButton = event.target.closest('button[data-action]');
-            if (!targetButton) return;
+            document.getElementById('listaConexoesFornecedores').addEventListener('click', function (event) {
+                const targetButton = event.target.closest('button[data-action]');
+                if (!targetButton || targetButton.disabled) return;
 
-            // Previne múltiplos cliques desabilitando o botão
-            if (targetButton.disabled) {
-                return;
-            }
+                const action = targetButton.dataset.action;
+                const id = targetButton.closest('[data-connection-id]').dataset.connectionId;
 
-            const action = targetButton.dataset.action;
-            const id = targetButton.closest('[data-connection-id]').dataset.connectionId;
+                // Ação de busca é tratada separadamente para obter o termo do input correto
+                if (action === 'search') {
+                    buscarProdutosFornecedor(id);
+                    return;
+                }
 
+                // Outras ações
                 switch (action) {
                     case 'authenticate':
                         performAuthenticationRequest(id);
@@ -557,10 +559,8 @@
                         validateAuthentication(id);
                         break;
                     case 'remove':
-                        removerConexaoFornecedor(Number(id));
-                        break;
-                    case 'search':
-                        buscarProdutosFornecedor(id);
+                        // O ID do dataset é string, convertemos para número para a busca no array
+                        removerConexaoFornecedor(parseInt(id, 10));
                         break;
                 }
             });
