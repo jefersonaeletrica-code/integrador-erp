@@ -64,10 +64,9 @@ export default (db, supplierConnections) => {
         if (connection.type !== 'dismatal_webscraper') return res.status(400).json({ sucesso: false, erro: 'Função disponível apenas para conexões Dismatal.' });
 
         try {
-            const result = await addToQueue(() => {
-                const scraper = new DismatalScraper({ headless: true });
-                return scraper.performAuthentication(connection);
-            });
+            // Executa a autenticação diretamente, sem adicionar à fila, pois é uma ação única.
+            const scraper = new DismatalScraper({ headless: true });
+            const result = await scraper.performAuthentication(connection);
             res.json(result);
         } catch (e) {
             console.error('[Dismatal API] Erro na autenticação:', e.message);
@@ -83,10 +82,9 @@ export default (db, supplierConnections) => {
         if (connection.type !== 'dismatal_webscraper') return res.status(400).json({ sucesso: false, erro: 'Função disponível apenas para conexões Dismatal.' });
 
         try {
-            const result = await addToQueue(() => {
-                const scraper = new DismatalScraper({ headless: true });
-                return scraper.validateAuthentication(connection);
-            });
+            // Executa a validação diretamente, sem adicionar à fila.
+            const scraper = new DismatalScraper({ headless: true });
+            const result = await scraper.validateAuthentication(connection);
             res.json(result);
         } catch (e) {
             console.error('[Dismatal API] Erro na validação de autenticação:', e.message);
