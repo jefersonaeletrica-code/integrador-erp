@@ -535,6 +535,23 @@
             carregarConexoes();
             carregarProdutosImportados();
             carregarConexoesFornecedores();
+
+            // Adiciona os event listeners UMA ÚNICA VEZ quando a página carrega.
+            document.getElementById('listaConexoesFornecedores').addEventListener('click', function(event) {
+                const button = event.target.closest('button[data-action]');
+                if (!button) return;
+
+                const action = button.dataset.action;
+                const id = button.parentElement.dataset.connectionId;
+
+                if (action === 'authenticate') {
+                    authenticateConnection(id);
+                } else if (action === 'validate') {
+                    validateAuthentication(id);
+                } else if (action === 'remove') {
+                    removerConexaoFornecedor(Number(id)); // Garante que o ID seja um número
+                }
+            });
         });
 
         async function carregarProdutosImportados() {
@@ -892,22 +909,6 @@
                 </div>`).join('');
         }
 
-        // Adiciona os event listeners após a renderização
-        document.getElementById('listaConexoesFornecedores').addEventListener('click', function(event) {
-            const button = event.target.closest('button[data-action]');
-            if (!button) return;
-
-            const action = button.dataset.action;
-            const id = button.parentElement.dataset.connectionId;
-
-            if (action === 'authenticate') {
-                authenticateConnection(id);
-            } else if (action === 'validate') {
-                validateAuthentication(id);
-            } else if (action === 'remove') {
-                removerConexaoFornecedor(Number(id)); // Garante que o ID seja um número
-            }
-        });
     </script>
 </body>
 </html>
