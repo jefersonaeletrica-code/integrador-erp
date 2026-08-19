@@ -185,11 +185,17 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
         if (cookies && cookies.length > 0) {
             logger.info('[Auth] Tentando validar sessão com cookies existentes...');
             try {
-                await page.setCookie(...cookies);
+                // Lógica corrigida: primeiro navega para a página para estabelecer o domínio.
                 await page.goto(url, { waitUntil: 'networkidle0', timeout: 45000 });
+                // Agora, define os cookies para o domínio atual.
+                await page.setCookie(...cookies);
+                // Recarrega a página para que o servidor reconheça a sessão dos cookies.
+                await page.reload({ waitUntil: 'networkidle0', timeout: 45000 });
 
-                // Valida se o login está ativo verificando se o botão de login NÃO existe.
-                await page.waitForSelector(selectors.loginButton.join(','), { hidden: true, timeout: 10000 });
+                // Validação mais robusta: verifica se um elemento que SÓ existe quando logado (ex: link de "Sair") está visível.
+                // Isso é mais confiável do que checar a ausência de um botão de login.
+                logger.debug('[Auth] Verificando a presença de um indicador de sessão ativa (ex: link de logout)...');
+                await page.waitForSelector(selectors.logoutLink.join(','), { visible: true, timeout: 15000 });
 
                 logger.info('[Auth] Sessão com cookies validada com sucesso.');
                 // Salva um screenshot da página logada com cookies para depuração.
