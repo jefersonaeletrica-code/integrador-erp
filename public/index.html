@@ -545,7 +545,10 @@
                 const id = button.parentElement.dataset.connectionId;
 
                 if (action === 'authenticate') {
-                    authenticateConnection(id);
+                    // A lógica que estava na função 'authenticateConnection' foi movida para cá
+                    // para evitar conflitos de escopo e garantir uma única execução.
+                    const conn = conexoesFornecedoresGlobais.find(c => c.id == id);
+                    if (conn) performAuthenticationRequest(id);
                 } else if (action === 'validate') {
                     validateAuthentication(id);
                 } else if (action === 'remove') {
@@ -553,6 +556,31 @@
                 }
             });
         });
+
+        // Função de requisição para autenticação, para ser chamada pelo event listener.
+        async function performAuthenticationRequest(id) {
+            console.log(`Iniciando autenticação para a conexão ${id}...`);
+            showSpinner();
+            try {
+                const res = await fetch(`/api/supplier-connections/${id}/authenticate`, {
+                    method: 'POST'
+                });
+                const data = await res.json();
+
+                if (res.ok && data.sucesso) {
+                    alert('Sucesso: ' + data.mensagem);
+                } else {
+                    alert(`Falha na autenticação: ${data.erro}`);
+                }
+            } catch (e) {
+                console.error('Erro de rede ao tentar autenticar:', e);
+                alert('Erro de rede: ' + e.message);
+            } finally {
+                hideSpinner();
+                console.log(`Autenticação para a conexão ${id} finalizada.`);
+                carregarConexoesFornecedores(); // Recarrega para refletir qualquer mudança de estado
+            }
+        }
 
         async function carregarProdutosImportados() {
             showSpinner();
