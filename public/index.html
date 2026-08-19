@@ -883,8 +883,8 @@
 
         async function buscarProdutosFornecedor(id) {
             // Encontra o input de busca associado ao botão clicado
-            const searchInput = document.querySelector(`div[data-connection-id="${id}"] input[data-action="search-input"]`);
-            const searchTerm = searchInput ? searchInput.value.trim() : '';
+            const searchInput = document.getElementById(`search-input-${id}`);
+            const searchTerm = searchInput ? searchInput.value.trim() : ''; // Garante que o termo seja pego
             const conn = conexoesFornecedoresGlobais.find(c => c.id === id);
             if (!conn) return;
             showSpinner(); // Mostra o spinner
