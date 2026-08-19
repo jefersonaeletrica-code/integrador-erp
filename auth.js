@@ -220,10 +220,10 @@ export async function tryCookieAuth(page, url, sessionData, selectors) {
         logger.error('[Auth] Falha ao capturar screenshot da validação com cookies.', screenshotError);
     }
 
-    // Validação definitiva: Se o login com cookies funcionou, o botão de login original não deve mais estar visível.
-    // Esperamos que ele esteja escondido. Se o `waitForSelector` falhar (der timeout), é um SUCESSO.
-    logger.debug('[Auth] Verificando se o botão de login desapareceu para confirmar a sessão...');
-    await page.waitForSelector(selectors.loginButton.join(','), { hidden: true, timeout: 15000 });
+    // Validação definitiva: Se o login com cookies funcionou, um elemento de saudação
+    // (como "Olá, [Nome]") deve estar visível.
+    logger.debug('[Auth] Verificando se o indicador de usuário logado está visível...');
+    await page.waitForSelector(selectors.loginButton.join(','), { visible: true, timeout: 15000 });
 
     logger.info('[Auth] Sessão com cookies validada com sucesso.');
     return { page, sessionData }; // Retorna a página e os dados de sessão originais, pois são válidos
