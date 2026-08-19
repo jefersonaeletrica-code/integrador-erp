@@ -32,7 +32,7 @@ export class DismatalScraper {
             // Seletores de página de produto (individual) - Adicionando mais alternativas
             productName: ['span.title-product', 'h1.product-name', 'h1.product-title', '[data-product-name]', 'h1', '.product-details__name'],
             productSKU: ['[data-sku]', '.product-sku', '.sku', '[itemprop="sku"]', '.product-details__sku'],
-            productPrice: ['[data-price]', '.price-group__unity-price', '.product-price', '.price', '.product-details__price'],
+            productPrice: ['span.price-group__unity-price', '[data-price]', '.product-price', '.price', '.product-details__price'],
             promoPrice: ['[data-promo-price]', '.promotional-price', '.sale-price'],
             stock: ['.stock-info', '.product-stock', '#stock', '[data-stock]'],
             // Seletores de lista de produtos
@@ -193,8 +193,8 @@ export class DismatalScraper {
                     }
 
                     try {
-                        // Em vez de esperar pelo container, espera por um elemento final (preço),
-                        // que é um indicador mais forte de que o conteúdo dinâmico foi carregado.
+                        // A validação de sucesso será pelo preço, pois ele só aparece se o usuário estiver logado.
+                        // O nome do produto pode aparecer mesmo sem login.
                         this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
                         await page.waitForSelector(this.selectors.productPrice.join(','), { timeout: 30000 });
                     } catch (waitError) {

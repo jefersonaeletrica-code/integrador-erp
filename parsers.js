@@ -34,8 +34,11 @@ export async function isProductPageValid(page) {
         return false;
     }
 
-    const hasProductStructure = await page.evaluate(() =>
-        !!(document.querySelector('h1, .product-name') && document.querySelector('.price, [data-price]'))
+    // A verificação deve ser consistente com os seletores de extração.
+    // Usamos os seletores de nome e preço para validar a estrutura.
+    const hasProductStructure = await page.evaluate((selectors) =>
+        !!(document.querySelector(selectors.productName.join(',')) && document.querySelector(selectors.productPrice.join(','))), 
+        { productName: ['span.title-product', 'h1', '.product-name'], productPrice: ['span.price-group__unity-price', '.price', '[data-price]'] }
     ).catch(() => false);
 
     return hasProductStructure;
