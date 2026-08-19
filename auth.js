@@ -195,23 +195,24 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
         if (sessionData && sessionData.cookies && sessionData.cookies.length > 0) {
             logger.info('[Auth] Tentando validar sessão com cookies existentes...');
             try {
-                // Lógica de restauração aprimorada:
-                // 1. Define os cookies ANTES da navegação.
-                await page.setCookie(...sessionData.cookies);
+                // Lógica de restauração definitiva:
+                // 1. Navega para a página para estabelecer o contexto do domínio.
+                await page.goto(url, { waitUntil: 'networkidle0', timeout: 45000 });
 
-                // 2. Navega para a página. O navegador enviará os cookies com a requisição.
-                await page.goto(url, { waitUntil: 'networkidle2', timeout: 45000 });
-
-                // 3. Restaura o localStorage após a página carregar, para que o JS da página possa usá-lo.
+                // 2. Restaura o localStorage.
                 if (sessionData.localStorage) {
                     await page.evaluate(savedLocalStorage => {
                         for (const key in savedLocalStorage) {
                             localStorage.setItem(key, savedLocalStorage[key]);
                         }
                     }, sessionData.localStorage);
-                    // Recarrega a página para garantir que o JS da aplicação leia o localStorage restaurado.
-                    await page.reload({ waitUntil: 'networkidle2', timeout: 45000 });
                 }
+
+                // 3. Define os cookies.
+                await page.setCookie(...sessionData.cookies);
+
+                // 4. Recarrega a página para que o servidor e o JS da página usem o estado restaurado.
+                await page.reload({ waitUntil: 'networkidle0', timeout: 45000 });
 
                 // Validação mais robusta: verifica se um elemento que SÓ existe quando logado (ex: link de "Sair") está visível.
                 // Isso é mais confiável do que checar a ausência de um botão de login.
