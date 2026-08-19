@@ -207,12 +207,16 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
         const authResult = await withRetry(
             async (attempt) => {
                 logger.info(`[Auth] Tentativa de login completo ${attempt}: navegando para a URL.`);
-                // **CORREÇÃO DEFINITIVA**: Verifica se a página foi fechada e a recria se necessário.
-                // Isso garante que cada tentativa use uma página válida.
-                if (page.isClosed()) {
-                    logger.warn('[Auth] A página foi fechada. Recriando uma nova página para a retentativa...');
+                // **CORREÇÃO DE ESTABILIDADE**: Se não for a primeira tentativa, assume que a página
+                // pode estar em um estado ruim e a recria para garantir uma execução limpa.
+                if (attempt > 1) {
+                    logger.warn(`[Auth] Recriando a página para a tentativa ${attempt} para garantir estabilidade.`);
+                    try {
+                        if (!page.isClosed()) await page.close();
+                    } catch (e) { /* Ignora erros ao fechar uma página já problemática */ }
                     page = await page.browser().newPage();
                 }
+
                 await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
                 // A função performLogin retorna { page, cookies }
                 const result = await performLogin(page, credentials, selectors);

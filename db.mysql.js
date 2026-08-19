@@ -71,6 +71,21 @@ export const initializeDatabase = async () => {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    // Garante que a coluna 'cookies' exista na tabela supplier_connections
+    // Isso é necessário para ambientes onde a tabela já foi criada sem essa coluna.
+    try {
+      await connection.query(`
+        ALTER TABLE supplier_connections ADD COLUMN cookies JSON DEFAULT NULL;
+      `);
+      console.log("Coluna 'cookies' adicionada à tabela 'supplier_connections'.");
+    } catch (error) {
+      if (error.code === 'ER_DUP_FIELDNAME') {
+        // A coluna já existe, o que é esperado na maioria das vezes. Ignora o erro.
+      } else {
+        throw error; // Lança outros erros inesperados.
+      }
+    }
+
     await connection.query(`
         CREATE TABLE IF NOT EXISTS produtos_importados (
           id INT NOT NULL AUTO_INCREMENT,
