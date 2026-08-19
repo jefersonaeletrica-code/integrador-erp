@@ -155,6 +155,21 @@ export class DismatalScraper {
             this.logger.error('[DismatalScraper] Falha ao capturar screenshot após fechar o modal.', screenshotError);
         }
 
+        // Adiciona log detalhado do HTML para depuração dos seletores.
+        try {
+            const productContainerSelector = await findSelector(page, this.selectors.productDetailContainer);
+            if (productContainerSelector) {
+                const productContainerHTML = await page.$eval(productContainerSelector, el => el.outerHTML);
+                this.logger.info(`[DismatalScraper] Conteúdo do container do produto (${productContainerSelector}) encontrado para extração:`, { html: productContainerHTML.substring(0, 4000) + '...' });
+            } else {
+                this.logger.warn('[DismatalScraper] Nenhum container de detalhes do produto encontrado com os seletores atuais. Logando o body inteiro.');
+                const bodyHTML = await page.evaluate(() => document.body.outerHTML);
+                this.logger.info('[DismatalScraper] Conteúdo do body:', { html: bodyHTML.substring(0, 5000) + '...' });
+            }
+        } catch (logError) {
+            this.logger.error('[DismatalScraper] Erro ao tentar logar o conteúdo da página para depuração.', logError);
+        }
+
         try {
             // A validação de sucesso será pelo preço, pois ele só aparece se o usuário estiver logado.
             this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
@@ -173,22 +188,6 @@ export class DismatalScraper {
             throw new Error('O conteúdo do produto não foi carregado na página.');
         }
 
-        // Adiciona log detalhado do HTML para depuração dos seletores.
-        try {
-            const productContainerSelector = await findSelector(page, this.selectors.productDetailContainer);
-            if (productContainerSelector) {
-                const productContainerHTML = await page.$eval(productContainerSelector, el => el.outerHTML);
-                this.logger.info(`[DismatalScraper] Conteúdo do container do produto (${productContainerSelector}) encontrado para extração:`, { html: productContainerHTML.substring(0, 4000) + '...' });
-            } else {
-                this.logger.warn('[DismatalScraper] Nenhum container de detalhes do produto encontrado com os seletores atuais. Logando o body inteiro.');
-                const bodyHTML = await page.evaluate(() => document.body.outerHTML);
-                this.logger.info('[DismatalScraper] Conteúdo do body:', { html: bodyHTML.substring(0, 5000) + '...' });
-            }
-        } catch (logError) {
-            this.logger.error('[DismatalScraper] Erro ao tentar logar o conteúdo da página para depuração.', logError);
-        }
-
-
         // Extrair os dados da página.
         this.logger.info(`[DismatalScraper] URL final: ${page.url()}`);
         const extractedProducts = await this.extractProductData(page, searchTerm);
@@ -199,18 +198,25 @@ export class DismatalScraper {
      * Executa uma função com retentativas em caso de erro de "Target Closed".
      * @private
      */
-    async _withTargetClosedRetry(fn, maxAttempts = 2) {
+    async _withTargetClosedRetry(fn, browserInstance, maxAttempts = 2) {
         let attempt = 1;
         while (attempt <= maxAttempts) {
             try {
-                return await fn();
+                // Passa a instância atual do navegador para a função
+                return await fn(browserInstance);
             } catch (e) {
                 // Se o erro for de "Target Closed" e ainda houver tentativas, tenta novamente.
                 if (e.message.includes('Target closed') && attempt < maxAttempts) {
                     this.logger.warn(`[DismatalScraper] Erro de "Target Closed" detectado. Tentativa ${attempt} de ${maxAttempts}. Reiniciando a operação...`);
                     attempt++;
-                    // Uma pequena pausa antes de tentar novamente.
-                    await new Promise(resolve => setTimeout(resolve, 2000));
+                    
+                    // Fecha a instância antiga do navegador, se ainda existir
+                    if (browserInstance) await closeBrowser(browserInstance);
+
+                    // Cria uma nova instância completa do navegador para a próxima tentativa
+                    this.logger.info('[DismatalScraper] Criando nova instância do navegador para a retentativa...');
+                    browserInstance = await initBrowser(this.config);
+
                 } else {
                     // Se não for um erro de "Target Closed" ou se as tentativas acabaram, lança o erro.
                     throw e;
@@ -264,24 +270,22 @@ export class DismatalScraper {
                 this.logger.info(`[DismatalScraper] Iniciando busca por navegação direta para o SKU: ${searchTerm}`);
                 
                 // Envolve a lógica de busca em uma função com retentativas para "Target Closed"
-                await this._withTargetClosedRetry(async () => {
+                await this._withTargetClosedRetry(async (currentBrowserInstance) => {
+                    let { page } = currentBrowserInstance;
                     // A cada tentativa, garante que a página está autenticada.
                     // A função `authenticate` é inteligente e usará cookies se a sessão ainda for válida.
-                    // A lógica de retentativa agora inclui a recriação do browser se necessário.
                     const freshAuthResult = await authenticate(page, {
                         url,
                         credentials: connection.credentials,
                         sessionData: connection.cookies,
                         retryAttempts: 1,
-                        browserConfig: this.config
+                        browserConfig: this.config // Passa a config para permitir a recriação do browser
                     });
-                    page = freshAuthResult.page; // Usa a página mais recente
+                    page = freshAuthResult.page; // Usa a página mais recente retornada pela autenticação
 
                     const extractedProducts = await this._fetchProductPage(page, url, searchTerm);
                     produtos = extractedProducts; // Substitui os produtos com o resultado da última tentativa bem-sucedida
-                    // Se a tentativa foi bem-sucedida, atualiza a instância do navegador para uso futuro.
-                    browserInstance = { browser: page.browser(), page };
-                });
+                }, browserInstance);
 
             } else if (searchTerm) { // Se não for um SKU válido, mas houver um termo de busca
                 this.logger.warn(`[DismatalScraper] O termo "${searchTerm}" não é um SKU válido para navegação direta. Outras estratégias de busca não estão implementadas.`);
