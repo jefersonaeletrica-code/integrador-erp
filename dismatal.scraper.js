@@ -173,7 +173,9 @@ export class DismatalScraper {
                 }
             }
             // Em vez de lançar o erro, retorna no formato padrão
-            return { sucesso: false, erro: error.message, produtos: [] };
+            // Garante que o erro seja uma string para evitar problemas de serialização
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            return { sucesso: false, erro: errorMessage, produtos: [] };
         } finally {
             if (browserInstance) {
                 this.logger.info('[DismatalScraper] Busca de produtos: fechando browser...');
