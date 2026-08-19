@@ -195,38 +195,6 @@ export class DismatalScraper {
     }
 
     /**
-     * Executa uma função com retentativas em caso de erro de "Target Closed".
-     * @private
-     */
-    async _withTargetClosedRetry(fn, browserInstance, maxAttempts = 2) {
-        let attempt = 1;
-        while (attempt <= maxAttempts) {
-            try {
-                // Passa a instância atual do navegador para a função
-                return await fn(browserInstance);
-            } catch (e) {
-                // Se o erro for de "Target Closed" e ainda houver tentativas, tenta novamente.
-                if (e.message.includes('Target closed') && attempt < maxAttempts) {
-                    this.logger.warn(`[DismatalScraper] Erro de "Target Closed" detectado. Tentativa ${attempt} de ${maxAttempts}. Reiniciando a operação...`);
-                    attempt++;
-                    
-                    // Fecha a instância antiga do navegador, se ainda existir
-                    if (browserInstance) await closeBrowser(browserInstance);
-
-                    // Cria uma nova instância completa do navegador para a próxima tentativa
-                    this.logger.info('[DismatalScraper] Criando nova instância do navegador para a retentativa...');
-                    browserInstance = await initBrowser(this.config);
-
-                } else {
-                    // Se não for um erro de "Target Closed" ou se as tentativas acabaram, lança o erro.
-                    throw e;
-                }
-            }
-        }
-    }
-
-
-    /**
      * Busca produtos no portal.
      * @param {object} connection - Objeto de conexão com credenciais.
      * @param {string} searchTerm - O termo a ser buscado.
@@ -268,24 +236,7 @@ export class DismatalScraper {
             // Estratégia de Navegação Direta Aprimorada
             if (searchTerm && isValidSKU(searchTerm)) {
                 this.logger.info(`[DismatalScraper] Iniciando busca por navegação direta para o SKU: ${searchTerm}`);
-                
-                // Envolve a lógica de busca em uma função com retentativas para "Target Closed"
-                await this._withTargetClosedRetry(async (currentBrowserInstance) => {
-                    let { page } = currentBrowserInstance;
-                    // A cada tentativa, garante que a página está autenticada.
-                    // A função `authenticate` é inteligente e usará cookies se a sessão ainda for válida.
-                    const freshAuthResult = await authenticate(page, {
-                        url,
-                        credentials: connection.credentials,
-                        sessionData: connection.cookies,
-                        retryAttempts: 1,
-                        browserConfig: this.config // Passa a config para permitir a recriação do browser
-                    });
-                    page = freshAuthResult.page; // Usa a página mais recente retornada pela autenticação
-
-                    const extractedProducts = await this._fetchProductPage(page, url, searchTerm);
-                    produtos = extractedProducts; // Substitui os produtos com o resultado da última tentativa bem-sucedida
-                }, browserInstance);
+                produtos = await this._fetchProductPage(page, url, searchTerm);
 
             } else if (searchTerm) { // Se não for um SKU válido, mas houver um termo de busca
                 this.logger.warn(`[DismatalScraper] O termo "${searchTerm}" não é um SKU válido para navegação direta. Outras estratégias de busca não estão implementadas.`);
