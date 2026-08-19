@@ -66,7 +66,7 @@ export const initializeDatabase = async () => {
         name VARCHAR(255) NOT NULL,
         type VARCHAR(50) NOT NULL, -- 'dismatal_webscraper', etc.
         credentials JSON NOT NULL,
-        cookies JSON DEFAULT NULL, -- Adicionado para armazenar cookies de sessão
+        session_data JSON DEFAULT NULL, -- Armazena cookies, localStorage, etc.
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
@@ -75,9 +75,9 @@ export const initializeDatabase = async () => {
     // Isso é necessário para ambientes onde a tabela já foi criada sem essa coluna.
     try {
       await connection.query(`
-        ALTER TABLE supplier_connections ADD COLUMN cookies JSON DEFAULT NULL;
+        ALTER TABLE supplier_connections CHANGE COLUMN cookies session_data JSON DEFAULT NULL;
       `);
-      console.log("Coluna 'cookies' adicionada à tabela 'supplier_connections'.");
+      console.log("Coluna 'cookies' renomeada para 'session_data' na tabela 'supplier_connections'.");
     } catch (error) {
       if (error.code === 'ER_DUP_FIELDNAME') {
         // A coluna já existe, o que é esperado na maioria das vezes. Ignora o erro.
@@ -141,13 +141,13 @@ export const updateSupplierConnection = async (connection) => {
   await ensureInitialized();
   const conn = await getPool().getConnection();
   try {
-    const { id, name, credentials, cookies } = connection;
+    const { id, name, credentials, cookies: sessionData } = connection; // Renomeado para clareza
     await conn.execute(
-      'UPDATE supplier_connections SET name = ?, credentials = ?, cookies = ? WHERE id = ?',
+      'UPDATE supplier_connections SET name = ?, credentials = ?, session_data = ? WHERE id = ?',
       [
         name,
         JSON.stringify(credentials),
-        cookies ? JSON.stringify(cookies) : null,
+        sessionData ? JSON.stringify(sessionData) : null,
         id
       ]
     );

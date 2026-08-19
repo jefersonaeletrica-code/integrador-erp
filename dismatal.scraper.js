@@ -88,7 +88,7 @@ export class DismatalScraper {
             const authResult = await authenticate(page, {
                 url,
                 credentials: { username, password },
-                cookies: connection.cookies, // Passa os cookies salvos para a função de autenticação
+                sessionData: connection.cookies, // Passa os dados de sessão salvos (anteriormente chamados de cookies)
                 retryAttempts: 3,
                 retryDelayMs: 2000,
                 browserConfig: this.config, // Passa a config para permitir a recriação do browser
@@ -97,8 +97,8 @@ export class DismatalScraper {
             page = authResult.page; // Atualiza a referência da página
 
             // Se a autenticação gerou novos cookies, atualiza a conexão
-            if (authResult.cookies) {
-                connection.cookies = authResult.cookies;
+            if (authResult.sessionData) {
+                connection.cookies = authResult.sessionData; // Salva os novos dados da sessão no campo 'cookies'
                 await db.updateSupplierConnection(connection);
             }
             this.logger.info('[DismatalScraper] Página autenticada com sucesso.');

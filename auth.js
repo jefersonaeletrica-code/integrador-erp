@@ -142,7 +142,18 @@ async function performLogin(page, credentials, selectors) {
 
     // PASSO 5: Extrair cookies
     logger.debug('[Auth] Extraindo cookies de sessão...');
-    const cookies = await page.cookies();
+    const sessionData = await page.evaluate(() => {
+        const localStorageData = {};
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            localStorageData[key] = localStorage.getItem(key);
+        }
+        // sessionStorage é mais difícil de extrair de forma genérica,
+        // mas o localStorage geralmente contém os tokens persistentes.
+        return { localStorage: localStorageData };
+    });
+
+    sessionData.cookies = await page.cookies();
 
     // PASSO 6: Fechar modal de boas-vindas (se houver)
     // Adiciona uma pausa para dar tempo ao modal de aparecer.
@@ -159,7 +170,7 @@ async function performLogin(page, credentials, selectors) {
         logger.debug('[Auth] Nenhum modal de boas-vindas encontrado.');
     }
 
-    return { page, cookies }; // Retorna a página e os cookies extraídos
+    return { page, sessionData }; // Retorna a página e os dados completos da sessão
 }
 
 /**
@@ -171,7 +182,7 @@ async function performLogin(page, credentials, selectors) {
  */
 export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELECTORS) {
     const logger = getLogger();
-    let { url, credentials, cookies, retryAttempts, retryDelayMs, browserConfig } = options;
+    let { url, credentials, sessionData, retryAttempts, retryDelayMs, browserConfig } = options;
     const requestId = createRequestId();    
 
     logger.info('[Auth] Iniciando orquestração de autenticação...', {
@@ -182,15 +193,27 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
 
     try {
         // ETAPA 1: Tentar usar cookies existentes, se disponíveis
-        if (cookies && cookies.length > 0) {
+        if (sessionData && sessionData.cookies && sessionData.cookies.length > 0) {
             logger.info('[Auth] Tentando validar sessão com cookies existentes...');
             try {
-                // Lógica corrigida: primeiro navega para a página para estabelecer o domínio.
+                // Lógica de restauração completa:
+                // 1. Navega para a página para ter o contexto do domínio.
                 await page.goto(url, { waitUntil: 'networkidle0', timeout: 45000 });
-                // Agora, define os cookies para o domínio atual.
-                await page.setCookie(...cookies);
-                // Recarrega a página para que o servidor reconheça a sessão dos cookies.
-                await page.reload({ waitUntil: 'networkidle0', timeout: 45000 });
+
+                // 2. Restaura o localStorage ANTES de recarregar.
+                if (sessionData.localStorage) {
+                    await page.evaluate(savedLocalStorage => {
+                        for (const key in savedLocalStorage) {
+                            localStorage.setItem(key, savedLocalStorage[key]);
+                        }
+                    }, sessionData.localStorage);
+                }
+
+                // 3. Define os cookies.
+                await page.setCookie(...sessionData.cookies);
+
+                // 4. Recarrega a página para que o servidor e o JS da página usem o estado restaurado.
+                await page.reload({ waitUntil: 'networkidle2', timeout: 45000 });
 
                 // Validação mais robusta: verifica se um elemento que SÓ existe quando logado (ex: link de "Sair") está visível.
                 // Isso é mais confiável do que checar a ausência de um botão de login.
@@ -208,7 +231,7 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
                 } catch (screenshotError) {
                     logger.error('[Auth] Falha ao capturar screenshot de login com cookies.', screenshotError);
                 }
-                return { page, cookies }; // Retorna a página e os cookies originais, pois são válidos
+                return { page, sessionData }; // Retorna a página e os dados de sessão originais, pois são válidos
             } catch (e) {
                 logger.warn(`[Auth] Sessão com cookies falhou ou expirou. Causa: ${e.message}. Prosseguindo para login completo.`);
                 // Limpa os cookies inválidos antes de tentar o login completo
@@ -220,7 +243,7 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
                 }
             }
         } else {
-            logger.info('[Auth] Nenhum cookie para validar. Prosseguindo para login completo.');
+            logger.info('[Auth] Nenhum dado de sessão para validar. Prosseguindo para login completo.');
         }
 
         // ETAPA 2: Se os cookies falharam ou não existem, fazer login completo
@@ -248,7 +271,7 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
                 }
 
                 await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
-                // A função performLogin retorna { page, cookies }
+                // A função performLogin retorna { page, sessionData }
                 const result = await performLogin(page, credentials, selectors);
                 // Retorna o resultado completo, incluindo a instância da página usada.
                 return { ...result, page };
