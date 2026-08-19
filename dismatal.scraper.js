@@ -156,7 +156,7 @@ export class DismatalScraper {
                 try {
                     const productUrl = `${url}/produtos/${searchTerm}`;
                     this.logger.info(`[DismatalScraper] Navegando para a URL do produto: ${productUrl}`);
-                    await page.goto(productUrl, { waitUntil: 'networkidle0', timeout: 60000 });
+                    await page.goto(productUrl, { waitUntil: 'networkidle2', timeout: 60000 });
  
                     // Adiciona o screenshot solicitado logo após a navegação para a página do produto.
                     try {
