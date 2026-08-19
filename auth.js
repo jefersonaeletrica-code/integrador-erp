@@ -195,24 +195,26 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
         if (sessionData && sessionData.cookies && sessionData.cookies.length > 0) {
             logger.info('[Auth] Tentando validar sessão com cookies existentes...');
             try {
-                // Lógica de restauração definitiva:
-                // 1. Navega para a página para estabelecer o contexto do domínio.
-                await page.goto(url, { waitUntil: 'networkidle0', timeout: 45000 });
+                // More robust session restoration logic:
+                // 1. Go to a blank page to ensure we have a clean context
+                // before setting cookies for a specific domain.
+                await page.goto('about:blank');
 
-                // 2. Restaura o localStorage.
+                // 2. Set cookies for the target domain.
+                await page.setCookie(...sessionData.cookies);
+
+                // 3. Now, navigate to the URL. The browser will send the cookies with the request.
+                await page.goto(url, { waitUntil: 'networkidle2', timeout: 45000 });
+
+                // 4. After the page loads with the cookie-based session, restore localStorage.
                 if (sessionData.localStorage) {
                     await page.evaluate(savedLocalStorage => {
                         for (const key in savedLocalStorage) {
                             localStorage.setItem(key, savedLocalStorage[key]);
                         }
                     }, sessionData.localStorage);
+                    await page.reload({ waitUntil: 'networkidle2', timeout: 45000 }); // Reload for the JS to pick up localStorage
                 }
-
-                // 3. Define os cookies.
-                await page.setCookie(...sessionData.cookies);
-
-                // 4. Recarrega a página para que o servidor e o JS da página usem o estado restaurado.
-                await page.reload({ waitUntil: 'networkidle0', timeout: 45000 });
 
                 // Validação mais robusta: verifica se um elemento que SÓ existe quando logado (ex: link de "Sair") está visível.
                 // Isso é mais confiável do que checar a ausência de um botão de login.
