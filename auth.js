@@ -113,16 +113,14 @@ async function performLogin(page, credentials, selectors) {
     // esperamos que o botão de login original desapareça.
     try {
         logger.debug('[Auth] Formulário enviado. Aguardando navegação e validação de sucesso...');
-        // A abordagem correta para um clique que causa navegação.
-        await Promise.all([
-            page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 60000 }),
-            page.click(submitSelector),
-        ]);
+        // Clica para submeter e, em vez de esperar uma navegação incerta,
+        // vamos diretamente para a validação do resultado.
+        await page.click(submitSelector);
 
-        // A validação de sucesso é esperar o botão de login sumir.
-        // Usamos `waitForSelector` com a opção `hidden: true`.
-        await page.waitForSelector(selectors.loginButton.join(','), { hidden: true, timeout: 25000 });
-        logger.debug('[Auth] Botão de login não está mais visível. Login considerado bem-sucedido.');
+        // Validação de sucesso mais robusta: esperar o modal de login desaparecer.
+        // Isso indica que o login foi aceito e a interface mudou.
+        await page.waitForSelector(selectors.loginModal.join(','), { hidden: true, timeout: 30000 });
+        logger.debug('[Auth] Modal de login não está mais visível. Login considerado bem-sucedido.');
 
         // Salva um screenshot da página logada para depuração.
         try {
