@@ -905,7 +905,7 @@
             } else if (action === 'validate') {
                 validateAuthentication(id);
             } else if (action === 'remove') {
-                removerConexaoFornecedor(id);
+                removerConexaoFornecedor(Number(id)); // Garante que o ID seja um número
             }
         });
     </script>
