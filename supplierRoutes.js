@@ -56,21 +56,40 @@ export default (db, supplierConnections) => {
         }
     });
 
-    router.post('/supplier-connections/:id/test', async (req, res) => {
+    router.post('/supplier-connections/:id/authenticate', async (req, res) => {
         const { id } = req.params;
         const connection = supplierConnections.find(c => c.id == id);
 
         if (!connection) return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
-        if (connection.type !== 'dismatal_webscraper') return res.status(400).json({ sucesso: false, erro: 'Teste disponível apenas para conexões Dismatal.' });
+        if (connection.type !== 'dismatal_webscraper') return res.status(400).json({ sucesso: false, erro: 'Função disponível apenas para conexões Dismatal.' });
 
         try {
             const result = await addToQueue(() => {
                 const scraper = new DismatalScraper({ headless: true });
-                return scraper.testConnection(connection);
+                return scraper.performAuthentication(connection);
             });
             res.json(result);
         } catch (e) {
-            console.error('[Dismatal API] Erro no teste de conexão:', e.message);
+            console.error('[Dismatal API] Erro na autenticação:', e.message);
+            res.status(500).json({ sucesso: false, erro: e.message });
+        }
+    });
+
+    router.post('/supplier-connections/:id/validate-authentication', async (req, res) => {
+        const { id } = req.params;
+        const connection = supplierConnections.find(c => c.id == id);
+
+        if (!connection) return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
+        if (connection.type !== 'dismatal_webscraper') return res.status(400).json({ sucesso: false, erro: 'Função disponível apenas para conexões Dismatal.' });
+
+        try {
+            const result = await addToQueue(() => {
+                const scraper = new DismatalScraper({ headless: true });
+                return scraper.validateAuthentication(connection);
+            });
+            res.json(result);
+        } catch (e) {
+            console.error('[Dismatal API] Erro na validação de autenticação:', e.message);
             res.status(500).json({ sucesso: false, erro: e.message });
         }
     });

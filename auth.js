@@ -173,6 +173,114 @@ async function performLogin(page, credentials, selectors) {
 }
 
 /**
+ * Tenta autenticar usando dados de sessão (cookies, localStorage).
+ * @param {import('puppeteer').Page} page
+ * @param {string} url
+ * @param {object} sessionData
+ * @param {object} selectors
+ * @returns {Promise<{page: import('puppeteer').Page, sessionData: object}>}
+ */
+async function tryCookieAuth(page, url, sessionData, selectors) {
+    const logger = getLogger();
+    logger.info('[Auth] Tentando validar sessão com dados salvos...');
+
+    if (!sessionData || !sessionData.cookies || sessionData.cookies.length === 0) {
+        throw new Error("Nenhum dado de sessão fornecido para validação.");
+    }
+
+    // More robust session restoration logic:
+    // 1. Go to a blank page to ensure we have a clean context
+    // before setting cookies for a specific domain.
+    await page.goto('about:blank');
+
+    // 2. Set cookies for the target domain.
+    await page.setCookie(...sessionData.cookies);
+
+    // 3. Now, navigate to the URL. The browser will send the cookies with the request.
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 45000 });
+
+    // 4. After the page loads with the cookie-based session, restore localStorage.
+    if (sessionData.localStorage) {
+        await page.evaluate(savedLocalStorage => {
+            for (const key in savedLocalStorage) {
+                localStorage.setItem(key, savedLocalStorage[key]);
+            }
+        }, sessionData.localStorage);
+        await page.reload({ waitUntil: 'networkidle2', timeout: 45000 }); // Reload for the JS to pick up localStorage
+    }
+
+    // Salva um screenshot da página após tentar restaurar a sessão para depuração.
+    try {
+        const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
+        fs.mkdirSync(screenshotDir, { recursive: true });
+        const screenshotPath = path.join(screenshotDir, `dismatal-cookie-validation-attempt-${Date.now()}.png`);
+        await page.screenshot({ path: screenshotPath, fullPage: true });
+        logger.info(`[Auth] Screenshot da tentativa de validação com cookies salvo em: ${screenshotPath}`);
+    } catch (screenshotError) {
+        logger.error('[Auth] Falha ao capturar screenshot da validação com cookies.', screenshotError);
+    }
+
+    // Validação mais robusta: verifica se um elemento que SÓ existe quando logado (ex: link de "Sair") está visível.
+    logger.debug('[Auth] Verificando a presença de um indicador de sessão ativa (ex: link de logout)...');
+    await page.waitForSelector(selectors.logoutLink.join(','), { visible: true, timeout: 15000 });
+
+    logger.info('[Auth] Sessão com cookies validada com sucesso.');
+    return { page, sessionData }; // Retorna a página e os dados de sessão originais, pois são válidos
+}
+
+/**
+ * Executa o fluxo de login completo com usuário e senha, com retentativas.
+ * @param {import('puppeteer').Page} page
+ * @param {object} options
+ * @param {object} selectors
+ * @returns {Promise<{page: import('puppeteer').Page, sessionData: object}>}
+ */
+async function tryPasswordLogin(page, options, selectors) {
+    const logger = getLogger();
+    const { url, credentials, retryAttempts, retryDelayMs, browserConfig, requestId } = options;
+
+    logger.info('[Auth] Executando fluxo de login completo com usuário e senha.');
+    const authResult = await withRetry(
+        async (attempt) => {
+            logger.info(`[Auth] Tentativa de login completo ${attempt}: navegando para a URL.`);
+            
+            // **LÓGICA DE RECUPERAÇÃO COMPLETA**
+            // Se a conexão com o browser caiu, reinicia tudo.
+            if (attempt > 1 && (!page.browser() || !page.browser().isConnected())) {
+                logger.warn(`[Auth] Conexão com o navegador perdida. Reiniciando a conexão para a tentativa ${attempt}...`);
+                const newInstance = await initBrowser(browserConfig);
+                page = newInstance.page; // Usa a nova página e o novo browser
+            } else if (attempt > 1 || page.isClosed()) {
+                // Se for apenas a página que fechou (ou por precaução), recria só a página.
+                logger.warn(`[Auth] A página está fechada ou é uma nova tentativa. Recriando a página para garantir estabilidade.`);
+                try {
+                    // Tenta fechar a página anterior se ela ainda estiver aberta
+                    if (!page.isClosed()) {
+                        await page.close();
+                    }
+                } catch (e) { /* Ignora erros ao fechar uma página já problemática */ }
+                page = await page.browser().newPage();
+            }
+
+            await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
+            // A função performLogin retorna { page, sessionData }
+            const result = await performLogin(page, credentials, selectors);
+            // Retorna o resultado completo, incluindo a instância da página usada.
+            return { ...result, page };
+        },
+        {
+            maxAttempts: retryAttempts,
+            delayMs: retryDelayMs,
+            onRetry: (attempt, error) => logger.warn(`[Auth] Tentativa ${attempt} de login completo falhou. Causa: ${error.message}.`, { requestId, attempt }),
+        }
+    );
+    
+    page = authResult.page; // Garante que a variável `page` externa seja a final
+    logger.info('[Auth] Autenticação completa bem-sucedida.', { action: 'auth_success', requestId });
+    return authResult;
+}
+
+/**
  * Orquestra a autenticação com retentativas.
  * @param {import('puppeteer').Page} page - A página do Puppeteer para executar o login.
  * @param {object} options
@@ -193,49 +301,10 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
     try {
         // ETAPA 1: Tentar usar cookies existentes, se disponíveis
         if (sessionData && sessionData.cookies && sessionData.cookies.length > 0) {
-            logger.info('[Auth] Tentando validar sessão com cookies existentes...');
             try {
-                // More robust session restoration logic:
-                // 1. Go to a blank page to ensure we have a clean context
-                // before setting cookies for a specific domain.
-                await page.goto('about:blank');
-
-                // 2. Set cookies for the target domain.
-                await page.setCookie(...sessionData.cookies);
-
-                // 3. Now, navigate to the URL. The browser will send the cookies with the request.
-                await page.goto(url, { waitUntil: 'networkidle2', timeout: 45000 });
-
-                // 4. After the page loads with the cookie-based session, restore localStorage.
-                if (sessionData.localStorage) {
-                    await page.evaluate(savedLocalStorage => {
-                        for (const key in savedLocalStorage) {
-                            localStorage.setItem(key, savedLocalStorage[key]);
-                        }
-                    }, sessionData.localStorage);
-                    await page.reload({ waitUntil: 'networkidle2', timeout: 45000 }); // Reload for the JS to pick up localStorage
-                }
-
-                // Validação mais robusta: verifica se um elemento que SÓ existe quando logado (ex: link de "Sair") está visível.
-                // Isso é mais confiável do que checar a ausência de um botão de login.
-                logger.debug('[Auth] Verificando a presença de um indicador de sessão ativa (ex: link de logout)...');
-                await page.waitForSelector(selectors.logoutLink.join(','), { visible: true, timeout: 15000 });
-
-                logger.info('[Auth] Sessão com cookies validada com sucesso.');
-                // Salva um screenshot da página logada com cookies para depuração.
-                try {
-                    const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
-                    fs.mkdirSync(screenshotDir, { recursive: true });
-                    const screenshotPath = path.join(screenshotDir, `dismatal-cookie-login-success-${Date.now()}.png`);
-                    await page.screenshot({ path: screenshotPath, fullPage: true });
-                    logger.info(`[Auth] Screenshot de login com cookies bem-sucedido salvo em: ${screenshotPath}`);
-                } catch (screenshotError) {
-                    logger.error('[Auth] Falha ao capturar screenshot de login com cookies.', screenshotError);
-                }
-                return { page, sessionData }; // Retorna a página e os dados de sessão originais, pois são válidos
+                return await tryCookieAuth(page, url, sessionData, selectors);
             } catch (e) {
                 logger.warn(`[Auth] Sessão com cookies falhou ou expirou. Causa: ${e.message}. Prosseguindo para login completo.`);
-                // Limpa os cookies inválidos antes de tentar o login completo
                 try {
                     const client = await page.target().createCDPSession();
                     await client.send('Network.clearBrowserCookies');
@@ -247,46 +316,8 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
             logger.info('[Auth] Nenhum dado de sessão para validar. Prosseguindo para login completo.');
         }
 
-        // ETAPA 2: Se os cookies falharam ou não existem, fazer login completo
-        logger.info('[Auth] Executando fluxo de login completo com usuário e senha.');
-        const authResult = await withRetry(
-            async (attempt) => {
-                logger.info(`[Auth] Tentativa de login completo ${attempt}: navegando para a URL.`);
-                
-                // **LÓGICA DE RECUPERAÇÃO COMPLETA**
-                // Se a conexão com o browser caiu, reinicia tudo.
-                if (attempt > 1 && (!page.browser() || !page.browser().isConnected())) {
-                    logger.warn(`[Auth] Conexão com o navegador perdida. Reiniciando a conexão para a tentativa ${attempt}...`);
-                    const newInstance = await initBrowser(browserConfig);
-                    page = newInstance.page; // Usa a nova página e o novo browser
-                } else if (attempt > 1 || page.isClosed()) {
-                    // Se for apenas a página que fechou (ou por precaução), recria só a página.
-                    logger.warn(`[Auth] A página está fechada ou é uma nova tentativa. Recriando a página para garantir estabilidade.`);
-                    try {
-                        // Tenta fechar a página anterior se ela ainda estiver aberta
-                        if (!page.isClosed()) {
-                            await page.close();
-                        }
-                    } catch (e) { /* Ignora erros ao fechar uma página já problemática */ }
-                    page = await page.browser().newPage();
-                }
-
-                await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
-                // A função performLogin retorna { page, sessionData }
-                const result = await performLogin(page, credentials, selectors);
-                // Retorna o resultado completo, incluindo a instância da página usada.
-                return { ...result, page };
-            },
-            {
-                maxAttempts: retryAttempts,
-                delayMs: retryDelayMs,
-                onRetry: (attempt, error) => logger.warn(`[Auth] Tentativa ${attempt} de login completo falhou. Causa: ${error.message}.`, { requestId, attempt }),
-            }
-        );
-        
-        page = authResult.page; // Garante que a variável `page` externa seja a final
-        logger.info('[Auth] Autenticação completa bem-sucedida.', { action: 'auth_success', requestId });
-        return authResult; // Retorna { page, cookies }
+        // ETAPA 2: Se os cookies falharam ou não existem, fazer login completo.
+        return await tryPasswordLogin(page, { url, credentials, retryAttempts, retryDelayMs, browserConfig, requestId }, selectors);
 
     } catch (error) {
         const errorMsg = error instanceof Error ? error.message : String(error);

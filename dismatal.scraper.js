@@ -45,25 +45,61 @@ export class DismatalScraper {
     }
 
     /**
-     * Testa a conexão e o login no portal.
+     * Executa uma autenticação completa com usuário/senha e salva a sessão no banco de dados.
      * @param {object} connection - Objeto de conexão com credenciais.
      */
-    async testConnection(connection) {
+    async performAuthentication(connection) {
         const { url, username, password } = connection.credentials;
         let browserInstance = null;
-        this.logger.info('[DismatalScraper] Iniciando teste de conexão...');
+        this.logger.info('[DismatalScraper] Iniciando autenticação completa...');
         try {
-            // Apenas autentica para validar as credenciais. O navegador é fechado dentro de authenticate.
-            await authenticate(this.config, {
+            browserInstance = await initBrowser(this.config);
+            const { page } = browserInstance;
+
+            const authResult = await authenticate(page, {
                 url,
                 credentials: { username, password },
+                sessionData: null, // Força o login por senha ignorando cookies existentes
                 retryAttempts: 3,
                 retryDelayMs: 2000,
+                browserConfig: this.config,
             });
 
-            return { sucesso: true, mensagem: 'Conexão com a Dismatal bem-sucedida!' };
+            if (authResult.sessionData) {
+                connection.cookies = authResult.sessionData;
+                await db.updateSupplierConnection(connection);
+                this.logger.info('[DismatalScraper] Sessão salva no banco de dados com sucesso.');
+            }
+
+            return { sucesso: true, mensagem: 'Autenticação realizada e sessão salva com sucesso!' };
         } catch (error) {
-            this.logger.error('[DismatalScraper] Teste de conexão falhou.', error);
+            this.logger.error('[DismatalScraper] Falha na autenticação completa.', error);
+            throw error;
+        } finally {
+            if (browserInstance) {
+                await closeBrowser(browserInstance);
+            }
+        }
+    }
+
+    /**
+     * Valida se a sessão salva no banco de dados ainda está ativa.
+     * @param {object} connection - Objeto de conexão com credenciais e session_data.
+     */
+    async validateAuthentication(connection) {
+        const { url } = connection.credentials;
+        let browserInstance = null;
+        this.logger.info('[DismatalScraper] Iniciando validação de sessão...');
+        try {
+            browserInstance = await initBrowser(this.config);
+            const { page } = browserInstance;
+
+            // Chama authenticate, que por sua vez usará tryCookieAuth
+            await authenticate(page, { url, sessionData: connection.cookies });
+
+            return { sucesso: true, mensagem: 'A sessão salva está ativa!' };
+        } catch (error) {
+            this.logger.error('[DismatalScraper] Validação de sessão falhou.', error);
             throw error; // Re-lança o erro para a rota capturar
         }
     }
