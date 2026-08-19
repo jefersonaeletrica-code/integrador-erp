@@ -94,8 +94,11 @@ export class DismatalScraper {
             browserInstance = await initBrowser(this.config);
             const { page } = browserInstance;
 
-            // Chama authenticate, que por sua vez usará tryCookieAuth
-            await authenticate(page, { url, sessionData: connection.cookies });
+            // Para validar, chamamos diretamente a função de autenticação por cookie.
+            // Não passamos pelo orquestrador principal para evitar o fallback para login por senha.
+            // Precisamos importar a função `tryCookieAuth` do `auth.js`
+            const { tryCookieAuth } = await import('./auth.js');
+            await tryCookieAuth(page, url, connection.cookies, this.selectors);
 
             return { sucesso: true, mensagem: 'A sessão salva está ativa!' };
         } catch (error) {
