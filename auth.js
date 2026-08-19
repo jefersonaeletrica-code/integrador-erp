@@ -117,10 +117,10 @@ async function performLogin(page, credentials, selectors) {
         // vamos diretamente para a validação do resultado.
         await page.click(submitSelector);
 
-        // Validação de sucesso mais robusta: esperar o modal de login desaparecer.
-        // Isso indica que o login foi aceito e a interface mudou.
-        await page.waitForSelector(selectors.loginModal.join(','), { hidden: true, timeout: 30000 });
-        logger.debug('[Auth] Modal de login não está mais visível. Login considerado bem-sucedido.');
+        // Validação de sucesso definitiva: aguarda por um elemento que só existe após o login,
+        // como o link de "Sair". Isso é robusto contra diferentes tipos de navegação.
+        await page.waitForSelector(selectors.logoutLink.join(','), { visible: true, timeout: 45000 });
+        logger.debug('[Auth] Indicador de logout encontrado. Login considerado bem-sucedido.');
 
         // Salva um screenshot da página logada para depuração.
         try {
