@@ -947,8 +947,8 @@
                     </div>
                     ${conn.type === 'dismatal_webscraper' ? `
                     <div class="flex items-center gap-2">
-                        <input type="text" data-action="search-input" placeholder="Buscar produto por SKU no portal..." class="w-full p-2 border rounded-lg text-sm" onkeydown="if(event.key === 'Enter') buscarProdutosFornecedor(${conn.id})">
-                        <button data-action="search" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 whitespace-nowrap">Buscar Produtos</button>
+                        <input type="text" id="search-input-${conn.id}" placeholder="Buscar produto por SKU no portal..." class="w-full p-2 border rounded-lg text-sm" onkeydown="if(event.key === 'Enter') buscarProdutosFornecedor(${conn.id})">
+                        <button onclick="buscarProdutosFornecedor(${conn.id})" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 whitespace-nowrap">Buscar Produtos</button>
                     </div>
                     ` : ''}
                 </div>`).join('');
