@@ -51,7 +51,7 @@ export class DismatalScraper {
     async performAuthentication(connection) {
         const { url, username, password } = connection.credentials;
         let browserInstance = null;
-        this.logger.info('[DismatalScraper] Iniciando autenticação completa...');
+        this.logger.info('[DismatalScraper] Iniciando tarefa de autenticação completa...');
         try {
             browserInstance = await initBrowser(this.config);
             const { page } = browserInstance;
