@@ -173,6 +173,22 @@ export class DismatalScraper {
             throw new Error('O conteúdo do produto não foi carregado na página.');
         }
 
+        // Adiciona log detalhado do HTML para depuração dos seletores.
+        try {
+            const productContainerSelector = await findSelector(page, this.selectors.productDetailContainer);
+            if (productContainerSelector) {
+                const productContainerHTML = await page.$eval(productContainerSelector, el => el.outerHTML);
+                this.logger.info(`[DismatalScraper] Conteúdo do container do produto (${productContainerSelector}) encontrado para extração:`, { html: productContainerHTML.substring(0, 4000) + '...' });
+            } else {
+                this.logger.warn('[DismatalScraper] Nenhum container de detalhes do produto encontrado com os seletores atuais. Logando o body inteiro.');
+                const bodyHTML = await page.evaluate(() => document.body.outerHTML);
+                this.logger.info('[DismatalScraper] Conteúdo do body:', { html: bodyHTML.substring(0, 5000) + '...' });
+            }
+        } catch (logError) {
+            this.logger.error('[DismatalScraper] Erro ao tentar logar o conteúdo da página para depuração.', logError);
+        }
+
+
         // Extrair os dados da página.
         this.logger.info(`[DismatalScraper] URL final: ${page.url()}`);
         const extractedProducts = await this.extractProductData(page, searchTerm);
@@ -251,11 +267,20 @@ export class DismatalScraper {
                 await this._withTargetClosedRetry(async () => {
                     // A cada tentativa, garante que a página está autenticada.
                     // A função `authenticate` é inteligente e usará cookies se a sessão ainda for válida.
-                    const freshAuthResult = await authenticate(page, { url, credentials: connection.credentials, sessionData: connection.cookies, retryAttempts: 1 });
+                    // A lógica de retentativa agora inclui a recriação do browser se necessário.
+                    const freshAuthResult = await authenticate(page, {
+                        url,
+                        credentials: connection.credentials,
+                        sessionData: connection.cookies,
+                        retryAttempts: 1,
+                        browserConfig: this.config
+                    });
                     page = freshAuthResult.page; // Usa a página mais recente
 
                     const extractedProducts = await this._fetchProductPage(page, url, searchTerm);
                     produtos = extractedProducts; // Substitui os produtos com o resultado da última tentativa bem-sucedida
+                    // Se a tentativa foi bem-sucedida, atualiza a instância do navegador para uso futuro.
+                    browserInstance = { browser: page.browser(), page };
                 });
 
             } else if (searchTerm) { // Se não for um SKU válido, mas houver um termo de busca
