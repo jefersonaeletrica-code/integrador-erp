@@ -131,6 +131,79 @@ export class DismatalScraper {
             this.logger.debug('[DismatalScraper] Nenhum modal de boas-vindas encontrado ou erro ao fechar.');
         }
     }
+
+    /**
+     * Lógica de navegação e extração para uma única página de produto.
+     * @private
+     */
+    async _fetchProductPage(page, url, searchTerm) {
+        const productUrl = `${url}/produtos/${searchTerm}`;
+        this.logger.info(`[DismatalScraper] Navegando para a URL do produto: ${productUrl}`);
+        await page.goto(productUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+
+        // Tenta fechar qualquer modal de boas-vindas que possa ter aparecido.
+        await this._closeWelcomeModal(page);
+
+        // Adiciona o screenshot solicitado APÓS fechar o modal.
+        try {
+            const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
+            fs.mkdirSync(screenshotDir, { recursive: true });
+            const screenshotPath = path.join(screenshotDir, `dismatal-after-product-nav-${Date.now()}.png`);
+            await page.screenshot({ path: screenshotPath, fullPage: true });
+            this.logger.info(`[DismatalScraper] Screenshot após navegação para produto salvo em: ${screenshotPath}`);
+        } catch (screenshotError) {
+            this.logger.error('[DismatalScraper] Falha ao capturar screenshot após fechar o modal.', screenshotError);
+        }
+
+        try {
+            // A validação de sucesso será pelo preço, pois ele só aparece se o usuário estiver logado.
+            this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
+            await page.waitForSelector(this.selectors.productPrice.join(','), { timeout: 60000 });
+        } catch (waitError) {
+            this.logger.error('[DismatalScraper] Timeout ao esperar pelo conteúdo do produto.', waitError);
+            // Salva o screenshot em um arquivo para facilitar a depuração.
+            const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
+            fs.mkdirSync(screenshotDir, { recursive: true });
+            const screenshotPath = path.join(screenshotDir, `dismatal-product-error-${Date.now()}.png`);
+            // Verifica se a página ainda está aberta antes de tentar o screenshot
+            if (!page.isClosed()) {
+                await page.screenshot({ path: screenshotPath, fullPage: true });
+                this.logger.info(`[DismatalScraper] Screenshot do erro salvo em: ${screenshotPath}`);
+            }
+            throw new Error('O conteúdo do produto não foi carregado na página.');
+        }
+
+        // Extrair os dados da página.
+        this.logger.info(`[DismatalScraper] URL final: ${page.url()}`);
+        const extractedProducts = await this.extractProductData(page, searchTerm);
+        return extractedProducts;
+    }
+
+    /**
+     * Executa uma função com retentativas em caso de erro de "Target Closed".
+     * @private
+     */
+    async _withTargetClosedRetry(fn, maxAttempts = 2) {
+        let attempt = 1;
+        while (attempt <= maxAttempts) {
+            try {
+                return await fn();
+            } catch (e) {
+                // Se o erro for de "Target Closed" e ainda houver tentativas, tenta novamente.
+                if (e.message.includes('Target closed') && attempt < maxAttempts) {
+                    this.logger.warn(`[DismatalScraper] Erro de "Target Closed" detectado. Tentativa ${attempt} de ${maxAttempts}. Reiniciando a operação...`);
+                    attempt++;
+                    // Uma pequena pausa antes de tentar novamente.
+                    await new Promise(resolve => setTimeout(resolve, 2000));
+                } else {
+                    // Se não for um erro de "Target Closed" ou se as tentativas acabaram, lança o erro.
+                    throw e;
+                }
+            }
+        }
+    }
+
+
     /**
      * Busca produtos no portal.
      * @param {object} connection - Objeto de conexão com credenciais.
@@ -173,53 +246,18 @@ export class DismatalScraper {
             // Estratégia de Navegação Direta Aprimorada
             if (searchTerm && isValidSKU(searchTerm)) {
                 this.logger.info(`[DismatalScraper] Iniciando busca por navegação direta para o SKU: ${searchTerm}`);
-                try {
-                    const productUrl = `${url}/produtos/${searchTerm}`;
-                    this.logger.info(`[DismatalScraper] Navegando para a URL do produto: ${productUrl}`);
-                    await page.goto(productUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+                
+                // Envolve a lógica de busca em uma função com retentativas para "Target Closed"
+                await this._withTargetClosedRetry(async () => {
+                    // A cada tentativa, garante que a página está autenticada.
+                    // A função `authenticate` é inteligente e usará cookies se a sessão ainda for válida.
+                    const freshAuthResult = await authenticate(page, { url, credentials, sessionData: connection.cookies, retryAttempts: 1 });
+                    page = freshAuthResult.page; // Usa a página mais recente
 
-                    // Tenta fechar qualquer modal de boas-vindas que possa ter aparecido.
-                    await this._closeWelcomeModal(page);
- 
-                    // Adiciona o screenshot solicitado APÓS fechar o modal.
-                    try {
-                        const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
-                        fs.mkdirSync(screenshotDir, { recursive: true });
-                        const screenshotPath = path.join(screenshotDir, `dismatal-after-product-nav-${Date.now()}.png`);
-                        await page.screenshot({ path: screenshotPath, fullPage: true });
-                        this.logger.info(`[DismatalScraper] Screenshot após navegação para produto salvo em: ${screenshotPath}`);
-                    } catch (screenshotError) {
-                        this.logger.error('[DismatalScraper] Falha ao capturar screenshot após fechar o modal.', screenshotError);
-                    }
+                    const extractedProducts = await this._fetchProductPage(page, url, searchTerm);
+                    produtos = extractedProducts; // Substitui os produtos com o resultado da última tentativa bem-sucedida
+                });
 
-                    try {
-                        // A validação de sucesso será pelo preço, pois ele só aparece se o usuário estiver logado.
-                        // O nome do produto pode aparecer mesmo sem login.
-                        this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
-                        await page.waitForSelector(this.selectors.productPrice.join(','), { timeout: 60000 });
-                    } catch (waitError) {
-                        this.logger.error('[DismatalScraper] Timeout ao esperar pelo conteúdo do produto. A página pode não ter carregado os dados dinamicamente ou os seletores estão incorretos.', waitError);
-                        // Salva o screenshot em um arquivo para facilitar a depuração.
-                        const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
-                        fs.mkdirSync(screenshotDir, { recursive: true });
-                        const screenshotPath = path.join(screenshotDir, `dismatal-product-error-${Date.now()}.png`);
-                        await page.screenshot({ path: screenshotPath, fullPage: true });
-                        this.logger.info(`[DismatalScraper] Screenshot do erro salvo em: ${screenshotPath}`);
-                        throw new Error('O conteúdo do produto não foi carregado na página.');
-                    }
-
-                    // 4. Extrair os dados da página.
-                    this.logger.info(`[DismatalScraper] URL final: ${page.url()}`);
-                    // A chamada para extrair os dados havia sido removida. Restaurando.
-                    const extractedProducts = await this.extractProductData(page, searchTerm);
-                    if (extractedProducts.length > 0) {
-                        produtos.push(...extractedProducts);
-                    }
-
-                } catch (e) {
-                    this.logger.error(`[DismatalScraper] Falha na estratégia de navegação direta.`, e);
-                    throw new Error(`Falha ao navegar para o produto "${searchTerm}" no portal.`);
-                }
             } else if (searchTerm) { // Se não for um SKU válido, mas houver um termo de busca
                 this.logger.warn(`[DismatalScraper] O termo "${searchTerm}" não é um SKU válido para navegação direta. Outras estratégias de busca não estão implementadas.`);
             }
