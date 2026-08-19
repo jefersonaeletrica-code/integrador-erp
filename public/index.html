@@ -887,7 +887,7 @@
             const searchTerm = searchInput ? searchInput.value.trim() : '';
             const conn = conexoesFornecedoresGlobais.find(c => c.id === id);
             if (!conn) return;
-            showSpinner();
+            showSpinner(); // Mostra o spinner
             try {
                 const res = await fetch(`/api/supplier-connections/${id}/products`, {
                     method: 'POST',
@@ -896,14 +896,14 @@
                 });
                 const data = await res.json();
 
-                if (res.ok) {
+                if (data.sucesso) {
                     const message = searchTerm ? `Busca por "${searchTerm}" encontrou ${data.produtos.length} produtos.` : `${data.produtos.length} produtos encontrados!`;
                     alert(message + ' Veja o console do navegador para detalhes.');
                     console.log('Produtos da Dismatal:', data.produtos);
                 } else {
                     alert(`Falha ao buscar produtos: ${data.erro}`);
                 }
-            } finally {
+            } finally { // Garante que o spinner seja escondido
                 hideSpinner();
             }
         }
@@ -947,7 +947,7 @@
                     </div>
                     ${conn.type === 'dismatal_webscraper' ? `
                     <div class="flex items-center gap-2" data-connection-id="${conn.id}">
-                        <input type="text" data-action="search-input" placeholder="Buscar produto no portal..." class="w-full p-2 border rounded-lg text-sm">
+                        <input type="text" data-action="search-input" placeholder="Buscar produto por SKU no portal..." class="w-full p-2 border rounded-lg text-sm" onkeydown="if(event.key === 'Enter') buscarProdutosFornecedor(${conn.id})">
                         <button data-action="search" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 whitespace-nowrap">Buscar Produtos</button>
                     </div>
                     ` : ''}
