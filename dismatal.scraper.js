@@ -112,6 +112,26 @@ export class DismatalScraper {
     }
 
     /**
+     * Tenta fechar o modal de boas-vindas que pode aparecer após o login ou na navegação.
+     * @param {import('puppeteer').Page} page
+     * @private
+     */
+    async _closeWelcomeModal(page) {
+        this.logger.debug('[DismatalScraper] Verificando e tentando fechar modal de boas-vindas...');
+        try {
+            // Adiciona uma pausa para dar tempo ao modal de aparecer.
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            const closeModalSelector = await findSelector(page, this.selectors.welcomeModalCloseButton);
+            if (closeModalSelector) {
+                this.logger.info('[DismatalScraper] Modal de boas-vindas encontrado. Fechando...');
+                await page.click(closeModalSelector);
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Espera para o modal fechar
+            }
+        } catch (e) {
+            this.logger.debug('[DismatalScraper] Nenhum modal de boas-vindas encontrado ou erro ao fechar.');
+        }
+    }
+    /**
      * Busca produtos no portal.
      * @param {object} connection - Objeto de conexão com credenciais.
      * @param {string} searchTerm - O termo a ser buscado.
@@ -157,8 +177,11 @@ export class DismatalScraper {
                     const productUrl = `${url}/produtos/${searchTerm}`;
                     this.logger.info(`[DismatalScraper] Navegando para a URL do produto: ${productUrl}`);
                     await page.goto(productUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+
+                    // Tenta fechar qualquer modal de boas-vindas que possa ter aparecido.
+                    await this._closeWelcomeModal(page);
  
-                    // Adiciona o screenshot solicitado logo após a navegação para a página do produto.
+                    // Adiciona o screenshot solicitado APÓS fechar o modal.
                     try {
                         const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
                         fs.mkdirSync(screenshotDir, { recursive: true });
@@ -166,14 +189,14 @@ export class DismatalScraper {
                         await page.screenshot({ path: screenshotPath, fullPage: true });
                         this.logger.info(`[DismatalScraper] Screenshot após navegação para produto salvo em: ${screenshotPath}`);
                     } catch (screenshotError) {
-                        this.logger.error('[DismatalScraper] Falha ao capturar screenshot após navegação.', screenshotError);
+                        this.logger.error('[DismatalScraper] Falha ao capturar screenshot após fechar o modal.', screenshotError);
                     }
 
                     try {
                         // Em vez de esperar pelo container, espera por um elemento final (preço),
                         // que é um indicador mais forte de que o conteúdo dinâmico foi carregado.
                         this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
-                        await page.waitForSelector(this.selectors.productPrice.join(','), { timeout: 20000 });
+                        await page.waitForSelector(this.selectors.productPrice.join(','), { timeout: 30000 });
                     } catch (waitError) {
                         this.logger.error('[DismatalScraper] Timeout ao esperar pelo conteúdo do produto. A página pode não ter carregado os dados dinamicamente ou os seletores estão incorretos.', waitError);
                         // Salva o screenshot em um arquivo para facilitar a depuração.

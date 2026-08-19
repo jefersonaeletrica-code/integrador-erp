@@ -51,7 +51,7 @@ export const DEFAULT_LOGIN_SELECTORS = {
     loginModal: ['[role="dialog"]', '.modal', '.login-modal'],
     logoutLink: ['a[href*="sair"]', '[data-testid="logout"]'],
     cookieAcceptButton: ['button[data-test="COOKIE-POPUP-CLOSE-BTN"]', '.cookie-popup__button', '#onetrust-accept-btn-handler'],
-    welcomeModalCloseButton: ['button:has-text("Continuar e fechar")', 'button[aria-label*="Fechar"]', '.modal-close'],
+    welcomeModalCloseButton: ['button.welcome-modal__bottom-button', 'button.welcome-modal-close-button', 'button:has-text("Continuar e fechar")', 'button[aria-label*="Fechar"]', '.modal-close'],
 };
 
 /**
