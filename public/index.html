@@ -544,15 +544,19 @@
                 const action = button.dataset.action;
                 const id = button.parentElement.dataset.connectionId;
 
-                if (action === 'authenticate') {
-                    // A lógica que estava na função 'authenticateConnection' foi movida para cá
-                    // para evitar conflitos de escopo e garantir uma única execução.
-                    const conn = conexoesFornecedoresGlobais.find(c => c.id == id);
-                    if (conn) performAuthenticationRequest(id);
-                } else if (action === 'validate') {
-                    validateAuthentication(id);
-                } else if (action === 'remove') {
-                    removerConexaoFornecedor(Number(id)); // Garante que o ID seja um número
+                switch (action) {
+                    case 'authenticate':
+                        performAuthenticationRequest(id);
+                        break;
+                    case 'validate':
+                        validateAuthentication(id);
+                        break;
+                    case 'remove':
+                        removerConexaoFornecedor(Number(id));
+                        break;
+                    case 'search':
+                        buscarProdutosFornecedor(id);
+                        break;
                 }
             });
         });
@@ -866,10 +870,11 @@
         }
 
         async function buscarProdutosFornecedor(id) {
-            const searchTerm = document.getElementById(`supplier-search-${id}`).value.trim();
+            // Encontra o input de busca associado ao botão clicado
+            const searchInput = document.querySelector(`div[data-connection-id="${id}"] input[data-action="search-input"]`);
+            const searchTerm = searchInput ? searchInput.value.trim() : '';
             const conn = conexoesFornecedoresGlobais.find(c => c.id === id);
             if (!conn) return;
-
             showSpinner();
             try {
                 const res = await fetch(`/api/supplier-connections/${id}/products`, {
@@ -922,16 +927,16 @@
                 <div class="p-3 border rounded-lg bg-gray-50 space-y-3">
                     <div class="flex justify-between items-start">
                         <p class="font-bold">${conn.name}</p>
-                        <div class="flex gap-2" data-connection-id="${conn.id}">
+                        <div class="flex gap-2 items-center" data-connection-id="${conn.id}">
                             ${conn.type === 'dismatal_webscraper' ? `<button data-action="authenticate" class="text-sm font-medium text-blue-600 hover:underline" title="Força um novo login com usuário/senha e salva a sessão.">Autenticar</button>` : ''}
                             ${conn.type === 'dismatal_webscraper' ? `<button data-action="validate" class="text-sm font-medium text-green-600 hover:underline" title="Testa se a sessão salva (cookies) ainda está ativa.">Validar Autenticação</button>` : ''}
                             <button data-action="remove" class="text-sm font-medium text-red-600 hover:underline">Remover</button>
                         </div>
                     </div>
                     ${conn.type === 'dismatal_webscraper' ? `
-                    <div class="flex items-center gap-2">
-                        <input type="text" id="supplier-search-${conn.id}" placeholder="Buscar produto no portal..." class="w-full p-2 border rounded-lg text-sm">
-                        <button onclick="buscarProdutosFornecedor(${conn.id})" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 whitespace-nowrap">Buscar Produtos</button>
+                    <div class="flex items-center gap-2" data-connection-id="${conn.id}">
+                        <input type="text" data-action="search-input" placeholder="Buscar produto no portal..." class="w-full p-2 border rounded-lg text-sm">
+                        <button data-action="search" class="bg-green-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-green-700 whitespace-nowrap">Buscar Produtos</button>
                     </div>
                     ` : ''}
                 </div>`).join('');
