@@ -104,6 +104,10 @@ export class DismatalScraper {
         } catch (error) {
             this.logger.error('[DismatalScraper] Validação de sessão falhou.', error);
             throw error; // Re-lança o erro para a rota capturar
+        } finally {
+            if (browserInstance) {
+                await closeBrowser(browserInstance);
+            }
         }
     }
 
