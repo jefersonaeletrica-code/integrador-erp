@@ -795,36 +795,6 @@
         }
 
         /**
-         * Chama o endpoint para forçar uma nova autenticação e salvar a sessão.
-         * @param {string} id - O ID da conexão de fornecedor.
-         */
-        async function authenticateConnection(id) {
-            const conn = conexoesFornecedoresGlobais.find(c => c.id === id);
-            if (!conn) return;
-
-            console.log(`Iniciando autenticação para a conexão ${id}...`);
-            showSpinner();
-            try {
-                const res = await fetch(`/api/supplier-connections/${id}/authenticate`, {
-                    method: 'POST'
-                });
-                const data = await res.json();
-
-                if (res.ok) {
-                    alert('Sucesso: ' + data.mensagem);
-                } else {
-                    alert(`Falha na autenticação: ${data.erro}`);
-                }
-            } catch (e) {
-                console.error('Erro de rede ao tentar autenticar:', e);
-                alert('Erro de rede: ' + e.message);
-            } finally {
-                hideSpinner();
-                console.log(`Autenticação para a conexão ${id} finalizada.`);
-            }
-        }
-
-        /**
          * Chama o endpoint para validar se a sessão salva ainda está ativa.
          * @param {string} id - O ID da conexão de fornecedor.
          */
