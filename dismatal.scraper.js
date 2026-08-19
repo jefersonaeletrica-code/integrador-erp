@@ -210,12 +210,18 @@ export class DismatalScraper {
 
                     // 4. Extrair os dados da página.
                     this.logger.info(`[DismatalScraper] URL final: ${page.url()}`);
-                    produtos = await this.extractProductData(page, searchTerm);
+                    // A chamada para extrair os dados havia sido removida. Restaurando.
+                    const extractedProducts = await this.extractProductData(page, searchTerm);
+                    if (extractedProducts.length > 0) {
+                        produtos.push(...extractedProducts);
+                    }
 
                 } catch (e) {
                     this.logger.error(`[DismatalScraper] Falha na estratégia de navegação direta.`, e);
                     throw new Error(`Falha ao navegar para o produto "${searchTerm}" no portal.`);
                 }
+            } else if (searchTerm) { // Se não for um SKU válido, mas houver um termo de busca
+                this.logger.warn(`[DismatalScraper] O termo "${searchTerm}" não é um SKU válido para navegação direta. Outras estratégias de busca não estão implementadas.`);
             }
 
             if (produtos.length === 0) {
