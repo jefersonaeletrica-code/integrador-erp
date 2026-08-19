@@ -30,9 +30,9 @@ export class DismatalScraper {
             // Seletor para o container principal dos detalhes do produto
             productDetailContainer: ['.product-details', '.product-info', '.product-summary', 'div[role="main"]'],
             // Seletores de página de produto (individual) - Adicionando mais alternativas
-            productName: ['div.product-description span.title-product', 'h1.product-name', 'h1.product-title'],
+            productName: ['div.product-description > section > span.title-product', 'h1.product-name'],
             productSKU: ['[data-sku]', '.product-sku', '.sku', '[itemprop="sku"]', '.product-details__sku'],
-            productPrice: ['div.price-group span', 'div.product-price-container span.price', '[data-price]'],
+            productPrice: ['div.price-group > div > span', 'div.product-price-container span.price', '[data-price]'],
             promoPrice: ['[data-promo-price]', '.promotional-price', '.sale-price'],
             stock: ['.stock-info', '.product-stock', '#stock', '[data-stock]'],
             // Seletores de lista de produtos
