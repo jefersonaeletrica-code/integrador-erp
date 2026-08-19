@@ -1,6 +1,8 @@
 import puppeteer from 'puppeteer';
 import { getLogger } from './logger.js';
 
+export const BROWSER_CONFIG = { headless: true, defaultViewport: { width: 1280, height: 800 } };
+
 const BROWSERLESS_API_KEY = process.env.BROWSERLESS_API_KEY;
 
 /**
@@ -23,7 +25,7 @@ export async function initBrowser(config) {
             browserWSEndpoint,
         });
         const page = await browser.newPage();
-        await page.setViewport({ width: 1280, height: 800 });
+        await page.setViewport(BROWSER_CONFIG.defaultViewport);
 
         logger.info('Navegador conectado e página criada com sucesso.');
         return { browser, page };

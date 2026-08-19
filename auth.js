@@ -1,5 +1,6 @@
 import { getLogger, createRequestId } from './logger.js';
 import { findSelector } from './parsers.js';
+import { initBrowser } from './browser.js'; // Importa a função de inicialização
 import fs from 'fs';
 import path from 'path';
 
@@ -166,7 +167,7 @@ async function performLogin(page, credentials, selectors) {
  */
 export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELECTORS) {
     const logger = getLogger();
-    const { url, credentials, cookies, retryAttempts, retryDelayMs } = options;
+    const { url, credentials, cookies, retryAttempts, retryDelayMs, browserConfig } = options;
     const requestId = createRequestId();    
 
     logger.info('[Auth] Iniciando orquestração de autenticação...', {
@@ -207,12 +208,21 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
         const authResult = await withRetry(
             async (attempt) => {
                 logger.info(`[Auth] Tentativa de login completo ${attempt}: navegando para a URL.`);
-                // **CORREÇÃO DE ESTABILIDADE**: Se não for a primeira tentativa, assume que a página
-                // pode estar em um estado ruim e a recria para garantir uma execução limpa.
-                if (attempt > 1) {
-                    logger.warn(`[Auth] Recriando a página para a tentativa ${attempt} para garantir estabilidade.`);
+                
+                // **LÓGICA DE RECUPERAÇÃO COMPLETA**
+                // Se a conexão com o browser caiu, reinicia tudo.
+                if (attempt > 1 && (!page.browser() || !page.browser().isConnected())) {
+                    logger.warn(`[Auth] Conexão com o navegador perdida. Reiniciando a conexão para a tentativa ${attempt}...`);
+                    const newInstance = await initBrowser(browserConfig);
+                    page = newInstance.page; // Usa a nova página e o novo browser
+                } else if (attempt > 1 || page.isClosed()) {
+                    // Se for apenas a página que fechou (ou por precaução), recria só a página.
+                    logger.warn(`[Auth] A página está fechada ou é uma nova tentativa. Recriando a página para garantir estabilidade.`);
                     try {
-                        if (!page.isClosed()) await page.close();
+                        // Tenta fechar a página anterior se ela ainda estiver aberta
+                        if (!page.isClosed()) {
+                            await page.close();
+                        }
                     } catch (e) { /* Ignora erros ao fechar uma página já problemática */ }
                     page = await page.browser().newPage();
                 }

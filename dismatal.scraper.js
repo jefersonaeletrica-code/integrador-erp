@@ -91,6 +91,7 @@ export class DismatalScraper {
                 cookies: connection.cookies, // Passa os cookies salvos para a função de autenticação
                 retryAttempts: 3,
                 retryDelayMs: 2000,
+                browserConfig: this.config, // Passa a config para permitir a recriação do browser
             });
             
             page = authResult.page; // Atualiza a referência da página
