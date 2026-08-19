@@ -112,8 +112,12 @@ async function performLogin(page, credentials, selectors) {
     // Em vez de esperar por uma navegação completa, que pode ser instável,
     // esperamos que o botão de login original desapareça.
     try {
-        await page.click(submitSelector);
-        logger.debug('[Auth] Formulário enviado. Aguardando validação de sucesso (desaparecimento do botão de login)...');
+        logger.debug('[Auth] Formulário enviado. Aguardando navegação e validação de sucesso...');
+        // A abordagem correta para um clique que causa navegação.
+        await Promise.all([
+            page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 60000 }),
+            page.click(submitSelector),
+        ]);
 
         // A validação de sucesso é esperar o botão de login sumir.
         // Usamos `waitForSelector` com a opção `hidden: true`.
