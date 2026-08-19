@@ -30,9 +30,9 @@ export class DismatalScraper {
             // Seletor para o container principal dos detalhes do produto
             productDetailContainer: ['.product-details', '.product-info', '.product-summary', 'div[role="main"]'],
             // Seletores de página de produto (individual) - Adicionando mais alternativas
-            productName: ['span.title-product', 'h1.product-name', 'h1.product-title', '[data-product-name]', 'h1', '.product-details__name'],
+            productName: ['div.product-details-container span.title-product', 'h1.product-name', 'h1.product-title'],
             productSKU: ['[data-sku]', '.product-sku', '.sku', '[itemprop="sku"]', '.product-details__sku'],
-            productPrice: ['span.price-group__unity-price', '[data-price]', '.product-price', '.price', '.product-details__price'],
+            productPrice: ['div.price-group span.price-group__unity-price', 'div.product-price-container span.price', '[data-price]'],
             promoPrice: ['[data-promo-price]', '.promotional-price', '.sale-price'],
             stock: ['.stock-info', '.product-stock', '#stock', '[data-stock]'],
             // Seletores de lista de produtos
@@ -196,7 +196,7 @@ export class DismatalScraper {
                         // A validação de sucesso será pelo preço, pois ele só aparece se o usuário estiver logado.
                         // O nome do produto pode aparecer mesmo sem login.
                         this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
-                        await page.waitForSelector(this.selectors.productPrice.join(','), { timeout: 30000 });
+                        await page.waitForSelector(this.selectors.productPrice.join(','), { timeout: 60000 });
                     } catch (waitError) {
                         this.logger.error('[DismatalScraper] Timeout ao esperar pelo conteúdo do produto. A página pode não ter carregado os dados dinamicamente ou os seletores estão incorretos.', waitError);
                         // Salva o screenshot em um arquivo para facilitar a depuração.
