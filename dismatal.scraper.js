@@ -159,8 +159,17 @@ export class DismatalScraper {
             // A validação de sucesso será pelo preço, pois ele só aparece se o usuário estiver logado.
             // A melhor âncora é o nome do produto, que garante que o conteúdo principal foi carregado.
             this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
-            await page.waitForSelector(this.selectors.productName.join(','), { timeout: 60000 });
-            this.logger.info(`[DismatalScraper] Conteúdo do produto parece ter carregado. Prosseguindo com a extração.`);
+            // Usar waitForFunction para esperar que o seletor do nome tenha conteúdo.
+            // Isso evita falsos positivos onde o elemento existe, mas está vazio.
+            await page.waitForFunction(
+                (selector) => {
+                    const el = document.querySelector(selector);
+                    return el && el.textContent && el.textContent.trim().length > 10;
+                },
+                { timeout: 60000 },
+                this.selectors.productName.join(',')
+            );
+            this.logger.info(`[DismatalScraper] Conteúdo do produto carregado. Prosseguindo com a extração.`);
         } catch (waitError) {
             this.logger.error('[DismatalScraper] Timeout ao esperar pelo conteúdo do produto.', waitError);
             // Salva o screenshot em um arquivo para facilitar a depuração.
