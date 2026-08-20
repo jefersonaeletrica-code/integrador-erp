@@ -156,29 +156,13 @@ export class DismatalScraper {
         }
 
         try {
-            // A validação de sucesso será pelo container principal do produto.
-            this.logger.info(`[DismatalScraper] Aguardando o container de detalhes do produto carregar (URL: ${page.url()})...`);
-            await page.waitForSelector(this.selectors.productDetailContainer.join(','), { timeout: 60000 });
-
-            // Adiciona log detalhado do HTML para depuração dos seletores, APÓS o container aparecer.
-            const productContainerSelector = await findSelector(page, this.selectors.productDetailContainer);
-            if (productContainerSelector) {
-                const productContainerHTML = await page.$eval(productContainerSelector, el => el.outerHTML);
-                this.logger.info(`[DismatalScraper] Conteúdo do container do produto (${productContainerSelector}) encontrado para extração:`, { html: productContainerHTML.substring(0, 4000) + '...' });
-            } else {
-                // Isso não deve acontecer se o waitForSelector acima funcionar.
-                this.logger.warn('[DismatalScraper] Nenhum container de detalhes do produto encontrado após a espera.');
-            }
-        } catch (logError) {
-            this.logger.error('[DismatalScraper] Erro ao tentar logar o conteúdo da página para depuração.', logError);
-        }
-
-        try {
             // A validação de sucesso será pelo preço, pois ele só aparece se o usuário estiver logado.
-            this.logger.info(`[DismatalScraper] Verificando se o preço está visível dentro do container...`);
-            await page.waitForSelector(this.selectors.productPrice.join(','), { timeout: 60000 });
+            // A melhor âncora é o nome do produto, que garante que o conteúdo principal foi carregado.
+            this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
+            await page.waitForSelector(this.selectors.productName.join(','), { timeout: 60000 });
+            this.logger.info(`[DismatalScraper] Conteúdo do produto parece ter carregado. Prosseguindo com a extração.`);
         } catch (waitError) {
-            this.logger.error('[DismatalScraper] Timeout ao esperar pelo preço do produto.', waitError);
+            this.logger.error('[DismatalScraper] Timeout ao esperar pelo conteúdo do produto.', waitError);
             // Salva o screenshot em um arquivo para facilitar a depuração.
             const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
             fs.mkdirSync(screenshotDir, { recursive: true });
