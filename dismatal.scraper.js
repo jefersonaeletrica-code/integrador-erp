@@ -280,6 +280,22 @@ export class DismatalScraper {
      * @returns {Promise<Array>}
      */
     async extractProductData(page, searchTerm) {
+        // Garante que o conteúdo esteja carregado antes de tentar extrair.
+        // Isso previne condições de corrida onde a validação passa, mas a extração falha.
+        try {
+            await page.waitForFunction(
+                (selector) => {
+                    const el = document.querySelector(selector);
+                    return el && el.textContent && el.textContent.trim().length > 10;
+                },
+                { timeout: 10000 }, // Timeout mais curto, pois a espera principal já ocorreu.
+                this.selectors.productName.join(',')
+            );
+        } catch (e) {
+            this.logger.warn('[DismatalScraper] Conteúdo do produto desapareceu antes da extração. A página pode ter mudado.');
+            return [];
+        }
+
         let produtos = [];
         const currentUrl = page.url();
 

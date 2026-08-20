@@ -36,13 +36,12 @@ export async function isProductPageValid(page) {
 
     // A verificação deve ser consistente com os seletores de extração.
     // Usamos os seletores de nome e preço para validar a estrutura.
-    // A validação mais robusta é esperar que o nome do produto tenha conteúdo.
-    const hasProductStructure = await page.waitForFunction(
-        (selector) => {
+    // A função _fetchProductPage já espera pelo conteúdo. Aqui, apenas validamos se ele existe.
+    const hasProductStructure = await page.evaluate((selector) => {
             const el = document.querySelector(selector);
-            return el && el.textContent && el.textContent.trim().length > 10;
+            // Verifica se o elemento existe e tem algum texto.
+            return !!(el && el.textContent && el.textContent.trim().length > 0);
         },
-        { timeout: 10000 }, // Um timeout mais curto para validação é aceitável
         ['span.title-product', 'h1.product-name'].join(',')
     ).then(() => true).catch(() => false);
 
