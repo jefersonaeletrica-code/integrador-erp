@@ -110,13 +110,15 @@ export default (db, supplierConnections) => {
         if (connection.type !== 'dismatal_webscraper') return res.status(400).json({ sucesso: false, erro: 'Busca de produtos disponível apenas para conexões Dismatal.' });
 
         try {
+            // A fila ainda é útil para garantir que apenas uma busca ocorra por vez,
+            // evitando problemas de concorrência mesmo com o gerenciador de navegador.
             const result = await addToQueue(() => {
                 const scraper = new DismatalScraper({ headless: true });
                 return scraper.fetchProducts(connection, searchTerm);
             });
             res.json(result);
         } catch (e) {
-            console.error('[Dismatal Scraper] Erro na rota:', e.message);
+            // O erro já é logado dentro do scraper, aqui apenas formatamos a resposta.
             res.status(500).json({ sucesso: false, erro: `Erro durante a busca de produtos: ${e.message}` });
         }
     });

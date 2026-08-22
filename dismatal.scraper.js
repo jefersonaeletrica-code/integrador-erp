@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import db from './db.js';
-import { initBrowser, closeBrowser } from './browser.js';
+import { initBrowser, closeBrowser } from './browser.js'; // closeBrowser pode ser removido se não for mais usado diretamente
 import { authenticate, tryPasswordLogin, DEFAULT_LOGIN_SELECTORS } from './auth.js';
 import { getLogger } from './logger.js';
 import {
@@ -10,6 +10,7 @@ import {
     listPageParser,
     isValidSKU
 } from './parsers.js';
+import browserManager from './browserManager.js';
 
 /**
  * @class DismatalScraper
@@ -202,80 +203,35 @@ export class DismatalScraper {
      * @param {string} searchTerm - O termo a ser buscado.
      */
     async fetchProducts(connection, searchTerm) {
-        const { url, username, password } = connection.credentials;
-        let browserInstance = null;
+        const { url } = connection.credentials;
         this.logger.info('[DismatalScraper] Iniciando busca de produtos...');
         try {
-            // 1. Iniciar o navegador e a página
-            this.logger.info('[DismatalScraper] Iniciando navegador para a operação completa...');
-            browserInstance = await initBrowser(this.config); // browserInstance contém { browser, page }
-            let { page } = browserInstance;
-
-            // 2. Autenticar diretamente na página
-            this.logger.info('[DismatalScraper] Executando autenticação na página...');
-            const authResult = await authenticate(page, {
-                url,
-                credentials: { username, password },
-                sessionData: connection.cookies, // Passa os dados de sessão salvos (anteriormente chamados de cookies)
-                retryAttempts: 3,
-                retryDelayMs: 2000,
-                browserConfig: this.config, // Passa a config para permitir a recriação do browser
-            });
-            
-            // This is the most critical part. The `page` object might have been
-            // recreated inside `authenticate`. We MUST use the returned instance.
-            page = authResult.page;
-
-            // Se a autenticação gerou novos cookies, atualiza a conexão
-            if (authResult.sessionData) {
-                connection.cookies = authResult.sessionData; // Salva os novos dados da sessão no campo 'cookies'
-                await db.updateSupplierConnection(connection);
-            }
-            this.logger.info('[DismatalScraper] Página autenticada com sucesso.');
+            // Otimização: Obter uma página autenticada do gerenciador
+            const page = await browserManager.getOrCreateInstance(connection);
 
             let produtos = [];
 
             // Estratégia de Navegação Direta Aprimorada
             if (searchTerm && isValidSKU(searchTerm)) {
                 this.logger.info(`[DismatalScraper] Iniciando busca por navegação direta para o SKU: ${searchTerm}`);
+                // Passa a página já autenticada para a lógica de busca
                 produtos = await this._fetchProductPage(page, url, searchTerm);
 
             } else if (searchTerm) { // Se não for um SKU válido, mas houver um termo de busca
                 this.logger.warn(`[DismatalScraper] O termo "${searchTerm}" não é um SKU válido para navegação direta. Outras estratégias de busca não estão implementadas.`);
             }
 
-            if (produtos.length === 0) {
-                this.logger.warn(`[DismatalScraper] Nenhum produto encontrado para o SKU "${searchTerm}".`);
-                // Adiciona log do conteúdo da página para depuração
-                // const pageContent = await page.content(); // Descomente se precisar depurar o HTML novamente
-                // this.logger.info(`[DismatalScraper] Conteúdo da página onde o produto não foi encontrado (URL: ${page.url()})`, { pageContent: pageContent.substring(0, 5000) + '...' });
-            }
+            // A lógica de log para "nenhum produto encontrado" já está dentro de _fetchProductPage e extractProductData
 
             this.logger.info(`[DismatalScraper] Busca concluída. Total de produtos: ${produtos.length}.`);
             return { sucesso: true, produtos };
         } catch (error) {
             this.logger.error('[DismatalScraper] Falha ao buscar produtos.', error);
-            // Captura um screenshot no momento de qualquer falha, se o navegador estiver ativo.
-            if (browserInstance && browserInstance.page && !browserInstance.page.isClosed()) {
-                try {
-                    const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
-                    fs.mkdirSync(screenshotDir, { recursive: true });
-                    const screenshotPath = path.join(screenshotDir, `dismatal-general-failure-${Date.now()}.png`);
-                    await browserInstance.page.screenshot({ path: screenshotPath, fullPage: true });
-                    this.logger.info(`[DismatalScraper] Screenshot da falha salvo em: ${screenshotPath}`);
-                } catch (screenshotError) {
-                    this.logger.error('[DismatalScraper] Falha ao tentar capturar o screenshot.', screenshotError);
-                }
-            }
+            // A captura de screenshots de erro agora é tratada dentro de _fetchProductPage
             // Em vez de lançar o erro, retorna no formato padrão
             // Garante que o erro seja uma string para evitar problemas de serialização
             const errorMessage = `Falha ao buscar produtos: ${error instanceof Error ? error.message : String(error)}`;
             return { sucesso: false, erro: errorMessage, produtos: [] };
-        } finally {
-            if (browserInstance) {
-                this.logger.info('[DismatalScraper] Busca de produtos: fechando browser...');
-                await closeBrowser(browserInstance);
-            }
         }
     }
 
