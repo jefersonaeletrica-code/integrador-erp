@@ -10,8 +10,6 @@ export let produtosImportados = []; // Estado local para produtos importados
 export const loadInitialData = async () => {
     const logger = getLogger();
     try {
-        // Garante que o DB esteja pronto antes de ler
-        await db.ensureInitialized();
         const { produtos } = await db.readDb();
         produtosImportados = Array.isArray(produtos) ? produtos : [];
         logger.info(`[ProductService] Estado inicial de produtos importados carregado: ${produtosImportados.length} itens.`);
