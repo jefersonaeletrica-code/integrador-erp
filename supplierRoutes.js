@@ -1,6 +1,7 @@
 import express from 'express';
 import { DismatalScraper } from './dismatal.scraper.js';
 import { addToQueue } from './scraperQueue.js';
+import path from 'path';
 
 const router = express.Router();
 
@@ -91,6 +92,13 @@ export default (db, supplierConnections) => {
             console.error('[Dismatal API] Erro na validação de autenticação:', e.message);
             res.status(500).json({ sucesso: false, erro: e.message });
         }
+    });
+
+    // Rota de teste para exibir a página de frontend
+    router.get('/supplier-connections/:id/test-scraper', (req, res) => {
+        // Presume que o arquivo de teste está na pasta 'public'
+        const filePath = path.join(process.cwd(), 'public', 'test-dismatal.html');
+        res.sendFile(filePath);
     });
 
     router.post('/supplier-connections/:id/products', async (req, res) => {

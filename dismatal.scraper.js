@@ -8,8 +8,7 @@ import {
     findSelector,
     pageParser,
     listPageParser,
-    isValidSKU,
-    getDOMStructure
+    isValidSKU
 } from './parsers.js';
 
 /**
@@ -181,11 +180,6 @@ export class DismatalScraper {
             
             // LOG APRIMORADO: Extrai e loga o conteúdo do Shadow DOM para depuração.
             if (!page.isClosed()) {
-                // A nova função de diagnóstico que extrai a estrutura completa do DOM.
-                const domStructure = await page.evaluate(getDOMStructure);
-
-                this.logger.warn(`[DismatalScraper] Estrutura completa do DOM no momento do erro:`, { domStructure });
-
                 const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
                 fs.mkdirSync(screenshotDir, { recursive: true });
                 const screenshotPath = path.join(screenshotDir, `dismatal-product-error-${Date.now()}.png`);
@@ -198,59 +192,6 @@ export class DismatalScraper {
         // Extrair os dados da página.
         this.logger.info(`[DismatalScraper] URL final: ${page.url()}`);
         const extractedProducts = await this.extractProductData(page, searchTerm);
-
-        if (extractedProducts.length > 0) {
-            this.logger.info('[DismatalScraper] Exibindo pop-up com dados extraídos para confirmação.');
-            await page.evaluate((product) => {
-                return new Promise(resolve => {
-                    // CSS for the modal
-                    const style = document.createElement('style');
-                    style.id = 'gemini-popup-styles';
-                    style.innerHTML = `
-                        #gemini-popup-overlay {
-                            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-                            background-color: rgba(0,0,0,0.6); z-index: 99999;
-                            display: flex; justify-content: center; align-items: center;
-                        }
-                        #gemini-popup-content {
-                            background: white; padding: 25px; border-radius: 8px;
-                            box-shadow: 0 5px 15px rgba(0,0,0,0.3); width: 450px;
-                            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-                            color: #333;
-                        }
-                        #gemini-popup-content h3 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-                        #gemini-popup-content p { margin: 10px 0; }
-                        #gemini-popup-content strong { color: #000; }
-                        #gemini-popup-close-btn {
-                            display: block; width: 100%; padding: 10px; margin-top: 20px;
-                            border: none; background-color: #007bff; color: white;
-                            border-radius: 5px; font-size: 16px; cursor: pointer;
-                        }
-                    `;
-                    document.head.appendChild(style);
-
-                    const overlay = document.createElement('div');
-                    overlay.id = 'gemini-popup-overlay';
-                    overlay.innerHTML = `
-                        <div id="gemini-popup-content">
-                            <h3>Dados Extraídos</h3>
-                            <p><strong>Nome:</strong> ${product.nome}</p>
-                            <p><strong>SKU:</strong> ${product.sku}</p>
-                            <p><strong>Preço:</strong> R$ ${product.preco.toFixed(2)}</p>
-                            <p><strong>Estoque:</strong> ${product.estoque !== null ? product.estoque : 'Não informado'}</p>
-                            <button id="gemini-popup-close-btn">Fechar</button>
-                        </div>
-                    `;
-                    document.body.appendChild(overlay);
-
-                    document.getElementById('gemini-popup-close-btn').addEventListener('click', () => {
-                        document.getElementById('gemini-popup-overlay').remove();
-                        document.getElementById('gemini-popup-styles').remove();
-                        resolve();
-                    });
-                });
-            }, extractedProducts[0]); // Passa o primeiro produto encontrado para o pop-up
-        }
 
         return extractedProducts;
     }
@@ -306,8 +247,8 @@ export class DismatalScraper {
             if (produtos.length === 0) {
                 this.logger.warn(`[DismatalScraper] Nenhum produto encontrado para o SKU "${searchTerm}".`);
                 // Adiciona log do conteúdo da página para depuração
-                const pageContent = await page.content();
-                this.logger.info(`[DismatalScraper] Conteúdo da página onde o produto não foi encontrado (URL: ${page.url()})`, { pageContent: pageContent.substring(0, 5000) + '...' });
+                // const pageContent = await page.content(); // Descomente se precisar depurar o HTML novamente
+                // this.logger.info(`[DismatalScraper] Conteúdo da página onde o produto não foi encontrado (URL: ${page.url()})`, { pageContent: pageContent.substring(0, 5000) + '...' });
             }
 
             this.logger.info(`[DismatalScraper] Busca concluída. Total de produtos: ${produtos.length}.`);
@@ -328,7 +269,7 @@ export class DismatalScraper {
             }
             // Em vez de lançar o erro, retorna no formato padrão
             // Garante que o erro seja uma string para evitar problemas de serialização
-            const errorMessage = error instanceof Error ? error.message : String(error);
+            const errorMessage = `Falha ao buscar produtos: ${error instanceof Error ? error.message : String(error)}`;
             return { sucesso: false, erro: errorMessage, produtos: [] };
         } finally {
             if (browserInstance) {

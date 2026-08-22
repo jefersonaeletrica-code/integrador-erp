@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Scraper Dismatal</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f4f4f9;
+        }
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        input {
+            padding: 0.5rem;
+            width: 200px;
+            margin-right: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            padding: 0.5rem 1rem;
+            border: none;
+            background-color: #007bff;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        #modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.6);
+            display: none; justify-content: center; align-items: center;
+            z-index: 1000;
+        }
+        #modal-content {
+            background: white; padding: 25px; border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3); width: 450px;
+            color: #333;
+        }
+        #modal-content h3 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        #modal-content p { margin: 10px 0; }
+        #modal-content strong { color: #000; }
+        #modal-close-btn {
+            display: block; width: 100%; padding: 10px; margin-top: 20px;
+            border: none; background-color: #007bff; color: white;
+            border-radius: 5px; font-size: 16px; cursor: pointer;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            animation: spin 1s linear infinite;
+            display: inline-block;
+            vertical-align: middle;
+            margin-left: 10px;
+            display: none;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>Teste do Scraper Dismatal</h2>
+        <input type="text" id="sku-input" placeholder="Digite o SKU do produto">
+        <button id="search-btn">Buscar Produto</button>
+        <div class="spinner" id="spinner"></div>
+    </div>
+
+    <div id="modal-overlay">
+        <div id="modal-content">
+            <h3 id="modal-title"></h3>
+            <div id="modal-body"></div>
+            <button id="modal-close-btn">Fechar</button>
+        </div>
+    </div>
+
+    <script>
+        const searchBtn = document.getElementById('search-btn');
+        const skuInput = document.getElementById('sku-input');
+        const spinner = document.getElementById('spinner');
+        const modalOverlay = document.getElementById('modal-overlay');
+        const modalTitle = document.getElementById('modal-title');
+        const modalBody = document.getElementById('modal-body');
+
+        // Extrai o ID da conexão da URL
+        const connectionId = window.location.pathname.split('/')[3];
+
+        searchBtn.addEventListener('click', async () => {
+            const searchTerm = skuInput.value.trim();
+            if (!searchTerm) {
+                alert('Por favor, digite um SKU.');
+                return;
+            }
+
+            searchBtn.disabled = true;
+            spinner.style.display = 'inline-block';
+
+            const response = await fetch(`/api/supplier-connections/${connectionId}/products`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ searchTerm })
+            });
+            const result = await response.json();
+
+            searchBtn.disabled = false;
+            spinner.style.display = 'none';
+            modalOverlay.style.display = 'flex';
+
+            if (result.sucesso && result.produtos.length > 0) {
+                const product = result.produtos[0];
+                modalTitle.innerText = 'Produto Encontrado!';
+                modalBody.innerHTML = `
+                    <p><strong>Nome:</strong> ${product.nome}</p>
+                    <p><strong>SKU:</strong> ${product.sku || product.codigo}</p>
+                    <p><strong>Preço:</strong> R$ ${product.preco.toFixed(2)}</p>
+                    <p><strong>Estoque:</strong> ${product.estoque !== null ? product.estoque : 'Não informado'}</p>
+                `;
+            } else {
+                modalTitle.innerText = 'Falha na Busca';
+                modalBody.innerHTML = `<p>${result.erro || 'Nenhum produto foi encontrado com este SKU.'}</p>`;
+            }
+        });
+
+        document.getElementById('modal-close-btn').addEventListener('click', () => {
+            modalOverlay.style.display = 'none';
+        });
+    </script>
+
+</body>
+</html>
