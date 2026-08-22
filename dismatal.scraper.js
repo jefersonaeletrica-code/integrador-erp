@@ -6,7 +6,6 @@ import { authenticate, tryPasswordLogin, DEFAULT_LOGIN_SELECTORS } from './auth.
 import { getLogger } from './logger.js';
 import {
     findSelector,
-    isProductPageValid,
     pageParser,
     listPageParser,
     isValidSKU
