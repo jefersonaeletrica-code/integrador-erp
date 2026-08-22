@@ -155,17 +155,13 @@ export class DismatalScraper {
 
         try {
             this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
-            // A espera mais robusta é pelo container principal do produto E pelo preço,
-            // que é um forte indicador de que a página carregou para um usuário logado.
-            await Promise.all([
-                page.waitForSelector(this.selectors.productDetailContainer, { timeout: 60000 }),
-                page.waitForSelector(this.selectors.productPrice.join(','), { timeout: 60000 })
-            ]);
-
-            // Adiciona uma pequena pausa para garantir que o JS da página finalize a renderização
-            // dos textos dentro dos elementos que acabaram de aparecer.
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
+            // A espera mais robusta para SPAs com Shadow DOM é usar um seletor que "perfure"
+            // o shadow root. O seletor '>>>' (ou 'pierce/') faz isso.
+            // Esperamos pelo preço, que está aninhado e é um ótimo indicador de que tudo carregou.
+            const priceSelector = `${this.selectors.productDetailContainer} >>> ${this.selectors.productPrice[0]}`;
+            this.logger.debug(`[DismatalScraper] Usando seletor de espera profundo: ${priceSelector}`);
+            await page.waitForSelector(priceSelector, { timeout: 60000 });
+            
             this.logger.info(`[DismatalScraper] Conteúdo do produto carregado. Prosseguindo com a extração.`);
         } catch (waitError) {
             this.logger.error('[DismatalScraper] Timeout ao esperar pelo conteúdo do produto.', waitError);
