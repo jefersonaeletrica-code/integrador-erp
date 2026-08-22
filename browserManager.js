@@ -49,9 +49,7 @@ class BrowserManager {
             // Bloqueia recursos visuais e scripts de rastreamento/anúncios para acelerar o carregamento
             // e evitar pop-ups indesejados.
             if (
-                ['image', 'font', 'media'].includes(resourceType) || // CSS foi removido para evitar quebrar o layout/lógica do site
-                url.includes('insider.com') || // Bloqueia scripts de marketing que geram pop-ups
-                url.includes('googletagmanager.com')
+                ['image', 'font', 'media'].includes(resourceType) // Removemos o bloqueio de scripts para garantir que a lógica do site não quebre.
             ) {
                 req.abort();
             } else {
