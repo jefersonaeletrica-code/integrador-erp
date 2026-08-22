@@ -15,15 +15,6 @@ export async function createApp() {
     app.use(express.json());
     app.use(express.static(path.join(process.cwd(), 'public')));
 
-    // Inicialização do Banco de Dados
-    try {
-        await db.ensureInitialized();
-        logger.info('Banco de dados inicializado com sucesso.');
-    } catch (error) {
-        logger.error('Falha fatal ao inicializar o banco de dados. O servidor não pode continuar.', error);
-        process.exit(1); // Encerra o processo se o DB não puder ser iniciado
-    }
-
     // Carregamento de dados
     const { connections: erpConnections, supplierConnections } = await db.readDb();
     // Carrega os dados de produtos do DB para a memória

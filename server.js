@@ -9,6 +9,9 @@ const logger = getLogger();
 const PORT = process.env.PORT || 3000;
 
 async function startServer() {
+    // Garante que o módulo de DB seja carregado antes de qualquer outra coisa.
+    await db.initialize();
+
     // Inicializa o banco de dados e carrega os dados iniciais
     const { app } = await createApp();
 
