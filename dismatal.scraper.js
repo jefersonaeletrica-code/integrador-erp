@@ -29,9 +29,9 @@ export class DismatalScraper {
             // Seletor para o container principal dos detalhes do produto. Usar o componente Angular é mais robusto.
             productDetailContainer: 'app-detalhe-produto', // Container principal do produto
             // Seletores de página de produto (individual) - Adicionando mais alternativas
-            productName: ['span.title-product', 'h1.product-name'],
-            productSKU: ['.cod-prod .code span', '[data-sku]', '.product-sku'],
-            productPrice: ['div.price-group__value span', 'div.price-group span.price-group__unity-price', '[data-price]', '.product-price', '.price'],
+            productName: ['div.product-description span.title-product'],
+            productSKU: ['div.cod-prod div.code span'],
+            productPrice: ['div.price-group__unity-price span:not(.price-group__before-price)'],
             promoPrice: ['[data-promo-price]', '.promotional-price', '.sale-price'],
             stock: ['.stock-info', '.product-stock', '#stock', '[data-stock]'],
             // Seletores de lista de produtos

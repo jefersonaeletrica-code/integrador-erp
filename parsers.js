@@ -44,7 +44,7 @@ export const pageParser = (selectors) => {
 
     // Helper que tenta múltiplos seletores e retorna o texto do primeiro que funcionar.
     const extractText = (root, selArray) => {
-        if (!root) return null; // Se o container do produto não for encontrado, não há o que extrair.
+        if (!root) return null;
 
         for (const sel of selArray) {
             const element = root.querySelector(sel);
@@ -55,7 +55,7 @@ export const pageParser = (selectors) => {
 
     const parsePrice = (text) => {
         if (!text) return null;
-        const cleaned = text.replace(/R\$\s*/, '').replace(/\./g, '').replace(',', '.');
+        const cleaned = text.replace(/[^\d,.]/g, '').replace(/\./g, '').replace(',', '.');
         const price = parseFloat(cleaned);
         return isNaN(price) ? null : price;
     };
