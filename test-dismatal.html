@@ -40,21 +40,21 @@
             background-color: #ccc;
             cursor: not-allowed;
         }
-        #modal-overlay {
+        #gemini-modal-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background-color: rgba(0,0,0,0.6);
             display: none; justify-content: center; align-items: center;
             z-index: 1000;
         }
-        #modal-content {
+        #gemini-modal-content {
             background: white; padding: 25px; border-radius: 8px;
             box-shadow: 0 5px 15px rgba(0,0,0,0.3); width: 450px;
             color: #333;
         }
-        #modal-content h3 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-        #modal-content p { margin: 10px 0; }
-        #modal-content strong { color: #000; }
-        #modal-close-btn {
+        #gemini-modal-content h3 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        #gemini-modal-content p { margin: 10px 0; }
+        #gemini-modal-content strong { color: #000; }
+        #gemini-modal-close-btn {
             display: block; width: 100%; padding: 10px; margin-top: 20px;
             border: none; background-color: #007bff; color: white;
             border-radius: 5px; font-size: 16px; cursor: pointer;
@@ -86,11 +86,11 @@
         <div class="spinner" id="spinner"></div>
     </div>
 
-    <div id="modal-overlay">
-        <div id="modal-content">
-            <h3 id="modal-title"></h3>
-            <div id="modal-body"></div>
-            <button id="modal-close-btn">Fechar</button>
+    <div id="gemini-modal-overlay">
+        <div id="gemini-modal-content">
+            <h3 id="gemini-modal-title"></h3>
+            <div id="gemini-modal-body"></div>
+            <button id="gemini-modal-close-btn">Fechar</button>
         </div>
     </div>
 
@@ -98,9 +98,9 @@
         const searchBtn = document.getElementById('search-btn');
         const skuInput = document.getElementById('sku-input');
         const spinner = document.getElementById('spinner');
-        const modalOverlay = document.getElementById('modal-overlay');
-        const modalTitle = document.getElementById('modal-title');
-        const modalBody = document.getElementById('modal-body');
+        const modalOverlay = document.getElementById('gemini-modal-overlay');
+        const modalTitle = document.getElementById('gemini-modal-title');
+        const modalBody = document.getElementById('gemini-modal-body');
 
         // Extrai o ID da conexão da URL
         const connectionId = window.location.pathname.split('/')[3];
@@ -141,7 +141,7 @@
             }
         });
 
-        document.getElementById('modal-close-btn').addEventListener('click', () => {
+        document.getElementById('gemini-modal-close-btn').addEventListener('click', () => {
             modalOverlay.style.display = 'none';
         });
     </script>

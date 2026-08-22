@@ -40,6 +40,22 @@ class BrowserManager {
         const browserInstance = await initBrowser({ headless: true });
         let { page } = browserInstance;
 
+        // Otimização de Performance: Bloqueia requisições desnecessárias
+        await page.setRequestInterception(true);
+        page.on('request', (req) => {
+            const resourceType = req.resourceType();
+            if (['image', 'stylesheet', 'font', 'media'].includes(resourceType)) {
+                req.abort();
+            } else {
+                req.continue();
+            }
+        });
+
+        // Otimização de Performance: Desativa o cache para garantir dados frescos,
+        // mas isso pode ser ajustado dependendo da necessidade.
+        await page.setCacheEnabled(false);
+
+
         try {
             const authResult = await authenticate(page, {
                 url: connection.credentials.url,
