@@ -33,6 +33,7 @@ export class DismatalScraper {
             productSKU: ['div.cod-prod div.code span'],
             productPrice: ['div.price-group__unity-price span:not(.price-group__before-price)'],
             promoPrice: ['[data-promo-price]', '.promotional-price', '.sale-price'],
+            productImages: ['.product-media img'], // Seletor para capturar todas as imagens do produto
             stock: ['.stock-info', '.product-stock', '#stock', '[data-stock]'],
             // Seletores de lista de produtos
             productListItem: ['.product-item', '.product-card', '.product-tile', 'div[role="listitem"]'],
@@ -124,7 +125,6 @@ export class DismatalScraper {
             if (closeModalSelector) {
                 this.logger.info('[DismatalScraper] Modal de boas-vindas encontrado. Fechando...');
                 await page.click(closeModalSelector);
-                await new Promise(resolve => setTimeout(resolve, 1000)); // Espera para o modal fechar
             }
         } catch (e) {
             // Se o seletor não for encontrado (o que é o esperado na maioria das vezes),
@@ -158,24 +158,10 @@ export class DismatalScraper {
 
         try {
             this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
-            // Com a estrutura do DOM revelada, não há Shadow DOM. A espera pode ser muito mais simples.
-            // Esperamos pelo container principal e depois verificamos se o nome do produto tem conteúdo.
-            await page.waitForFunction(
-                (productDetailContainerSelector, productNameSelector) => {
-                    const productContainer = document.querySelector(productDetailContainerSelector);
-                    if (productContainer) {
-                        const productNameElement = productContainer.querySelector(productNameSelector);
-                        // Retorna true se o elemento do nome do produto for encontrado e tiver algum texto.
-                        return productNameElement && productNameElement.textContent.trim().length > 0;
-                    }
-                    return false;
-                },
-                { timeout: 60000 },
-                // Passa os seletores como argumentos para a função executada no navegador
-                this.selectors.productDetailContainer,
-                // Usa o primeiro seletor de nome do produto para a verificação de conteúdo
-                this.selectors.productName[0]
-            );
+            // A espera mais robusta é simplesmente aguardar que o container principal do produto
+            // esteja visível na página. Isso é mais rápido e confiável do que `waitForFunction`
+            // para este cenário, pois o componente Angular renderiza todo o bloco de uma vez.
+            await page.waitForSelector(this.selectors.productDetailContainer, { visible: true, timeout: 60000 });
             
             this.logger.info(`[DismatalScraper] Conteúdo do produto carregado. Prosseguindo com a extração.`);
         } catch (waitError) {
