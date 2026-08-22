@@ -140,7 +140,7 @@ export class DismatalScraper {
     async _fetchProductPage(page, url, searchTerm) {
         const productUrl = `${url}/produtos/${searchTerm}`;
         this.logger.info(`[DismatalScraper] Navegando para a URL do produto: ${productUrl}`);
-        await page.goto(productUrl, { waitUntil: 'domcontentloaded', timeout: 120000 });
+        await page.goto(productUrl, { waitUntil: 'domcontentloaded', timeout: 120000 }); // Timeout de 2 minutos
 
         // Tenta fechar qualquer modal de boas-vindas que possa ter aparecido.
         await this._closeWelcomeModal(page);
@@ -161,7 +161,7 @@ export class DismatalScraper {
             // A espera mais robusta é simplesmente aguardar que o container principal do produto
             // esteja visível na página. Isso é mais rápido e confiável do que `waitForFunction`
             // para este cenário. Usamos `findSelector` para testar múltiplos seletores.
-            const containerSelector = await findSelector(page, this.selectors.productDetailContainer, 60000);
+            const containerSelector = await findSelector(page, this.selectors.productDetailContainer, 120000); // Timeout de 2 minutos
             
             this.logger.info(`[DismatalScraper] Conteúdo do produto carregado (usando seletor '${containerSelector}'). Prosseguindo com a extração.`);
         } catch (waitError) {

@@ -1,5 +1,7 @@
 import { initBrowser, closeBrowser } from './browser.js';
 import { authenticate } from './auth.js';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 import { getLogger } from './logger.js';
 import db from './db.js';
 
@@ -10,6 +12,18 @@ const logger = getLogger();
  * Isso evita o custo de iniciar um novo navegador e fazer login a cada requisição.
  */
 class BrowserManager {
+    constructor() {
+        // Adiciona o plugin de stealth para evitar detecção
+        puppeteer.use(StealthPlugin());
+        // Armazena as instâncias de navegador por ID de conexão
+        this.instances = new Map();
+    }
+
+    /**
+     * Obtém uma instância de navegador autenticada. Se não existir, cria uma nova.
+     * @param {object} connection - O objeto de conexão do fornecedor.
+     * @returns {Promise<{browser: import('puppeteer').Browser, page: import('puppeteer').Page}>}
+     */
     constructor() {
         // Armazena as instâncias de navegador por ID de conexão
         this.instances = new Map();
