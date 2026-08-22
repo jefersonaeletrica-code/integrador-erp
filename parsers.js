@@ -39,15 +39,19 @@ export function validateProduct(productData) {
  */
 export const pageParser = (selectors) => {
     // Função auxiliar para encontrar o shadow root que contém o nosso `productDetailContainer`
-    const findProductContainerRoot = () => {
-        const allElements = document.querySelectorAll('*');
-        for (const el of allElements) {
-            if (el.shadowRoot) {
-                const productContainer = el.shadowRoot.querySelector(selectors.productDetailContainer);
-                if (productContainer) {
-                    return productContainer.shadowRoot; // Retorna o shadow root do container do produto
-                }
+    const findProductContentRoot = () => {
+        const appRoot = document.querySelector('app-root'); // Assume que app-root é o host principal
+        if (!appRoot || !appRoot.shadowRoot) {
+            return null;
+        }
+        const productContainer = appRoot.shadowRoot.querySelector(selectors.productDetailContainer);
+        if (productContainer) {
+            // Se o container do produto tem seu próprio shadowRoot, usamos ele.
+            // Caso contrário, o conteúdo está diretamente dentro do container.
+            if (productContainer.shadowRoot) {
+                return productContainer.shadowRoot;
             }
+            return productContainer;
         }
         return null;
     };
@@ -70,7 +74,7 @@ export const pageParser = (selectors) => {
         return isNaN(price) ? null : price;
     };
     
-    const productRoot = findProductContainerRoot();
+    const productRoot = findProductContentRoot();
 
     const nome = extractText(productRoot, selectors.productName);
     const sku = extractText(productRoot, selectors.productSKU);

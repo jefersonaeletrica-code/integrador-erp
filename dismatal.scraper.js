@@ -156,26 +156,32 @@ export class DismatalScraper {
         try {
             this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
             // Usar waitForFunction é mais robusto para Shadow DOM.
-            // Esta função agora procura por `app-product-details` dentro de QUALQUER shadow root na página.
-            // Isso resolve o problema de shadow DOMs aninhados (ex: app-root -> app-product-details).
+            // Esta função agora procura por `app-product-details` dentro do shadow root de `app-root`.
+            // Em seguida, verifica se o nome do produto está presente dentro do container do produto.
             await page.waitForFunction(
-                (containerSelector) => {
-                    // Itera sobre todos os elementos da página
-                    const allElements = document.querySelectorAll('*');
-                    for (const el of allElements) {
-                        // Se um elemento tem um shadowRoot, procuramos o container do produto dentro dele
-                        if (el.shadowRoot) {
-                            const productContainer = el.shadowRoot.querySelector(containerSelector);
-                            // Se encontrarmos o container e ele tiver conteúdo, a espera terminou.
-                            if (productContainer && productContainer.innerHTML.length > 10) {
-                                return true;
-                            }
+                (productDetailContainerSelector, productNameSelector) => {
+                    const appRoot = document.querySelector('app-root'); // Assume que app-root é o host principal
+                    if (!appRoot || !appRoot.shadowRoot) {
+                        return false;
+                    }
+                    const productContainer = appRoot.shadowRoot.querySelector(productDetailContainerSelector);
+                    if (productContainer) {
+                        // O container do produto pode ter seu próprio shadowRoot ou o conteúdo pode estar direto nele.
+                        let targetRoot = productContainer;
+                        if (productContainer.shadowRoot) {
+                            targetRoot = productContainer.shadowRoot;
                         }
+                        const productNameElement = targetRoot.querySelector(productNameSelector);
+                        // Retorna true se o elemento do nome do produto for encontrado e tiver algum texto.
+                        return productNameElement && productNameElement.textContent.trim().length > 0;
                     }
                     return false;
                 },
                 { timeout: 60000 },
-                this.selectors.productDetailContainer // Passa o seletor do container como argumento
+                // Passa os seletores como argumentos para a função executada no navegador
+                this.selectors.productDetailContainer,
+                // Usa o primeiro seletor de nome do produto para a verificação de conteúdo
+                this.selectors.productName[0]
             );
             
             this.logger.info(`[DismatalScraper] Conteúdo do produto carregado. Prosseguindo com a extração.`);
@@ -185,8 +191,16 @@ export class DismatalScraper {
             // LOG APRIMORADO: Extrai e loga o conteúdo do Shadow DOM para depuração.
             if (!page.isClosed()) {
                 const shadowContent = await page.evaluate((selector) => {
-                    const el = document.querySelector(selector);
-                    return el ? el.shadowRoot?.innerHTML : 'Container do produto não encontrado no DOM principal.';
+                    const appRoot = document.querySelector('app-root');
+                    if (appRoot && appRoot.shadowRoot) {
+                        const productContainer = appRoot.shadowRoot.querySelector(selector);
+                        if (productContainer) {
+                            // Retorna o innerHTML do shadowRoot do container do produto, ou o innerHTML do próprio container
+                            return productContainer.shadowRoot?.innerHTML || productContainer.innerHTML;
+                        }
+                        return `Product container (${selector}) not found in app-root's shadow DOM. App-root shadow DOM: ${appRoot.shadowRoot.innerHTML}`;
+                    }
+                    return 'App-root ou seu shadow DOM não encontrado.';
                 }, this.selectors.productDetailContainer);
 
                 this.logger.warn(`[DismatalScraper] Conteúdo do Shadow DOM no momento do erro:`, { shadowHTML: shadowContent });
