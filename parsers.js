@@ -53,6 +53,22 @@ export const pageParser = (selectors) => {
         return null;
     };
 
+    const extractImageUrls = (root, selArray) => {
+        if (!root) return [];
+        const urls = new Set(); // Usa um Set para evitar URLs duplicadas
+        for (const sel of selArray) {
+            const elements = root.querySelectorAll(sel);
+            elements.forEach(img => {
+                if (img.src) {
+                    // Converte a URL para absoluta para garantir que seja sempre válida
+                    const absoluteUrl = new URL(img.src, document.baseURI).href;
+                    urls.add(absoluteUrl);
+                }
+            });
+        }
+        return Array.from(urls);
+    };
+
     const parsePrice = (text) => {
         if (!text) return null;
         const cleaned = text.replace(/[^\d,.]/g, '').replace(/\./g, '').replace(',', '.');
@@ -64,13 +80,14 @@ export const pageParser = (selectors) => {
     const sku = extractText(productRoot, selectors.productSKU);
     const precoText = extractText(productRoot, selectors.productPrice) || extractText(productRoot, selectors.promoPrice);
     const estoqueText = extractText(productRoot, selectors.stock);
+    const imagens = extractImageUrls(productRoot, selectors.productImages);
     
     const preco = parsePrice(precoText);
     const estoque = estoqueText ? parseInt(estoqueText.replace(/\D/g, ''), 10) : 0;
 
     if (!nome || !preco) return null;
 
-    return { nome, sku, preco, estoque };
+    return { nome, sku, preco, estoque, imagens };
 };
 
 /**

@@ -263,6 +263,19 @@ export async function tryPasswordLogin(page, options, selectors) {
                 page = await page.browser().newPage();
             }
 
+            // Otimização de Performance: Bloqueia recursos desnecessários durante o login
+            await page.setRequestInterception(true);
+            page.on('request', (req) => {
+                const resourceType = req.resourceType();
+                if (['image', 'font', 'media'].includes(resourceType)) {
+                    req.abort();
+                } else {
+                    req.continue();
+                }
+            });
+            // Desativa o cache para garantir que o fluxo de login não use dados antigos
+            await page.setCacheEnabled(false);
+
             await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120000 });
             // A função performLogin retorna { page, sessionData }
             const result = await performLogin(page, credentials, selectors);
