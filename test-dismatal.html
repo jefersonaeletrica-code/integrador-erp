@@ -101,6 +101,7 @@
         const modalOverlay = document.getElementById('gemini-modal-overlay');
         const modalTitle = document.getElementById('gemini-modal-title');
         const modalBody = document.getElementById('gemini-modal-body');
+        let ws;
 
         // Extrai o ID da conexão da URL
         const connectionId = window.location.pathname.split('/')[3];
@@ -115,6 +116,9 @@
             searchBtn.disabled = true;
             spinner.style.display = 'inline-block';
 
+            // Inicia a conexão WebSocket
+            connectWebSocket();
+
             try {
                 const response = await fetch(`/api/supplier-connections/${connectionId}/products`, {
                     method: 'POST',
@@ -123,10 +127,37 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error(`Erro na requisição: ${response.status} ${response.statusText}`);
+                    throw new Error(`Erro ao iniciar a busca: ${response.status} ${response.statusText}`);
                 }
 
-                const result = await response.json();
+                // A requisição HTTP agora só inicia o processo. O resultado virá pelo WebSocket.
+                // A interface mostrará o spinner até a mensagem chegar.
+                console.log('Busca iniciada. Aguardando resultado via WebSocket...');
+
+            } catch (error) {
+                modalTitle.innerText = 'Erro Crítico no Frontend';
+                modalBody.innerHTML = `<p>Ocorreu um erro ao tentar comunicar com a API ou processar a resposta.</p><p><strong>Detalhe:</strong> ${error.message}</p>`;
+                searchBtn.disabled = false;
+                modalOverlay.style.display = 'flex';
+            }
+        });
+
+        function connectWebSocket() {
+            // Constrói a URL do WebSocket (ws:// ou wss:// para https)
+            const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${wsProtocol}//${window.location.host}`;
+            ws = new WebSocket(wsUrl);
+
+            ws.onopen = () => console.log('Conexão WebSocket estabelecida.');
+            ws.onclose = () => console.log('Conexão WebSocket fechada.');
+            ws.onerror = (error) => console.error('Erro no WebSocket:', error);
+
+            ws.onmessage = (event) => {
+                console.log('Mensagem recebida do servidor:', event.data);
+                const result = JSON.parse(event.data);
+
+                spinner.style.display = 'none';
+                modalOverlay.style.display = 'flex';
 
                 if (result.sucesso && result.produtos && result.produtos.length > 0) {
                     const product = result.produtos[0];
@@ -145,18 +176,15 @@
                     modalTitle.innerText = 'Falha na Busca';
                     modalBody.innerHTML = `<p>${result.erro || 'A busca não retornou produtos ou ocorreu um erro desconhecido.'}</p>`;
                 }
-            } catch (error) {
-                modalTitle.innerText = 'Erro Crítico no Frontend';
-                modalBody.innerHTML = `<p>Ocorreu um erro ao tentar comunicar com a API ou processar a resposta.</p><p><strong>Detalhe:</strong> ${error.message}</p>`;
-            } finally {
-                searchBtn.disabled = false;
-                spinner.style.display = 'none';
-                modalOverlay.style.display = 'flex';
-            }
-        });
+
+                // Fecha a conexão após receber o resultado
+                ws.close();
+            };
+        }
 
         document.getElementById('gemini-modal-close-btn').addEventListener('click', () => {
             modalOverlay.style.display = 'none';
+            searchBtn.disabled = false;
         });
     </script>
 

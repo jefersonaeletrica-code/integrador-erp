@@ -1,5 +1,6 @@
 import express from 'express';
 import { DismatalScraper } from './dismatal.scraper.js';
+import { getLogger } from './logger.js';
 import { addToQueue } from './scraperQueue.js';
 import path from 'path';
 
@@ -106,19 +107,29 @@ export default (db, supplierConnections) => {
         const { searchTerm } = req.body;
         const connection = supplierConnections.find(c => c.id == id);
 
+        const logger = getLogger();
+        const wss = req.app.get('wss'); // Obtém a instância do WebSocketServer
+
         if (!connection) return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
         if (connection.type !== 'dismatal_webscraper') return res.status(400).json({ sucesso: false, erro: 'Busca de produtos disponível apenas para conexões Dismatal.' });
 
         try {
-            // A fila ainda é útil para garantir que apenas uma busca ocorra por vez,
-            // evitando problemas de concorrência mesmo com o gerenciador de navegador.
-            const result = await addToQueue(() => {
+            // Adiciona a tarefa à fila. A função não espera mais pelo resultado.
+            addToQueue(async () => {
                 const scraper = new DismatalScraper({ headless: true });
-                return scraper.fetchProducts(connection, searchTerm);
+                const result = await scraper.fetchProducts(connection, searchTerm);
+                
+                // Quando o resultado estiver pronto, envia para todos os clientes WebSocket conectados.
+                logger.info('[WebSocket] Enviando resultado da busca para os clientes.');
+                wss.clients.forEach(client => {
+                    if (client.readyState === client.OPEN) {
+                        client.send(JSON.stringify(result));
+                    }
+                });
             });
-            res.json(result);
+            // Responde imediatamente à requisição HTTP para evitar timeout.
+            res.status(202).json({ sucesso: true, mensagem: 'A busca foi iniciada. O resultado será enviado via WebSocket quando estiver pronto.' });
         } catch (e) {
-            // O erro já é logado dentro do scraper, aqui apenas formatamos a resposta.
             res.status(500).json({ sucesso: false, erro: `Erro durante a busca de produtos: ${e.message}` });
         }
     });
