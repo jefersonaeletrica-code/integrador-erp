@@ -17,39 +17,6 @@ export async function findSelector(page, selectors) {
 }
 
 /**
- * Verifica se a página de produto é válida, procurando por indicadores de erro.
- * @param {import('puppeteer').Page} page
- * @returns {Promise<boolean>}
- */
-export async function isProductPageValid(page) {
-    const url = page.url();
-    if (url.includes('/login') || url.includes('/erro')) {
-        return false;
-    }
-
-    const pageText = await page.evaluate(() => document.body.innerText || '').catch(() => '');
-    const errorPatterns = [/produto n[ã|a]o encontrado/i, /página não encontrada/i];
-
-    if (errorPatterns.some(pattern => pattern.test(pageText))) {
-        return false;
-    }
-
-    // A verificação deve ser consistente com os seletores de extração.
-    // Usamos os seletores de nome e preço para validar a estrutura.
-    // A validação mais robusta é esperar que o nome do produto tenha conteúdo.
-    const hasProductStructure = await page.waitForFunction(
-        (selector) => {
-            const el = document.querySelector(selector);
-            return el && el.textContent && el.textContent.trim().length > 10;
-        },
-        { timeout: 10000 }, // Um timeout mais curto para validação é aceitável
-        ['span.title-product', 'h1.product-name'].join(',')
-    ).then(() => true).catch(() => false);
-
-    return hasProductStructure;
-}
-
-/**
  * Valida os dados de um produto extraído.
  * @param {object} productData - Os dados do produto.
  * @returns {{valid: boolean, errors: string[]}}

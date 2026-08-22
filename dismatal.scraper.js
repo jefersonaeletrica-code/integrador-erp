@@ -7,7 +7,6 @@ import { getLogger } from './logger.js';
 import {
     findSelector,
     isProductPageValid,
-    validateProduct,
     pageParser,
     listPageParser,
     isValidSKU
@@ -28,7 +27,7 @@ export class DismatalScraper {
             // está correspondendo ao campo de busca real no portal Dismatal. Adicionado seletor com base no placeholder.
             searchInput: ['input[placeholder="O que você está procurando?"]', 'input[name="descricao"]', 'input[placeholder*="produto"]', 'input[type="search"]'],
             // Seletor para o container principal dos detalhes do produto. Usar o componente Angular é mais robusto.
-            productDetailContainer: ['app-product-details', '.product-info', '.product-details'],
+            productDetailContainer: 'app-product-details',
             // Seletores de página de produto (individual) - Adicionando mais alternativas
             productName: ['span.title-product', 'h1.product-name', 'h1.product-title'],
             productSKU: ['[data-sku]', '.product-sku', '.sku', '[itemprop="sku"]', '.product-details__sku'],
@@ -156,19 +155,18 @@ export class DismatalScraper {
         }
 
         try {
-            // A validação de sucesso será pelo preço, pois ele só aparece se o usuário estiver logado.
-            // A melhor âncora é o nome do produto, que garante que o conteúdo principal foi carregado.
             this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
-            // Usar waitForFunction para esperar que o seletor do nome tenha conteúdo.
-            // Isso evita falsos positivos onde o elemento existe, mas está vazio.
-            await page.waitForFunction(
-                (selector) => {
-                    const el = document.querySelector(selector);
-                    return el && el.textContent && el.textContent.trim().length > 10;
-                },
-                { timeout: 60000 },
-                this.selectors.productName.join(',')
-            );
+            // A espera mais robusta é pelo container principal do produto E pelo preço,
+            // que é um forte indicador de que a página carregou para um usuário logado.
+            await Promise.all([
+                page.waitForSelector(this.selectors.productDetailContainer, { timeout: 60000 }),
+                page.waitForSelector(this.selectors.productPrice.join(','), { timeout: 60000 })
+            ]);
+
+            // Adiciona uma pequena pausa para garantir que o JS da página finalize a renderização
+            // dos textos dentro dos elementos que acabaram de aparecer.
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
             this.logger.info(`[DismatalScraper] Conteúdo do produto carregado. Prosseguindo com a extração.`);
         } catch (waitError) {
             this.logger.error('[DismatalScraper] Timeout ao esperar pelo conteúdo do produto.', waitError);
@@ -280,22 +278,6 @@ export class DismatalScraper {
      * @returns {Promise<Array>}
      */
     async extractProductData(page, searchTerm) {
-        // Garante que o conteúdo esteja carregado antes de tentar extrair.
-        // Isso previne condições de corrida onde a validação passa, mas a extração falha.
-        try {
-            await page.waitForFunction(
-                (selector) => {
-                    const el = document.querySelector(selector);
-                    return el && el.textContent && el.textContent.trim().length > 10;
-                },
-                { timeout: 10000 }, // Timeout mais curto, pois a espera principal já ocorreu.
-                this.selectors.productName.join(',')
-            );
-        } catch (e) {
-            this.logger.warn('[DismatalScraper] Conteúdo do produto desapareceu antes da extração. A página pode ter mudado.');
-            return [];
-        }
-
         let produtos = [];
         const currentUrl = page.url();
 
@@ -303,20 +285,20 @@ export class DismatalScraper {
         if (currentUrl.includes('/busca')) {
             this.logger.info('[DismatalScraper] Detectada página de lista de produtos. Usando listPageParser...');
             const produtosDaLista = await page.evaluate(listPageParser, this.selectors);
-            
+
             if (produtosDaLista.length > 0) {
                 this.logger.info(`[DismatalScraper] Encontrados ${produtosDaLista.length} produtos na lista.`);
                 // Filtra e valida os produtos da lista
                 produtos = produtosDaLista
                     .map(p => ({ ...p, codigo: p.codigo || searchTerm.toString() }))
-                    .filter(p => validateProduct(p).valid);
+                    .filter(p => p.nome && p.preco); // Validação simples
             }
-        } else if (await isProductPageValid(page)) {
+        } else {
             // Se não for uma página de busca, verifica se é uma página de produto individual
             this.logger.info('[DismatalScraper] Detectada página de produto individual. Usando pageParser...');
             const produto = await page.evaluate(pageParser, this.selectors);
 
-            if (produto && validateProduct(produto).valid) {
+            if (produto && produto.nome && produto.preco) { // Validação simples
                 produtos.push({ ...produto, codigo: produto.sku || searchTerm.toString() });
                 this.logger.info('[DismatalScraper] Extração do produto bem-sucedida.');
             } else if (produto) {
