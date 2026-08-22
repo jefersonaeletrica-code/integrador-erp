@@ -26,8 +26,8 @@ export class DismatalScraper {
             // O erro "Campo de busca não foi encontrado na página inicial" indica que nenhum desses seletores
             // está correspondendo ao campo de busca real no portal Dismatal. Adicionado seletor com base no placeholder.
             searchInput: ['input[placeholder="O que você está procurando?"]', 'input[name="descricao"]', 'input[placeholder*="produto"]', 'input[type="search"]'],
-            // Seletor para o container principal dos detalhes do produto. Usar o componente Angular é mais robusto.
-            productDetailContainer: 'app-detalhe-produto', // Container principal do produto
+            // Seletor para o container principal dos detalhes do produto. O seletor de componente Angular estava falhando.
+            productDetailContainer: '.product-details-info', // Usando uma classe CSS mais estável como container principal.
             // Seletores de página de produto (individual) - Adicionando mais alternativas
             productName: ['div.product-description span.title-product'],
             productSKU: ['div.cod-prod div.code span'],
