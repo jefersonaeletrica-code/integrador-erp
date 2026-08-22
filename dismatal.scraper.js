@@ -26,10 +26,10 @@ export class DismatalScraper {
             // está correspondendo ao campo de busca real no portal Dismatal. Adicionado seletor com base no placeholder.
             searchInput: ['input[placeholder="O que você está procurando?"]', 'input[name="descricao"]', 'input[placeholder*="produto"]', 'input[type="search"]'],
             // Seletor para o container principal dos detalhes do produto. Usar o componente Angular é mais robusto.
-            productDetailContainer: 'app-product-details',
+            productDetailContainer: 'app-product-details', // Este é o host do Shadow DOM
             // Seletores de página de produto (individual) - Adicionando mais alternativas
-            productName: ['span.title-product', 'h1.product-name', 'h1.product-title'],
-            productSKU: ['[data-sku]', '.product-sku', '.sku', '[itemprop="sku"]', '.product-details__sku'],
+            productName: ['span.title-product', 'h1.product-name'], // Seletores DENTRO do Shadow DOM
+            productSKU: ['.product-code > span', '[data-sku]', '.product-sku'],
             productPrice: ['div.price-group__value span', 'div.price-group span.price-group__unity-price', '[data-price]', '.product-price', '.price'],
             promoPrice: ['[data-promo-price]', '.promotional-price', '.sale-price'],
             stock: ['.stock-info', '.product-stock', '#stock', '[data-stock]'],
@@ -155,22 +155,39 @@ export class DismatalScraper {
 
         try {
             this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
-            // A espera mais robusta para SPAs com Shadow DOM é usar um seletor que "perfure"
-            // o shadow root. O seletor '>>>' (ou 'pierce/') faz isso.
-            // Esperamos pelo preço, que está aninhado e é um ótimo indicador de que tudo carregou.
-            const priceSelector = `${this.selectors.productDetailContainer} >>> ${this.selectors.productPrice[0]}`;
-            this.logger.debug(`[DismatalScraper] Usando seletor de espera profundo: ${priceSelector}`);
-            await page.waitForSelector(priceSelector, { timeout: 60000 });
+            // Usar waitForFunction é mais robusto para Shadow DOM.
+            // Ele executa o script no navegador até que retorne um valor "truthy".
+            await page.waitForFunction(
+                (containerSelector, priceSelector) => {
+                    const container = document.querySelector(containerSelector);
+                    if (container && container.shadowRoot) {
+                        const priceEl = container.shadowRoot.querySelector(priceSelector);
+                        // Retorna true se o elemento de preço for encontrado e tiver algum texto.
+                        return priceEl && priceEl.textContent.trim();
+                    }
+                    return false;
+                },
+                { timeout: 60000 },
+                this.selectors.productDetailContainer,
+                this.selectors.productPrice[0] // Passa os seletores como argumentos
+            );
             
             this.logger.info(`[DismatalScraper] Conteúdo do produto carregado. Prosseguindo com a extração.`);
         } catch (waitError) {
             this.logger.error('[DismatalScraper] Timeout ao esperar pelo conteúdo do produto.', waitError);
-            // Salva o screenshot em um arquivo para facilitar a depuração.
-            const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
-            fs.mkdirSync(screenshotDir, { recursive: true });
-            const screenshotPath = path.join(screenshotDir, `dismatal-product-error-${Date.now()}.png`);
-            // Verifica se a página ainda está aberta antes de tentar o screenshot
+            
+            // LOG APRIMORADO: Extrai e loga o conteúdo do Shadow DOM para depuração.
             if (!page.isClosed()) {
+                const shadowContent = await page.evaluate((selector) => {
+                    const el = document.querySelector(selector);
+                    return el ? el.shadowRoot?.innerHTML : 'Container do produto não encontrado no DOM principal.';
+                }, this.selectors.productDetailContainer);
+
+                this.logger.warn(`[DismatalScraper] Conteúdo do Shadow DOM no momento do erro:`, { shadowHTML: shadowContent });
+
+                const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
+                fs.mkdirSync(screenshotDir, { recursive: true });
+                const screenshotPath = path.join(screenshotDir, `dismatal-product-error-${Date.now()}.png`);
                 await page.screenshot({ path: screenshotPath, fullPage: true });
                 this.logger.info(`[DismatalScraper] Screenshot do erro salvo em: ${screenshotPath}`);
             }

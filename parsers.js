@@ -39,14 +39,15 @@ export function validateProduct(productData) {
  */
 export const pageParser = (selectors) => {
     // Helper que tenta múltiplos seletores e retorna o texto do primeiro que funcionar.
-    // A sintaxe '>>>' é um alias para /deep/ que perfura o Shadow DOM.
     const extractText = (doc, selArray) => {
+        // Primeiro, localiza o container que hospeda o Shadow DOM.
+        const container = doc.querySelector(selectors.productDetailContainer);
+        if (!container || !container.shadowRoot) return null;
+
         for (const sel of selArray) {
-            // Tenta o seletor dentro do container principal, atravessando o Shadow DOM.
-            const element = doc.querySelector(`${selectors.productDetailContainer} >>> ${sel}`);
-            if (element) return element.textContent.trim();            
+            const element = container.shadowRoot.querySelector(sel);
+            if (element) return element.textContent.trim();
         }
-        // Fallback para seletores globais se a busca profunda falhar.
         return null;
     };
 
