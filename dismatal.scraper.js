@@ -118,16 +118,18 @@ export class DismatalScraper {
     async _closeWelcomeModal(page) {
         this.logger.debug('[DismatalScraper] Verificando e tentando fechar modal de boas-vindas...');
         try {
-            // Adiciona uma pausa para dar tempo ao modal de aparecer.
-            await new Promise(resolve => setTimeout(resolve, 2000));
-            const closeModalSelector = await findSelector(page, this.selectors.welcomeModalCloseButton);
+            // Usa waitForSelector com um timeout curto para verificar se o modal existe,
+            // o que é mais eficiente do que uma pausa fixa.
+            const closeModalSelector = await findSelector(page, this.selectors.welcomeModalCloseButton, 5000);
             if (closeModalSelector) {
                 this.logger.info('[DismatalScraper] Modal de boas-vindas encontrado. Fechando...');
                 await page.click(closeModalSelector);
                 await new Promise(resolve => setTimeout(resolve, 1000)); // Espera para o modal fechar
             }
         } catch (e) {
-            this.logger.debug('[DismatalScraper] Nenhum modal de boas-vindas encontrado ou erro ao fechar.');
+            // Se o seletor não for encontrado (o que é o esperado na maioria das vezes),
+            // apenas registra em modo debug e continua a execução.
+            this.logger.debug(`[DismatalScraper] Nenhum modal de boas-vindas encontrado ou erro ao fechar: ${e.message}`);
         }
     }
 

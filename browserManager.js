@@ -40,11 +40,19 @@ class BrowserManager {
         const browserInstance = await initBrowser({ headless: true });
         let { page } = browserInstance;
 
-        // Otimização de Performance: Bloqueia requisições desnecessárias
+        // Otimização de Performance: Intercepta requisições para bloquear recursos desnecessários.
         await page.setRequestInterception(true);
         page.on('request', (req) => {
             const resourceType = req.resourceType();
-            if (['image', 'stylesheet', 'font', 'media'].includes(resourceType)) {
+            const url = req.url();
+            
+            // Bloqueia recursos visuais e scripts de rastreamento/anúncios para acelerar o carregamento
+            // e evitar pop-ups indesejados.
+            if (
+                ['image', 'stylesheet', 'font', 'media'].includes(resourceType) ||
+                url.includes('insider.com') || // Bloqueia scripts de marketing que geram pop-ups
+                url.includes('googletagmanager.com')
+            ) {
                 req.abort();
             } else {
                 req.continue();

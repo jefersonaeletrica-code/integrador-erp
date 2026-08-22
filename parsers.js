@@ -4,10 +4,10 @@
  * @param {string[]} selectors
  * @returns {Promise<string|null>}
  */
-export async function findSelector(page, selectors) {
-    for (const selector of selectors) {
+export async function findSelector(page, selectors, timeout = 15000) {
+    for (const selector of selectors) { // Itera sobre a lista de seletores fornecida
         try {
-            await page.waitForSelector(selector, { visible: true, timeout: 15000 }); // Increased timeout
+            await page.waitForSelector(selector, { visible: true, timeout });
             return selector;
         } catch (e) {
             // Continua para o próximo seletor
