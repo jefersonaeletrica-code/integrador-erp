@@ -3,12 +3,15 @@ import { WebSocketServer } from 'ws';
 import { createApp } from './app.js';
 import db from './db.js';
 import { getLogger } from './logger.js';
+import { loadInitialData } from './productService.js';
 
 const logger = getLogger();
 const PORT = process.env.PORT || 3000;
 
 // Inicializa o banco de dados e carrega os dados iniciais
 const { app, supplierConnections } = await createApp();
+// Carrega os dados de produtos do DB para a memória
+await loadInitialData();
 
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });

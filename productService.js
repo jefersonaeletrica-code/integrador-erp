@@ -1,13 +1,29 @@
+import db from './db.js';
+import { getLogger } from './logger.js';
+
 export let produtosImportados = []; // Estado local para produtos importados
 
 /**
- * Carrega os produtos do banco de dados para a memória na inicialização.
- * @param {Array} items - Os produtos vindos do banco de dados.
+ * Carrega os produtos do banco de dados para a memória.
+ * Esta função é chamada na inicialização do servidor.
  */
-export const loadProdutosImportados = (items) => {
-    produtosImportados = Array.isArray(items) ? items : [];
-    console.log(`[ProductService] Estado inicial de produtos importados carregado: ${produtosImportados.length} itens.`);
+export const loadInitialData = async () => {
+    const logger = getLogger();
+    try {
+        // Garante que o DB esteja pronto antes de ler
+        await db.ensureInitialized();
+        const { produtos } = await db.readDb();
+        produtosImportados = Array.isArray(produtos) ? produtos : [];
+        logger.info(`[ProductService] Estado inicial de produtos importados carregado: ${produtosImportados.length} itens.`);
+    } catch (error) {
+        logger.error('[ProductService] Falha ao carregar dados iniciais de produtos.', error);
+        // Em caso de erro, garante que a lista de produtos esteja vazia para evitar inconsistências.
+        produtosImportados = [];
+    }
 };
+
+// A função loadProdutosImportados não é mais necessária, pois loadInitialData faz seu trabalho.
+// Mantendo saveProdutosImportados para uso futuro.
 
 export const saveProdutosImportados = (items, db) => {
     if (!db || !Array.isArray(items)) {
