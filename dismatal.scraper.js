@@ -156,20 +156,26 @@ export class DismatalScraper {
         try {
             this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
             // Usar waitForFunction é mais robusto para Shadow DOM.
-            // Ele executa o script no navegador até que retorne um valor "truthy".
+            // Esta função agora procura por `app-product-details` dentro de QUALQUER shadow root na página.
+            // Isso resolve o problema de shadow DOMs aninhados (ex: app-root -> app-product-details).
             await page.waitForFunction(
-                (containerSelector, priceSelector) => {
-                    const container = document.querySelector(containerSelector);
-                    if (container && container.shadowRoot) {
-                        const priceEl = container.shadowRoot.querySelector(priceSelector);
-                        // Retorna true se o elemento de preço for encontrado e tiver algum texto.
-                        return priceEl && priceEl.textContent.trim();
+                (containerSelector) => {
+                    // Itera sobre todos os elementos da página
+                    const allElements = document.querySelectorAll('*');
+                    for (const el of allElements) {
+                        // Se um elemento tem um shadowRoot, procuramos o container do produto dentro dele
+                        if (el.shadowRoot) {
+                            const productContainer = el.shadowRoot.querySelector(containerSelector);
+                            // Se encontrarmos o container e ele tiver conteúdo, a espera terminou.
+                            if (productContainer && productContainer.innerHTML.length > 10) {
+                                return true;
+                            }
+                        }
                     }
                     return false;
                 },
                 { timeout: 60000 },
-                this.selectors.productDetailContainer,
-                this.selectors.productPrice[0] // Passa os seletores como argumentos
+                this.selectors.productDetailContainer // Passa o seletor do container como argumento
             );
             
             this.logger.info(`[DismatalScraper] Conteúdo do produto carregado. Prosseguindo com a extração.`);

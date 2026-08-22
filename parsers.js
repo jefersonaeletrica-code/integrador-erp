@@ -38,14 +38,26 @@ export function validateProduct(productData) {
  * @returns {object|null}
  */
 export const pageParser = (selectors) => {
+    // Função auxiliar para encontrar o shadow root que contém o nosso `productDetailContainer`
+    const findProductContainerRoot = () => {
+        const allElements = document.querySelectorAll('*');
+        for (const el of allElements) {
+            if (el.shadowRoot) {
+                const productContainer = el.shadowRoot.querySelector(selectors.productDetailContainer);
+                if (productContainer) {
+                    return productContainer.shadowRoot; // Retorna o shadow root do container do produto
+                }
+            }
+        }
+        return null;
+    };
+
     // Helper que tenta múltiplos seletores e retorna o texto do primeiro que funcionar.
-    const extractText = (doc, selArray) => {
-        // Primeiro, localiza o container que hospeda o Shadow DOM.
-        const container = doc.querySelector(selectors.productDetailContainer);
-        if (!container || !container.shadowRoot) return null;
+    const extractText = (root, selArray) => {
+        if (!root) return null;
 
         for (const sel of selArray) {
-            const element = container.shadowRoot.querySelector(sel);
+            const element = root.querySelector(sel);
             if (element) return element.textContent.trim();
         }
         return null;
@@ -58,10 +70,12 @@ export const pageParser = (selectors) => {
         return isNaN(price) ? null : price;
     };
     
-    const nome = extractText(document, selectors.productName);
-    const sku = extractText(document, selectors.productSKU);
-    const precoText = extractText(document, selectors.productPrice) || extractText(document, selectors.promoPrice);
-    const estoqueText = extractText(document, selectors.stock);
+    const productRoot = findProductContainerRoot();
+
+    const nome = extractText(productRoot, selectors.productName);
+    const sku = extractText(productRoot, selectors.productSKU);
+    const precoText = extractText(productRoot, selectors.productPrice) || extractText(productRoot, selectors.promoPrice);
+    const estoqueText = extractText(productRoot, selectors.stock);
     
     const preco = parsePrice(precoText);
     const estoque = estoqueText ? parseInt(estoqueText.replace(/\D/g, ''), 10) : 0;
