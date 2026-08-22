@@ -38,27 +38,13 @@ export function validateProduct(productData) {
  * @returns {object|null}
  */
 export const pageParser = (selectors) => {
-    // Função auxiliar para encontrar o shadow root que contém o nosso `productDetailContainer`
-    const findProductContentRoot = () => {
-        const appRoot = document.querySelector('app-root'); // Assume que app-root é o host principal
-        if (!appRoot || !appRoot.shadowRoot) {
-            return null;
-        }
-        const productContainer = appRoot.shadowRoot.querySelector(selectors.productDetailContainer);
-        if (productContainer) {
-            // Se o container do produto tem seu próprio shadowRoot, usamos ele.
-            // Caso contrário, o conteúdo está diretamente dentro do container.
-            if (productContainer.shadowRoot) {
-                return productContainer.shadowRoot;
-            }
-            return productContainer;
-        }
-        return null;
-    };
+    // Como não há Shadow DOM, o "root" para a busca é o próprio documento,
+    // e os seletores precisam ser específicos o suficiente.
+    const productRoot = document.querySelector(selectors.productDetailContainer);
 
     // Helper que tenta múltiplos seletores e retorna o texto do primeiro que funcionar.
     const extractText = (root, selArray) => {
-        if (!root) return null;
+        if (!root) return null; // Se o container do produto não for encontrado, não há o que extrair.
 
         for (const sel of selArray) {
             const element = root.querySelector(sel);
@@ -73,8 +59,6 @@ export const pageParser = (selectors) => {
         const price = parseFloat(cleaned);
         return isNaN(price) ? null : price;
     };
-    
-    const productRoot = findProductContentRoot();
 
     const nome = extractText(productRoot, selectors.productName);
     const sku = extractText(productRoot, selectors.productSKU);

@@ -27,10 +27,10 @@ export class DismatalScraper {
             // está correspondendo ao campo de busca real no portal Dismatal. Adicionado seletor com base no placeholder.
             searchInput: ['input[placeholder="O que você está procurando?"]', 'input[name="descricao"]', 'input[placeholder*="produto"]', 'input[type="search"]'],
             // Seletor para o container principal dos detalhes do produto. Usar o componente Angular é mais robusto.
-            productDetailContainer: 'app-product-details', // Este é o host do Shadow DOM
+            productDetailContainer: 'app-detalhe-produto', // Container principal do produto
             // Seletores de página de produto (individual) - Adicionando mais alternativas
-            productName: ['span.title-product', 'h1.product-name'], // Seletores DENTRO do Shadow DOM
-            productSKU: ['.product-code > span', '[data-sku]', '.product-sku'],
+            productName: ['span.title-product', 'h1.product-name'],
+            productSKU: ['.cod-prod .code span', '[data-sku]', '.product-sku'],
             productPrice: ['div.price-group__value span', 'div.price-group span.price-group__unity-price', '[data-price]', '.product-price', '.price'],
             promoPrice: ['[data-promo-price]', '.promotional-price', '.sale-price'],
             stock: ['.stock-info', '.product-stock', '#stock', '[data-stock]'],
@@ -156,23 +156,13 @@ export class DismatalScraper {
 
         try {
             this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
-            // Usar waitForFunction é mais robusto para Shadow DOM.
-            // Esta função agora procura por `app-product-details` dentro do shadow root de `app-root`.
-            // Em seguida, verifica se o nome do produto está presente dentro do container do produto.
+            // Com a estrutura do DOM revelada, não há Shadow DOM. A espera pode ser muito mais simples.
+            // Esperamos pelo container principal e depois verificamos se o nome do produto tem conteúdo.
             await page.waitForFunction(
                 (productDetailContainerSelector, productNameSelector) => {
-                    const appRoot = document.querySelector('app-root'); // Assume que app-root é o host principal
-                    if (!appRoot || !appRoot.shadowRoot) {
-                        return false;
-                    }
-                    const productContainer = appRoot.shadowRoot.querySelector(productDetailContainerSelector);
+                    const productContainer = document.querySelector(productDetailContainerSelector);
                     if (productContainer) {
-                        // O container do produto pode ter seu próprio shadowRoot ou o conteúdo pode estar direto nele.
-                        let targetRoot = productContainer;
-                        if (productContainer.shadowRoot) {
-                            targetRoot = productContainer.shadowRoot;
-                        }
-                        const productNameElement = targetRoot.querySelector(productNameSelector);
+                        const productNameElement = productContainer.querySelector(productNameSelector);
                         // Retorna true se o elemento do nome do produto for encontrado e tiver algum texto.
                         return productNameElement && productNameElement.textContent.trim().length > 0;
                     }
@@ -195,8 +185,6 @@ export class DismatalScraper {
                 const domStructure = await page.evaluate(getDOMStructure);
 
                 this.logger.warn(`[DismatalScraper] Estrutura completa do DOM no momento do erro:`, { domStructure });
-
-                this.logger.warn(`[DismatalScraper] Conteúdo do Shadow DOM no momento do erro:`, { shadowHTML: shadowContent });
 
                 const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
                 fs.mkdirSync(screenshotDir, { recursive: true });
