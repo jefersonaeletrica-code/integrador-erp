@@ -141,7 +141,7 @@
                 `;
             } else {
                 modalTitle.innerText = 'Falha na Busca';
-                modalBody.innerHTML = `<p>${result.erro || 'Nenhum produto foi encontrado com este SKU.'}</p>`;
+                modalBody.innerHTML = `<p>${result.erro || 'A busca não retornou produtos ou ocorreu um erro desconhecido.'}</p>`;
             }
         });
 

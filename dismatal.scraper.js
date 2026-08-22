@@ -26,8 +26,8 @@ export class DismatalScraper {
             // O erro "Campo de busca não foi encontrado na página inicial" indica que nenhum desses seletores
             // está correspondendo ao campo de busca real no portal Dismatal. Adicionado seletor com base no placeholder.
             searchInput: ['input[placeholder="O que você está procurando?"]', 'input[name="descricao"]', 'input[placeholder*="produto"]', 'input[type="search"]'],
-            // Seletor para o container principal dos detalhes do produto. O seletor de componente Angular estava falhando.
-            productDetailContainer: '.product-details-info', // Usando uma classe CSS mais estável como container principal.
+            // Lista de seletores para o container principal dos detalhes do produto. Aumenta a robustez.
+            productDetailContainer: ['div.product-details', '.product-details-info', 'app-detalhe-produto'],
             // Seletores de página de produto (individual) - Adicionando mais alternativas
             productName: ['div.product-description span.title-product'],
             productSKU: ['div.cod-prod div.code span'],
@@ -160,10 +160,10 @@ export class DismatalScraper {
             this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
             // A espera mais robusta é simplesmente aguardar que o container principal do produto
             // esteja visível na página. Isso é mais rápido e confiável do que `waitForFunction`
-            // para este cenário, pois o componente Angular renderiza todo o bloco de uma vez.
-            await page.waitForSelector(this.selectors.productDetailContainer, { visible: true, timeout: 60000 });
+            // para este cenário. Usamos `findSelector` para testar múltiplos seletores.
+            const containerSelector = await findSelector(page, this.selectors.productDetailContainer, 60000);
             
-            this.logger.info(`[DismatalScraper] Conteúdo do produto carregado. Prosseguindo com a extração.`);
+            this.logger.info(`[DismatalScraper] Conteúdo do produto carregado (usando seletor '${containerSelector}'). Prosseguindo com a extração.`);
         } catch (waitError) {
             this.logger.error('[DismatalScraper] Timeout ao esperar pelo conteúdo do produto.', waitError);
             
@@ -180,7 +180,7 @@ export class DismatalScraper {
 
         // Extrair os dados da página.
         this.logger.info(`[DismatalScraper] URL final: ${page.url()}`);
-        const extractedProducts = await this.extractProductData(page, searchTerm);
+        const extractedProducts = await this.extractProductData(page, searchTerm, this.selectors.productDetailContainer);
 
         return extractedProducts;
     }
@@ -233,7 +233,7 @@ export class DismatalScraper {
      * @param {string} searchTerm
      * @returns {Promise<Array>}
      */
-    async extractProductData(page, searchTerm) {
+    async extractProductData(page, searchTerm, containerSelectors) {
         let produtos = [];
         const currentUrl = page.url();
 
@@ -252,7 +252,7 @@ export class DismatalScraper {
         } else {
             // Se não for uma página de busca, verifica se é uma página de produto individual
             this.logger.info('[DismatalScraper] Detectada página de produto individual. Usando pageParser...');
-            const produto = await page.evaluate(pageParser, this.selectors);
+            const produto = await page.evaluate(pageParser, { ...this.selectors, productDetailContainer: containerSelectors.join(',') });
 
             if (produto && produto.nome && produto.preco) { // Validação simples
                 produtos.push({ ...produto, codigo: produto.sku || searchTerm.toString() });
