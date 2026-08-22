@@ -126,7 +126,7 @@ async function main() {
         browserInstance = await initBrowser(config);
 
         logger.info('🔐 Autenticando no portal...');
-        await browserInstance.page.goto(env.PORTAL_URL, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        await browserInstance.page.goto(env.PORTAL_URL, { waitUntil: 'domcontentloaded', timeout: 120000 });
         await authenticate(browserInstance.page, {
             credentials: { username: env.PORTAL_USERNAME, password: env.PORTAL_PASSWORD },
             retryAttempts: env.RETRY_ATTEMPTS,

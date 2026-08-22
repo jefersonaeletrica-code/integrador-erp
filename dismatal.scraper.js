@@ -139,7 +139,7 @@ export class DismatalScraper {
     async _fetchProductPage(page, url, searchTerm) {
         const productUrl = `${url}/produtos/${searchTerm}`;
         this.logger.info(`[DismatalScraper] Navegando para a URL do produto: ${productUrl}`);
-        await page.goto(productUrl, { waitUntil: 'networkidle2', timeout: 60000 });
+        await page.goto(productUrl, { waitUntil: 'domcontentloaded', timeout: 120000 });
 
         // Tenta fechar qualquer modal de boas-vindas que possa ter aparecido.
         await this._closeWelcomeModal(page);

@@ -26,7 +26,7 @@ export async function initBrowser(config) {
         throw new Error('A variável de ambiente BROWSERLESS_API_KEY não está configurada.');
     }
 
-    const browserWSEndpoint = `wss://chrome.browserless.io?token=${BROWSERLESS_API_KEY}&--no-sandbox`;
+    const browserWSEndpoint = `wss://chrome.browserless.io?token=${BROWSERLESS_API_KEY}&timeout=300000&--no-sandbox`;
 
     try {
         isBrowserInUse = true; // Bloqueia a criação de novas instâncias

@@ -116,8 +116,8 @@ async function performLogin(page, credentials, selectors) {
         // A abordagem mais robusta para um clique que causa navegação.
         // Executa o clique e espera a navegação resultante ao mesmo tempo.
         await Promise.all([
-            page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 60000 }),
             page.click(submitSelector),
+            page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 120000 }),
         ]);
 
         // Após a navegação, a nova página está carregada. Agora podemos validar o sucesso.
@@ -197,7 +197,7 @@ export async function tryCookieAuth(page, url, sessionData, selectors) {
     await page.setCookie(...sessionData.cookies);
 
     // 3. Now, navigate to the URL. The browser will send the cookies with the request.
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 45000 });
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120000 });
 
     // 4. After the page loads with the cookie-based session, restore localStorage.
     if (sessionData.localStorage) {
@@ -206,7 +206,7 @@ export async function tryCookieAuth(page, url, sessionData, selectors) {
                 localStorage.setItem(key, savedLocalStorage[key]);
             }
         }, sessionData.localStorage);
-        await page.reload({ waitUntil: 'networkidle2', timeout: 45000 }); // Reload for the JS to pick up localStorage
+        await page.reload({ waitUntil: 'domcontentloaded', timeout: 120000 }); // Reload for the JS to pick up localStorage
     }
 
     // Salva um screenshot da página após tentar restaurar a sessão para depuração.
@@ -263,7 +263,7 @@ export async function tryPasswordLogin(page, options, selectors) {
                 page = await page.browser().newPage();
             }
 
-            await page.goto(url, { waitUntil: 'networkidle0', timeout: 60000 });
+            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120000 });
             // A função performLogin retorna { page, sessionData }
             const result = await performLogin(page, credentials, selectors);
             // Retorna o resultado completo, incluindo a instância da página usada.
