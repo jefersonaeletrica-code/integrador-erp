@@ -8,29 +8,29 @@ import { loadInitialData } from './productService.js';
 const logger = getLogger();
 const PORT = process.env.PORT || 3000;
 
-// Inicializa o banco de dados e carrega os dados iniciais
-const { app, supplierConnections } = await createApp();
-// Carrega os dados de produtos do DB para a memória
-await loadInitialData();
+async function startServer() {
+    // Inicializa o banco de dados e carrega os dados iniciais
+    const { app } = await createApp();
 
-const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+    const server = http.createServer(app);
+    const wss = new WebSocketServer({ server });
 
-wss.on('connection', ws => {
-    logger.info('[WebSocket] Cliente conectado.');
-    ws.on('close', () => {
-        logger.info('[WebSocket] Cliente desconectado.');
+    wss.on('connection', ws => {
+        logger.info('[WebSocket] Cliente conectado.');
+        ws.on('close', () => {
+            logger.info('[WebSocket] Cliente desconectado.');
+        });
     });
-});
 
-// Passa a instância do WSS para o app para que as rotas possam usá-la
-app.set('wss', wss);
+    // Passa a instância do WSS para o app para que as rotas possam usá-la
+    app.set('wss', wss);
 
-server.listen(PORT, async () => {
-    try {
+    server.listen(PORT, () => {
         logger.info(`Servidor rodando na porta ${PORT}`);
-    } catch (error) {
-        logger.error('Falha ao iniciar o servidor:', error);
-        process.exit(1);
-    }
+    });
+}
+
+startServer().catch(error => {
+    logger.error('Falha fatal ao iniciar o servidor.', error);
+    process.exit(1);
 });
