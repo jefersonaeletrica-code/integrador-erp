@@ -211,8 +211,12 @@ export class DismatalScraper {
 
             // A lógica de log para "nenhum produto encontrado" já está dentro de _fetchProductPage e extractProductData
 
+            if (produtos.length === 0) {
+                this.logger.info('[DismatalScraper] Nenhum produto encontrado para o termo de busca.');
+                return { sucesso: false, erro: 'Nenhum produto foi encontrado com este SKU.', produtos: [] };
+            }
             this.logger.info(`[DismatalScraper] Busca concluída. Total de produtos: ${produtos.length}.`);
-            return { sucesso: true, produtos };
+            return { sucesso: true, produtos: produtos };
         } catch (error) {
             this.logger.error('[DismatalScraper] Falha ao buscar produtos.', error);
             // A captura de screenshots de erro agora é tratada dentro de _fetchProductPage
