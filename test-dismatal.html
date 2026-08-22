@@ -115,33 +115,43 @@
             searchBtn.disabled = true;
             spinner.style.display = 'inline-block';
 
-            const response = await fetch(`/api/supplier-connections/${connectionId}/products`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ searchTerm })
-            });
-            const result = await response.json();
+            try {
+                const response = await fetch(`/api/supplier-connections/${connectionId}/products`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ searchTerm })
+                });
 
-            searchBtn.disabled = false;
-            spinner.style.display = 'none';
-            modalOverlay.style.display = 'flex';
+                if (!response.ok) {
+                    throw new Error(`Erro na requisição: ${response.status} ${response.statusText}`);
+                }
 
-            if (result.sucesso && result.produtos && result.produtos.length > 0) {
-                const product = result.produtos[0];
-                modalTitle.innerText = 'Produto Encontrado!';
-                modalBody.innerHTML = `
-                    <p><strong>Nome:</strong> ${product.nome}</p>
-                    <p><strong>SKU:</strong> ${product.sku || product.codigo}</p>
-                    <p><strong>Preço:</strong> R$ ${product.preco.toFixed(2)}</p>
-                    <p><strong>Estoque:</strong> ${product.estoque !== null ? product.estoque : 'Não informado'}</p>
-                    <p><strong>Imagens:</strong></p>
-                    <div style="display: flex; flex-wrap: wrap; gap: 10px; max-height: 150px; overflow-y: auto;">
-                        ${(product.imagens || []).map(url => `<img src="${url}" style="width: 50px; height: 50px; object-fit: cover; border: 1px solid #ddd;">`).join('')}
-                    </div>
-                `;
-            } else {
-                modalTitle.innerText = 'Falha na Busca';
-                modalBody.innerHTML = `<p>${result.erro || 'A busca não retornou produtos ou ocorreu um erro desconhecido.'}</p>`;
+                const result = await response.json();
+
+                if (result.sucesso && result.produtos && result.produtos.length > 0) {
+                    const product = result.produtos[0];
+                    modalTitle.innerText = 'Produto Encontrado!';
+                    modalBody.innerHTML = `
+                        <p><strong>Nome:</strong> ${product.nome}</p>
+                        <p><strong>SKU:</strong> ${product.sku || product.codigo}</p>
+                        <p><strong>Preço:</strong> R$ ${product.preco ? product.preco.toFixed(2) : 'N/A'}</p>
+                        <p><strong>Estoque:</strong> ${product.estoque !== null ? product.estoque : 'Não informado'}</p>
+                        <p><strong>Imagens:</strong></p>
+                        <div style="display: flex; flex-wrap: wrap; gap: 10px; max-height: 150px; overflow-y: auto;">
+                            ${(product.imagens || []).map(url => `<img src="${url}" style="width: 50px; height: 50px; object-fit: cover; border: 1px solid #ddd;">`).join('')}
+                        </div>
+                    `;
+                } else {
+                    modalTitle.innerText = 'Falha na Busca';
+                    modalBody.innerHTML = `<p>${result.erro || 'A busca não retornou produtos ou ocorreu um erro desconhecido.'}</p>`;
+                }
+            } catch (error) {
+                modalTitle.innerText = 'Erro Crítico no Frontend';
+                modalBody.innerHTML = `<p>Ocorreu um erro ao tentar comunicar com a API ou processar a resposta.</p><p><strong>Detalhe:</strong> ${error.message}</p>`;
+            } finally {
+                searchBtn.disabled = false;
+                spinner.style.display = 'none';
+                modalOverlay.style.display = 'flex';
             }
         });
 
