@@ -126,6 +126,7 @@
             spinner.style.display = 'none';
             modalOverlay.style.display = 'flex';
 
+            // Lógica corrigida para exibir os dados do produto ou a mensagem de erro.
             if (result.sucesso && result.produtos.length > 0) {
                 const product = result.produtos[0];
                 modalTitle.innerText = 'Produto Encontrado!';
