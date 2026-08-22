@@ -136,3 +136,29 @@ export const listPageParser = (selectors) => {
 export const isValidSKU = (term) => {
     return /^\d{5,}$/.test(term);
 };
+
+/**
+ * Gera uma representação em texto da estrutura do DOM, incluindo Shadow Roots.
+ * Esta função é executada no contexto do navegador.
+ * @returns {string}
+ */
+export const getDOMStructure = () => {
+    let structure = '';
+
+    function traverse(node, prefix = '') {
+        if (node.nodeType !== Node.ELEMENT_NODE) return;
+
+        const tagName = node.tagName.toLowerCase();
+        const id = node.id ? `#${node.id}` : '';
+        const classes = node.className && typeof node.className === 'string' ? `.${node.className.trim().split(/\s+/).join('.')}` : '';
+        structure += `${prefix}<${tagName}${id}${classes}>\n`;
+
+        if (node.shadowRoot) {
+            structure += `${prefix}  #shadow-root\n`;
+            node.shadowRoot.childNodes.forEach(child => traverse(child, prefix + '    '));
+        }
+        node.childNodes.forEach(child => traverse(child, prefix + '  '));
+    }
+    traverse(document.body);
+    return structure;
+};

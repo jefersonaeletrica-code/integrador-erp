@@ -8,7 +8,8 @@ import {
     findSelector,
     pageParser,
     listPageParser,
-    isValidSKU
+    isValidSKU,
+    getDOMStructure
 } from './parsers.js';
 
 /**
@@ -190,18 +191,10 @@ export class DismatalScraper {
             
             // LOG APRIMORADO: Extrai e loga o conteúdo do Shadow DOM para depuração.
             if (!page.isClosed()) {
-                const shadowContent = await page.evaluate((selector) => {
-                    const appRoot = document.querySelector('app-root');
-                    if (appRoot && appRoot.shadowRoot) {
-                        const productContainer = appRoot.shadowRoot.querySelector(selector);
-                        if (productContainer) {
-                            // Retorna o innerHTML do shadowRoot do container do produto, ou o innerHTML do próprio container
-                            return productContainer.shadowRoot?.innerHTML || productContainer.innerHTML;
-                        }
-                        return `Product container (${selector}) not found in app-root's shadow DOM. App-root shadow DOM: ${appRoot.shadowRoot.innerHTML}`;
-                    }
-                    return 'App-root ou seu shadow DOM não encontrado.';
-                }, this.selectors.productDetailContainer);
+                // A nova função de diagnóstico que extrai a estrutura completa do DOM.
+                const domStructure = await page.evaluate(getDOMStructure);
+
+                this.logger.warn(`[DismatalScraper] Estrutura completa do DOM no momento do erro:`, { domStructure });
 
                 this.logger.warn(`[DismatalScraper] Conteúdo do Shadow DOM no momento do erro:`, { shadowHTML: shadowContent });
 
