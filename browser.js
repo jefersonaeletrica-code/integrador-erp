@@ -17,22 +17,18 @@ export async function initBrowser(config) {
     const logger = getLogger();
     logger.info('Inicializando instância do navegador...');
 
-    if (isBrowserInUse) {
-        logger.warn('[Browser] Tentativa de iniciar um novo navegador enquanto um já está em uso. Operação bloqueada.');
-        throw new Error('Uma operação de navegador já está em andamento. Tente novamente mais tarde.');
-    }
-
     if (!BROWSERLESS_API_KEY) {
         throw new Error('A variável de ambiente BROWSERLESS_API_KEY não está configurada.');
     }
 
-    const browserWSEndpoint = `wss://chrome.browserless.io?token=${BROWSERLESS_API_KEY}&timeout=300000&--no-sandbox`;
+    // Endpoint de conexão do Browserless.io
+    const browserWSEndpoint = `wss://chrome.browserless.io?token=${BROWSERLESS_API_KEY}&--no-sandbox&timeout=300000`;
 
     try {
         isBrowserInUse = true; // Bloqueia a criação de novas instâncias
         const browser = await puppeteer.connect({
             browserWSEndpoint,
-            timeout: 120000, // Adiciona um timeout de 2 minutos para a conexão
+            timeout: 120000, // Timeout de 2 minutos para a conexão inicial
         });
         const page = await browser.newPage();
         await page.setViewport(BROWSER_CONFIG.defaultViewport);
@@ -41,7 +37,7 @@ export async function initBrowser(config) {
         logger.info('Navegador conectado e página criada com sucesso.');
         return browserInstance;
     } catch (error) {
-        logger.error('Falha ao conectar ao Browserless.', error);
+        logger.error('Falha ao conectar ao serviço de navegador remoto (Browserless).', error);
         isBrowserInUse = false; // Libera o bloqueio em caso de falha
         throw new Error('Não foi possível inicializar o navegador remoto.');
     }
@@ -53,7 +49,7 @@ export async function initBrowser(config) {
  */
 export async function closeBrowser(instance) {
     if (instance && instance.browser && instance.browser.isConnected()) {        
-        await instance.browser.disconnect();
+        await instance.browser.disconnect(); // Apenas desconecta, não fecha o navegador remoto
         getLogger().info('Conexão com o navegador remoto fechada.');
     }
     // Libera o bloqueio para que uma nova instância possa ser criada no futuro.
