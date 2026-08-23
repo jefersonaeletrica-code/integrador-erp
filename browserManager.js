@@ -44,10 +44,14 @@ class BrowserManager {
         const browserInstance = await initBrowser({ headless: true });
         let { page } = browserInstance;
 
-        // Otimização de Performance: Desativa o cache para garantir dados frescos,
-        // mas isso pode ser ajustado dependendo da necessidade.
-        await page.setCacheEnabled(false);
+        // Otimização de Performance: Habilita o cache para simular um navegador real e acelerar carregamentos.
+        await page.setCacheEnabled(true);
 
+        // Simula um comportamento mais humano para evitar detecção.
+        await page.evaluateOnNewDocument(() => {
+            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+        });
+        await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36');
 
         try {
             const authResult = await authenticate(page, {
@@ -69,6 +73,9 @@ class BrowserManager {
             // Armazena a instância completa (browser e page) para uso futuro
             this.instances.set(connectionId, { browser: page.browser(), page });
             logger.info(`[BrowserManager] Nova instância para a conexão ${connectionId} criada e autenticada com sucesso.`);
+
+            // Simula um movimento de mouse para "acordar" a página.
+            await page.mouse.move(Math.random() * 800, Math.random() * 600);
 
             return page;
         } catch (error) {
