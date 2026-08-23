@@ -297,11 +297,13 @@ export class DismatalScraper {
     async fetchProducts(connection, searchTerm) {
         const { url } = connection.credentials;
         this.logger.info(`[DismatalScraper] Iniciando busca de produtos para o termo: ${searchTerm}`);
+        let page;
         try {
             // Otimização: Obter uma página autenticada do gerenciador
-            const page = await browserManager.getOrCreateInstance(connection);
+            page = await browserManager.getOrCreateInstance(connection);
 
             let produtos = [];
+
 
             // --- ESTRATÉGIA 1: Tentar Navegação Direta (mais rápido) ---
             try {
@@ -326,7 +328,7 @@ export class DismatalScraper {
             this.logger.info(`[DismatalScraper] Busca concluída. Total de produtos: ${produtos.length}.`);
             return { sucesso: true, produtos: produtos };
         } catch (error) {
-            this.logger.error('[DismatalScraper] Falha ao buscar produtos.', error);
+            this.logger.error('[DismatalScraper] Falha crítica ao buscar produtos.', error);
             // Retorna o erro no formato padrão para ser enviado via WebSocket.
             const errorMessage = error instanceof Error ? error.message : String(error);
             return { sucesso: false, erro: errorMessage, produtos: [] };

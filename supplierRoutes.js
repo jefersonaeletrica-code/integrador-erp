@@ -107,28 +107,17 @@ export default (db, supplierConnections) => {
         const { searchTerm } = req.body;
         const connection = supplierConnections.find(c => c.id == id);
 
-        const logger = getLogger();
-        const wss = req.app.get('wss'); // Obtém a instância do WebSocketServer
-
         if (!connection) return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
         if (connection.type !== 'dismatal_webscraper') return res.status(400).json({ sucesso: false, erro: 'Busca de produtos disponível apenas para conexões Dismatal.' });
 
         try {
-            // Adiciona a tarefa à fila. A função não espera mais pelo resultado.
-            addToQueue(async () => {
-                const scraper = new DismatalScraper({ headless: true });
-                const result = await scraper.fetchProducts(connection, searchTerm);
-                
-                // Quando o resultado estiver pronto, envia para todos os clientes WebSocket conectados.
-                logger.info('[WebSocket] Enviando resultado da busca para os clientes.');
-                wss.clients.forEach(client => {
-                    if (client.readyState === client.OPEN) {
-                        client.send(JSON.stringify(result));
-                    }
-                });
-            });
-            // Responde imediatamente à requisição HTTP para evitar timeout.
-            res.status(202).json({ sucesso: true, mensagem: 'A busca foi iniciada. O resultado será enviado via WebSocket quando estiver pronto.' });
+            // A busca agora é síncrona em relação à requisição HTTP.
+            // O `addToQueue` garante que apenas uma busca ocorra por vez no backend.
+            const scraper = new DismatalScraper({ headless: true });
+            const result = await addToQueue(() => scraper.fetchProducts(connection, searchTerm));
+
+            // Retorna o resultado diretamente na resposta da API.
+            res.status(200).json(result);
         } catch (e) {
             res.status(500).json({ sucesso: false, erro: `Erro durante a busca de produtos: ${e.message}` });
         }
