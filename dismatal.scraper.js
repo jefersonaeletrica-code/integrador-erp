@@ -162,6 +162,19 @@ export class DismatalScraper {
             this.logger.error('[DismatalScraper] Falha ao capturar screenshot após fechar o modal.', screenshotError);
         }
 
+        // LOG DE DEPURAÇÃO: Salva o conteúdo HTML da página para análise.
+        try {
+            const pageContent = await page.content();
+            const debugDir = path.join(process.cwd(), 'debug_screenshots');
+            fs.mkdirSync(debugDir, { recursive: true });
+            const htmlLogPath = path.join(debugDir, `dismatal-page-content-${Date.now()}.html`);
+            fs.writeFileSync(htmlLogPath, pageContent, 'utf8');
+            this.logger.info(`[DismatalScraper] Conteúdo HTML da página salvo para depuração em: ${htmlLogPath}`);
+        } catch (logError) {
+            this.logger.error('[DismatalScraper] Falha ao salvar o log de conteúdo HTML.', logError);
+        }
+
+
         try {
             this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
             // A espera mais robusta é simplesmente aguardar que o container principal do produto
