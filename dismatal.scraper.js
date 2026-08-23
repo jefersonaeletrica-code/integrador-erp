@@ -175,7 +175,7 @@ export class DismatalScraper {
         try {
             // Usa waitForSelector com um timeout curto para verificar se o modal existe,
             // o que é mais eficiente do que uma pausa fixa.
-            const closeModalSelector = await findSelector(page, this.selectors.welcomeModalCloseButton, 5000);
+            const closeModalSelector = await findSelector(page, this.selectors.welcomeModalCloseButton, 1000);
             if (closeModalSelector) {
                 this.logger.info('[DismatalScraper] Modal de boas-vindas encontrado. Fechando...');
                 await page.click(closeModalSelector);
