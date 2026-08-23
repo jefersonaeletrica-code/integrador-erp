@@ -21,30 +21,80 @@ export class DismatalScraper {
         this.config = config;
         this.logger = getLogger();
         this.selectors = {
+            // --- Seletores de Autenticação (baseado no seu exemplo) ---
             ...DEFAULT_LOGIN_SELECTORS,
-            // Seletores de busca
-            // O erro "Campo de busca não foi encontrado na página inicial" indica que nenhum desses seletores
-            // está correspondendo ao campo de busca real no portal Dismatal. Adicionado seletor com base no placeholder.
-            searchInput: ['input[placeholder="O que você está procurando?"]', 'input[name="descricao"]', 'input[placeholder*="produto"]', 'input[type="search"]'],
-            // Lista de seletores para o container principal dos detalhes do produto. Aumenta a robustez.
-            productDetailContainer: ['div.product-details', '.product-details-info', 'app-detalhe-produto'],
-            // Seletores de página de produto (individual) - Adicionando mais alternativas
-            productName: ['div.product-description span.title-product'],
-            productSKU: ['div.cod-prod div.code span'],
-            productPrice: ['div.price-group__unity-price span:not(.price-group__before-price)'],
-            promoPrice: ['[data-promo-price]', '.promotional-price', '.sale-price'],
-            productImages: ['.product-media img'], // Seletor para capturar todas as imagens do produto
-            stock: ['.stock-info', '.product-stock', '#stock', '[data-stock]'],
-            // Seletores de lista de produtos
-            productListItem: ['.product-item', '.product-card', '.product-tile', 'div[role="listitem"]'],
-            listItemName: ['.product-name', '.product-title', 'h3', 'a.link'],
-            listItemSKU: ['.product-sku', '.product-code', '[data-sku]'],
-            listItemPrice: ['.product-price', '.price', '.price-tag', '[data-price]'],
-            // Seletores para estados alternativos na página do produto
+            loginModal: ['[role="dialog"]', '.modal', '.login-modal', '.mat-dialog-container'],
+
+            // --- Seletores de Busca ---
+            searchInput: [
+                'input[placeholder*="sku"]', 'input[placeholder*="SKU"]',
+                'input[placeholder*="produto"]', 'input[placeholder*="Produto"]',
+                'input.search-input', '.search-field input', 'input[type="search"]'
+            ],
+
+            // --- Contêineres e Estados da Página ---
+            productDetailContainer: ['div.product-details', '.product-details-info', 'app-detalhe-produto', '[data-product-container]'],
+            productListItem: ['.product-grid', '.product-list', '.items-list', '.product-item', '.product-card'],
             productNotFound: ['.not-found-container', '.product-not-found', '.empty-results'],
             captchaContainer: ['#captcha-container', 'div.g-recaptcha', '[data-captcha]'],
-            // Seletor para detectar um estado de carregamento travado
             loadingSpinner: ['.spinner', 'app-loading', '[class*="loading"]', '[class*="spinner"]'],
+
+            // --- Detalhes do Produto (Página Individual) ---
+            productName: [
+                '[data-product-name]', '[itemprop="name"]', 'h1.product-title',
+                'h1.product-name', '.product-name h1', 'div.product-description span.title-product', 'h1'
+            ],
+            productSKU: [
+                '[data-sku]', '[data-product-sku]', '[itemprop="sku"]', '.sku',
+                '.product-sku', '.codigo-produto', 'div.cod-prod div.code span'
+            ],
+            productPrice: [
+                '[data-price]', '[data-product-price]', '[itemprop="price"]',
+                '.product-price', '.price-value', '.preco-tabela',
+                'div.price-group__unity-price span:not(.price-group__before-price)'
+            ],
+            promoPrice: [
+                '[data-promo-price]', '[data-sale-price]', '.promotional-price',
+                '.sale-price', '.preco-promocional'
+            ],
+            stock: [
+                '[data-stock]', '[data-product-stock]', '[itemprop="availability"]',
+                '.product-stock', '.stock-available', '.estoque', '.stock-info'
+            ],
+            productImages: [
+                '.product-media img', 'img.product-image', '[data-product-image]'
+            ],
+
+            // --- Detalhes do Produto (Página de Lista) ---
+            listItemName: [
+                '.product-name', '.product-title', 'h3', 'a.link'
+            ],
+            listItemSKU: [
+                '.product-sku', '.product-code', '[data-sku]'
+            ],
+            listItemPrice: [
+                '.product-price', '.price', '.price-tag', '[data-price]'
+            ],
+
+            // --- Seletores de Preços Múltiplos / Atacado ---
+            multipleTable: [
+                '[data-multiplos-table]', '.tabela-multiplos', '.tabela-atacado',
+                '.compre-pague-menos', 'table.multiplos'
+            ],
+            multipleLowerPrice: [
+                '[data-multiple-price]', '.multiplo-preco', 'td[data-price]'
+            ],
+            multipleQuantity: [
+                '[data-multiple-qty]', '.multiplo-quantidade', 'td[data-qty]'
+            ],
+
+            // --- Seletores de Informações Tributárias (IPI) ---
+            tributaryInfo: [
+                '[data-tributary-info]', '.infos-tributarias', '.tax-information'
+            ],
+            ipiField: [
+                '[data-ipi-value]', '.ipi-percent', '.ipi-value', 'span.ipi'
+            ],
         };
     }
 

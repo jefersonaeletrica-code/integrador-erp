@@ -38,14 +38,13 @@ export function validateProduct(productData) {
  * @returns {object|null}
  */
 export const pageParser = (selectors) => {
-    // Como não há Shadow DOM, o "root" para a busca é o próprio documento,
-    // e os seletores precisam ser específicos o suficiente.
     const productRoot = document.querySelector(selectors.productDetailContainer);
+    if (!productRoot) return null;
 
-    // Helper que tenta múltiplos seletores e retorna o texto do primeiro que funcionar.
+    // --- Funções Auxiliares (inspiradas no seu exemplo) ---
+
     const extractText = (root, selArray) => {
         if (!root) return null;
-
         for (const sel of selArray) {
             const element = root.querySelector(sel);
             if (element) return element.textContent.trim();
@@ -55,12 +54,11 @@ export const pageParser = (selectors) => {
 
     const extractImageUrls = (root, selArray) => {
         if (!root) return [];
-        const urls = new Set(); // Usa um Set para evitar URLs duplicadas
+        const urls = new Set();
         for (const sel of selArray) {
             const elements = root.querySelectorAll(sel);
             elements.forEach(img => {
                 if (img.src) {
-                    // Converte a URL para absoluta para garantir que seja sempre válida
                     const absoluteUrl = new URL(img.src, document.baseURI).href;
                     urls.add(absoluteUrl);
                 }
@@ -70,24 +68,109 @@ export const pageParser = (selectors) => {
     };
 
     const parsePrice = (text) => {
-        if (!text) return null;
-        const cleaned = text.replace(/[^\d,.]/g, '').replace(/\./g, '').replace(',', '.');
-        const price = parseFloat(cleaned);
-        return isNaN(price) ? null : price;
+        if (!text || typeof text !== 'string' || text.trim().length === 0) return null;
+        let cleaned = text.replace(/R\$\s*/gi, '').replace(/\s/g, '').trim();
+        if (cleaned.length === 0) return null;
+        const priceMatch = cleaned.match(/[\d.,]+/);
+        if (!priceMatch) return null;
+        let numberPart = priceMatch[0];
+        if (numberPart.includes(',') && numberPart.includes('.')) {
+            numberPart = numberPart.replace(/\./g, '').replace(',', '.');
+        } else if (numberPart.includes(',')) {
+            numberPart = numberPart.replace(',', '.');
+        }
+        const parsed = parseFloat(numberPart);
+        return isNaN(parsed) || parsed < 0 ? null : Math.round(parsed * 100) / 100;
     };
 
+    const parseStock = (text) => {
+        if (!text) return null;
+        const matches = text.match(/(\d+)/);
+        if (matches?.[1]) {
+            const stock = parseInt(matches[1], 10);
+            return !isNaN(stock) && stock >= 0 ? stock : null;
+        }
+        return null;
+    };
+
+    const getLowestValidPrice = (prices) => {
+        const validPrices = prices.filter(p => p !== undefined && p !== null && p > 0);
+        return validPrices.length > 0 ? Math.min(...validPrices) : null;
+    };
+
+    const extractMultiplePrice = (root) => {
+        for (const tableSelector of selectors.multipleTable) {
+            const table = root.querySelector(tableSelector);
+            if (!table) continue;
+            for (const priceSelector of selectors.multipleLowerPrice) {
+                const priceEl = table.querySelector(priceSelector);
+                if (priceEl?.textContent) {
+                    const price = parsePrice(priceEl.textContent);
+                    if (price !== null && price > 0) return price;
+                }
+            }
+        }
+        return null;
+    };
+
+    const extractIPI = (root) => {
+        // Estratégia 1: Campo específico
+        for (const selector of selectors.ipiField) {
+            const el = root.querySelector(selector);
+            if (el?.textContent) {
+                const ipi = parsePrice(el.textContent);
+                if (ipi !== null && ipi >= 0) return ipi;
+            }
+        }
+        // Estratégia 2: Seção de informações tributárias
+        for (const selector of selectors.tributaryInfo) {
+            const el = root.querySelector(selector);
+            if (el?.textContent) {
+                const matches = el.textContent.match(/ipi[:\s]+([0-9,]+\.?[0-9]*)\s*%?/i);
+                if (matches?.[1]) {
+                    const ipi = parsePrice(matches[1]);
+                    if (ipi !== null && ipi >= 0) return ipi;
+                }
+            }
+        }
+        // Estratégia 3: Fallback no corpo do documento
+        const bodyText = document.body?.textContent || '';
+        const matches = bodyText.match(/ipi[:\s]+([0-9,]+\.?[0-9]*)\s*%?/i);
+        if (matches?.[1]) {
+            const ipi = parsePrice(matches[1]);
+            if (ipi !== null && ipi >= 0) return ipi;
+        }
+        return null;
+    };
+
+    // --- Extração Principal ---
     const nome = extractText(productRoot, selectors.productName);
     const sku = extractText(productRoot, selectors.productSKU);
-    const precoText = extractText(productRoot, selectors.productPrice) || extractText(productRoot, selectors.promoPrice);
-    const estoqueText = extractText(productRoot, selectors.stock);
+    const estoque = parseStock(extractText(productRoot, selectors.stock));
     const imagens = extractImageUrls(productRoot, selectors.productImages);
-    
-    const preco = parsePrice(precoText);
-    const estoque = estoqueText ? parseInt(estoqueText.replace(/\D/g, ''), 10) : 0;
 
-    if (!nome || !preco) return null;
+    // --- Lógica de Preços ---
+    const precoRegular = parsePrice(extractText(productRoot, selectors.productPrice));
+    const precoPromocional = parsePrice(extractText(productRoot, selectors.promoPrice));
+    const precoMultiplo = extractMultiplePrice(productRoot);
 
-    return { nome, sku, preco, estoque, imagens };
+    const precoFinal = getLowestValidPrice([precoRegular, precoPromocional, precoMultiplo]);
+
+    // --- Lógica de IPI ---
+    const ipi = extractIPI(productRoot);
+
+    // Validação final: um produto precisa ter nome e preço para ser considerado válido.
+    if (!nome || !precoFinal) return null;
+
+    return {
+        nome,
+        sku,
+        preco: precoFinal,
+        estoque,
+        imagens,
+        ipi,
+        precoMultiplo,
+    };
 };
 
 /**
