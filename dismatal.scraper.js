@@ -312,8 +312,22 @@ export class DismatalScraper {
         await page.type(searchInputSelector, searchTerm);
         await page.keyboard.press('Enter');
 
-        // 3. Aguarda a navegação para a página de resultados e extrai os dados
-        await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: 120000 });
+        // 3. Aguarda o resultado da busca, que é uma atualização dinâmica, não uma navegação.
+        // Usamos a mesma lógica de "corrida" da navegação direta para aguardar o resultado.
+        this.logger.info('[DismatalScraper] Busca executada. Aguardando resultados dinâmicos...');
+        const raceResult = await Promise.race([
+            new Promise(resolve => setTimeout(() => resolve({ state: 'hard_timeout' }), 30000)),
+            findSelector(page, this.selectors.productDetailContainer, 120000).then(selector => ({ state: 'product', selector })),
+            findSelector(page, this.selectors.productNotFound, 120000).then(selector => ({ state: 'not_found', selector })),
+        ]);
+
+        if (raceResult.state === 'product') {
+            this.logger.info(`[DismatalScraper] Resultados da busca carregados. Prosseguindo com a extração.`);
+        } else if (raceResult.state === 'not_found' || raceResult.state === 'hard_timeout') {
+            this.logger.warn(`[DismatalScraper] A busca não retornou um produto válido ou excedeu o tempo de espera.`);
+            throw new Error('A busca manual não encontrou o produto ou a página não respondeu.');
+        }
+
         return await this.extractProductData(page, searchTerm, this.selectors.productDetailContainer);
     }
 
