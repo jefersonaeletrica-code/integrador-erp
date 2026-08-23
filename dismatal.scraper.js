@@ -43,6 +43,8 @@ export class DismatalScraper {
             // Seletores para estados alternativos na página do produto
             productNotFound: ['.not-found-container', '.product-not-found', '.empty-results'],
             captchaContainer: ['#captcha-container', 'div.g-recaptcha', '[data-captcha]'],
+            // Seletor para detectar um estado de carregamento travado
+            loadingSpinner: ['.spinner', 'app-loading', '[class*="loading"]', '[class*="spinner"]'],
         };
     }
 
@@ -181,6 +183,17 @@ export class DismatalScraper {
             this.logger.info(`[DismatalScraper] Aguardando o conteúdo do produto ou um estado alternativo (erro, captcha)...`);
 
             const raceResult = await Promise.race([
+                // Adiciona uma promessa que resolve se um spinner ficar visível por muito tempo
+                (async () => {
+                    try {
+                        await page.waitForSelector(this.selectors.loadingSpinner.join(','), { visible: true, timeout: 15000 });
+                        // Se o spinner ainda estiver lá após 15s, consideramos que a página travou.
+                        return { state: 'loading_stuck', selector: this.selectors.loadingSpinner[0] };
+                    } catch (e) {
+                        // Se o spinner não aparecer ou desaparecer, esta promessa nunca vencerá a corrida, o que é bom.
+                        return new Promise(() => {}); // Retorna uma promessa que nunca resolve
+                    }
+                })(),
                 findSelector(page, this.selectors.productDetailContainer, 120000).then(selector => ({ state: 'product', selector })),
                 findSelector(page, this.selectors.productNotFound, 120000).then(selector => ({ state: 'not_found', selector })),
                 findSelector(page, this.selectors.captchaContainer, 120000).then(selector => ({ state: 'captcha', selector })),
@@ -194,6 +207,9 @@ export class DismatalScraper {
             } else if (raceResult.state === 'captcha') {
                 this.logger.error(`[DismatalScraper] CAPTCHA detectado. A busca não pode continuar.`);
                 throw new Error('CAPTCHA detectado, bloqueando o acesso do scraper.');
+            } else if (raceResult.state === 'loading_stuck') {
+                this.logger.error(`[DismatalScraper] A página parece ter travado em um estado de carregamento.`);
+                throw new Error('A página do produto travou durante o carregamento.');
             } else {
                 // Este caso não deve acontecer com Promise.race, mas é uma salvaguarda.
                 throw new Error('Estado da página indeterminado após o carregamento.');
@@ -208,8 +224,8 @@ export class DismatalScraper {
                 await page.screenshot({ path: screenshotPath, fullPage: true });
                 this.logger.info(`[DismatalScraper] Screenshot do erro salvo em: ${screenshotPath}`);
             }
-            // Se o erro já for específico (ex: CAPTCHA), repassa. Senão, usa uma mensagem de timeout.
-            if (waitError.message.includes('CAPTCHA') || waitError.message.includes('Produto não encontrado')) {
+            // Se o erro já for específico, repassa. Senão, usa uma mensagem de timeout.
+            if (['CAPTCHA', 'Produto não encontrado', 'travou'].some(term => waitError.message.includes(term))) {
                 throw waitError;
             }
             throw new Error(`Timeout: O conteúdo do produto não foi carregado em 2 minutos.`);
