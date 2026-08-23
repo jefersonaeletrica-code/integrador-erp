@@ -150,6 +150,7 @@ export const pageParser = (selectors) => {
     // --- Extração Principal ---
     const nome = extractText(productRoot, selectors.productName);
     const sku = extractText(productRoot, selectors.productSKU);
+    const descricao = extractText(productRoot, selectors.productDescription);
     const estoque = parseStock(extractText(productRoot, selectors.stock));
     const imagens = extractImageUrls(productRoot, selectors.productImages);
 
@@ -169,6 +170,7 @@ export const pageParser = (selectors) => {
     return {
         nome,
         sku,
+        descricao,
         preco: precoFinal,
         estoque,
         imagens,

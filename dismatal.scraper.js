@@ -44,14 +44,19 @@ export class DismatalScraper {
                 '[data-product-name]', '[itemprop="name"]', 'h1.product-title',
                 'h1.product-name', '.product-name h1', 'div.product-description span.title-product', 'h1'
             ],
+            productDescription: [
+                'div.description-feature',
+                '[data-product-description]',
+                '.product-description'
+            ],
             productSKU: [
                 '[data-sku]', '[data-product-sku]', '[itemprop="sku"]', '.sku',
                 '.product-sku', '.codigo-produto', 'div.cod-prod div.code span'
             ],
             productPrice: [
-                '[data-price]', '[data-product-price]', '[itemprop="price"]',
-                '.product-price', '.price-value', '.preco-tabela',
-                'div.price-group__unity-price span:not(.price-group__before-price)'
+                'div.price-group__unity-price span', // Seletor mais específico para o preço unitário.
+                '[data-price]', '[data-product-price]', '[itemprop="price"]', // Seletores genéricos.
+                '.product-price', '.price-value', '.preco-tabela'
             ],
             promoPrice: [
                 '[data-promo-price]', '[data-sale-price]', '.promotional-price',
