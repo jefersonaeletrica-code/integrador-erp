@@ -387,34 +387,30 @@ export class DismatalScraper {
      * @returns {Promise<Array>}
      */
     async extractProductData(page, searchTerm, containerSelectors) {
-        let produtos = [];
         const currentUrl = page.url();
+        this.logger.info(`[DismatalScraper] Iniciando extração de dados da URL: ${currentUrl}`);
 
-        // Verifica se a URL indica uma página de lista de resultados de busca
-        if (currentUrl.includes('/busca')) {
-            this.logger.info('[DismatalScraper] Detectada página de lista de produtos. Usando listPageParser...');
-            const produtosDaLista = await page.evaluate(listPageParser, this.selectors);
+        // A lógica agora é unificada. Se chegamos aqui, a página de produto foi encontrada.
+        // Apenas extraímos os dados que estão nela.
+        const produtoExtraido = await page.evaluate(pageParser, { ...this.selectors, productDetailContainer: containerSelectors.join(',') });
 
-            if (produtosDaLista.length > 0) {
-                this.logger.info(`[DismatalScraper] Encontrados ${produtosDaLista.length} produtos na lista.`);
-                // Filtra e valida os produtos da lista
-                produtos = produtosDaLista
-                    .map(p => ({ ...p, codigo: p.codigo || searchTerm.toString() }))
-                    .filter(p => p.nome && p.preco); // Validação simples
-            }
-        } else {
-            // Se não for uma página de busca, verifica se é uma página de produto individual
-            this.logger.info('[DismatalScraper] Detectada página de produto individual. Usando pageParser...');
-            const produto = await page.evaluate(pageParser, { ...this.selectors, productDetailContainer: containerSelectors.join(',') });
-
-            if (produto && produto.nome && produto.preco) { // Validação simples
-                produtos.push({ ...produto, codigo: produto.sku || searchTerm.toString() });
-                this.logger.info('[DismatalScraper] Extração do produto bem-sucedida.');
-            } else if (produto) {
-                this.logger.warn('[DismatalScraper] Produto extraído, mas dados inválidos.');
-            }
+        if (!produtoExtraido || !produtoExtraido.nome || !produtoExtraido.preco) {
+            this.logger.warn('[DismatalScraper] O parser não conseguiu extrair os dados essenciais (nome/preço) do produto.');
+            return [];
         }
 
-        return produtos;
+        // A validação de SKU foi removida. Confiamos que a navegação nos levou ao produto correto.
+        // O SKU buscado é mantido, e o SKU da página é salvo como um campo separado.
+        const produtoFinal = {
+            ...produtoExtraido,
+            sku: searchTerm, // O SKU original que foi buscado.
+            codigoFornecedor: produtoExtraido.sku, // O código de referência encontrado na página.
+        };
+
+        // Remove a propriedade 'sku' duplicada do objeto principal, se existir, para evitar confusão.
+        delete produtoFinal.sku;
+
+        this.logger.info('[DismatalScraper] Extração do produto bem-sucedida.', { skuBuscado: searchTerm, skuNaPagina: produtoFinal.codigoFornecedor });
+        return [produtoFinal];
     }
 }
