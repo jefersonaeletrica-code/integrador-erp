@@ -63,8 +63,9 @@ export class DismatalScraper {
                 '.sale-price', '.preco-promocional'
             ],
             stock: [
+                'div.available-stock', // Seletor específico para o estoque disponível.
                 '[data-stock]', '[data-product-stock]', '[itemprop="availability"]',
-                '.product-stock', '.stock-available', '.estoque', '.stock-info'
+                '.product-stock', '.stock-available', '.estoque', '.stock-info', '.disponivel-time-lead'
             ],
             productImages: [
                 '.product-media img', 'img.product-image', '[data-product-image]'
