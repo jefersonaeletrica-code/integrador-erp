@@ -47,7 +47,11 @@ export const pageParser = (selectors) => {
         if (!root) return null;
         for (const sel of selArray) {
             const element = root.querySelector(sel);
-            if (element) return element.textContent.trim();
+            if (element && element.textContent) {
+                // Remove prefixos comuns como "Código: " ou "SKU: " para limpar o dado.
+                const cleanedText = element.textContent.replace(/^(c[óo]digo|sku|ref[eê]rencia):?\s*/i, '').trim();
+                if (cleanedText) return cleanedText;
+            }
         }
         return null;
     };
@@ -218,5 +222,6 @@ export const listPageParser = (selectors) => {
  * @returns {boolean}
  */
 export const isValidSKU = (term) => {
-    return /^\d{5,}$/.test(term);
+    // Torna a validação mais flexível, aceitando números, letras e hífens, com no mínimo 5 caracteres.
+    return /^[a-zA-Z0-9-]{5,}$/.test(term);
 };

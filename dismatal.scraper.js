@@ -352,12 +352,16 @@ export class DismatalScraper {
 
             // --- ESTRATÉGIA 1: Tentar Navegação Direta (mais rápido) ---
             try {
+                // Apenas tenta a navegação direta se o termo de busca for um SKU válido.
                 if (searchTerm && isValidSKU(searchTerm)) {
                     this.logger.info(`[DismatalScraper] Estratégia 1: Tentando navegação direta para o SKU: ${searchTerm}`);
                     produtos = await this._tryDirectNavigation(page, url, searchTerm);
+                } else {
+                    // Se não for um SKU, pula direto para a busca manual.
+                    throw new Error('Termo de busca não é um SKU válido, pulando para a Estratégia 2.');
                 }
             } catch (e) {
-                this.logger.warn(`[DismatalScraper] Estratégia 1 (Navegação Direta) falhou: ${e.message}. Tentando Estratégia 2 (Busca Manual).`);
+                this.logger.warn(`[DismatalScraper] Estratégia 1 (Navegação Direta) falhou ou foi pulada: ${e.message}. Iniciando Estratégia 2 (Busca Manual).`);
                 // --- ESTRATÉGIA 2: Fallback para Busca Manual ---
                 produtos = await this._trySearchStrategy(page, url, searchTerm);
             }
