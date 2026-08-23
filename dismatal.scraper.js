@@ -193,17 +193,23 @@ export class DismatalScraper {
      */
     async _tryDirectNavigation(page, url, searchTerm) {
         const productUrl = `${url}/produtos/${searchTerm}`;
+
+        // OTIMIZAÇÃO: Bloqueia recursos desnecessários para acelerar o carregamento.
+        await page.setRequestInterception(true);
+        const requestHandler = (req) => {
+            if (['image', 'stylesheet', 'font', 'media'].includes(req.resourceType())) {
+                req.abort();
+            } else {
+                req.continue();
+            }
+        };
+        page.on('request', requestHandler);
+
         this.logger.info(`[DismatalScraper] Navegando para a URL do produto: ${productUrl}`);
         await page.goto(productUrl, { waitUntil: 'domcontentloaded', timeout: 120000 }); // Timeout de 2 minutos
 
         // Tenta fechar qualquer modal de boas-vindas que possa ter aparecido.
         await this._closeWelcomeModal(page);
-
-        // Simula uma rolagem para "acordar" scripts de lazy-loading.
-        this.logger.debug('[DismatalScraper] Simulando rolagem da página para disparar a renderização de conteúdo.');
-        await page.evaluate(() => window.scrollBy(0, 500));
-        await new Promise(resolve => setTimeout(resolve, 500));
-        await page.evaluate(() => window.scrollBy(0, -500));
 
         // Adiciona o screenshot solicitado APÓS fechar o modal.
         try {
@@ -239,6 +245,10 @@ export class DismatalScraper {
             this.logger.error('[DismatalScraper] Falha ao definir o conteúdo HTML da página.', error);
             throw new Error(`Falha ao processar o HTML da página do produto: ${error.message}`);
         }
+
+        // Desativa a interceptação para não afetar outras operações.
+        page.off('request', requestHandler);
+        await page.setRequestInterception(false);
 
         // Extrair os dados da página.
         this.logger.info(`[DismatalScraper] URL final: ${page.url()}`);

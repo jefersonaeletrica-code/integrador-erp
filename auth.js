@@ -188,6 +188,18 @@ export async function tryCookieAuth(page, url, sessionData, selectors) {
         throw new Error("Nenhum dado de sessão fornecido para validação.");
     }
 
+    // OTIMIZAÇÃO: Bloqueia recursos desnecessários para acelerar a validação.
+    await page.setRequestInterception(true);
+    const requestHandler = (req) => {
+        const resourceType = req.resourceType();
+        if (['image', 'font', 'media'].includes(resourceType)) {
+            req.abort();
+        } else {
+            req.continue();
+        }
+    };
+    page.on('request', requestHandler);
+
     // More robust session restoration logic:
     // 1. Go to a blank page to ensure we have a clean context
     // before setting cookies for a specific domain.
@@ -226,6 +238,10 @@ export async function tryCookieAuth(page, url, sessionData, selectors) {
     await page.waitForSelector(selectors.loginButton.join(','), { visible: true, timeout: 15000 });
 
     logger.info('[Auth] Sessão com cookies validada com sucesso.');
+
+    // Desativa a interceptação após a conclusão.
+    page.off('request', requestHandler);
+    await page.setRequestInterception(false);
     return { page, sessionData }; // Retorna a página e os dados de sessão originais, pois são válidos
 }
 
