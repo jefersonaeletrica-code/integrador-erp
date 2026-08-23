@@ -145,6 +145,12 @@ export class DismatalScraper {
         // Tenta fechar qualquer modal de boas-vindas que possa ter aparecido.
         await this._closeWelcomeModal(page);
 
+        // Simula uma rolagem para "acordar" scripts de lazy-loading.
+        this.logger.debug('[DismatalScraper] Simulando rolagem da página para disparar a renderização de conteúdo.');
+        await page.evaluate(() => window.scrollBy(0, 500));
+        await new Promise(resolve => setTimeout(resolve, 500));
+        await page.evaluate(() => window.scrollBy(0, -500));
+
         // Adiciona o screenshot solicitado APÓS fechar o modal.
         try {
             const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
@@ -199,7 +205,7 @@ export class DismatalScraper {
 
             let produtos = [];
 
-            // Estratégia de Navegação Direta Aprimorada
+            // Estratégia de Navegação Direta Aprimorada (conforme solicitado).
             if (searchTerm && isValidSKU(searchTerm)) {
                 this.logger.info(`[DismatalScraper] Iniciando busca por navegação direta para o SKU: ${searchTerm}`);
                 // Passa a página já autenticada para a lógica de busca
