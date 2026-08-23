@@ -303,6 +303,11 @@ export class DismatalScraper {
         // 1. Garante que estamos na página inicial para realizar a busca
         if (!page.url().endsWith('.br/')) {
             await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120000 });
+            // Adiciona uma pausa e rolagem para garantir que a página inicial esteja totalmente renderizada
+            // antes de procurar o campo de busca.
+            this.logger.debug('[DismatalScraper] Página inicial carregada. Aguardando estabilização...');
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            await page.evaluate(() => window.scrollBy(0, 200));
         }
 
         // 2. Encontra o campo de busca e digita o termo
