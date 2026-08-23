@@ -187,6 +187,22 @@
         <div class="w-16 h-16 border-4 border-dashed rounded-full animate-spin border-white"></div>
     </div>
 
+    <!-- Modal Genérico para Resultados -->
+    <div id="resultModal" class="hidden fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center p-4 border-b">
+                <h3 id="modalTitle" class="text-lg font-semibold text-gray-800">Resultado da Busca</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-gray-600">&times;</button>
+            </div>
+            <div id="modalBody" class="p-6 overflow-y-auto">
+                <!-- O conteúdo será inserido aqui -->
+            </div>
+            <div class="p-4 bg-gray-50 border-t rounded-b-xl text-right">
+                <button onclick="closeModal()" class="bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-700">Fechar</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         let produtosGlobais = [];
         let produtosImportadosGlobais = [];
@@ -194,6 +210,15 @@
         let filtroAtual = null;
         let conexoesGlobais = [];
         let conexoesFornecedoresGlobais = [];
+
+        // Funções de controle do Modal
+        function showModal(title, bodyHtml) {
+            document.getElementById('modalTitle').innerText = title;
+            document.getElementById('modalBody').innerHTML = bodyHtml;
+            document.getElementById('resultModal').classList.remove('hidden');
+        }
+
+        function closeModal() { document.getElementById('resultModal').classList.add('hidden'); }
 
         // Funções de controle do Spinner
         function showSpinner() {
@@ -897,12 +922,33 @@
                 });
                 const data = await res.json();
 
-                if (data.sucesso) {
-                    const message = searchTerm ? `Busca por "${searchTerm}" encontrou ${data.produtos.length} produtos.` : `${data.produtos.length} produtos encontrados!`;
-                    alert(message + ' Veja o console do navegador para detalhes.');
-                    console.log('Produtos da Dismatal:', data.produtos);
+                if (!data.sucesso) {
+                    showModal('Erro na Busca', `<div class="text-red-600">${data.erro}</div>`);
+                } else if (data.produtos.length === 0) {
+                    showModal('Resultado da Busca', '<div class="text-gray-600">Nenhum produto encontrado para o termo informado.</div>');
                 } else {
-                    alert(`Falha ao buscar produtos: ${data.erro}`);
+                    const productsHtml = data.produtos.map(product => {
+                        const price = product.preco ? `R$ ${product.preco.toFixed(2)}` : 'Preço indisponível';
+                        const stock = product.estoque !== null ? `${product.estoque} em estoque` : 'Estoque indisponível';
+                        const image = product.imagens && product.imagens.length > 0 ? product.imagens[0] : 'https://via.placeholder.com/150';
+                        const sku = product.codigoFornecedor || product.sku || 'N/A';
+
+                        return `
+                            <div class="flex items-start gap-4 p-4 border rounded-lg mb-4 shadow-sm bg-gray-50">
+                                <div class="flex-shrink-0 w-24 h-24 bg-white border rounded-md flex items-center justify-center">
+                                    <img src="${image}" alt="Imagem do Produto" class="max-w-full max-h-full object-contain">
+                                </div>
+                                <div class="flex-grow">
+                                    <h4 class="font-bold text-gray-800">${product.nome || 'Nome indisponível'}</h4>
+                                    <p class="text-sm text-gray-500 font-mono">SKU: ${sku}</p>
+                                    <p class="text-2xl font-bold text-green-600 mt-2">${price}</p>
+                                    <p class="text-sm text-gray-600 mt-1">${stock}</p>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+
+                    showModal(`Busca por "${searchTerm}"`, productsHtml);
                 }
             } finally { // Garante que o spinner seja escondido
                 hideSpinner();
