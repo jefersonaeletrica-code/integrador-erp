@@ -56,6 +56,21 @@ export const pageParser = (selectors) => {
         return null;
     };
 
+    const extractContent = (root, selArray, { removeChild = '' } = {}) => {
+        if (!root) return null;
+        for (const sel of selArray) {
+            const element = root.querySelector(sel);
+            if (element) {
+                const clone = element.cloneNode(true);
+                if (removeChild) {
+                    const childToRemove = clone.querySelector(removeChild);
+                    if (childToRemove) childToRemove.remove();
+                }
+                return clone.innerHTML.trim();
+            }
+        }
+        return null;
+    };
     const extractImageUrls = (root, selArray) => {
         if (!root) return [];
         const urls = new Set();
@@ -117,6 +132,24 @@ export const pageParser = (selectors) => {
         return null;
     };
 
+    const extractAndGetLowestPrice = (root, selArray) => {
+        if (!root) return null;
+        for (const sel of selArray) {
+            const element = root.querySelector(sel);
+            if (element && element.textContent) {
+                // Encontra todos os números que parecem ser preços no texto
+                const priceMatches = element.textContent.match(/R\$\s*[\d.,]+/g);
+                if (priceMatches) {
+                    const prices = priceMatches.map(parsePrice).filter(p => p !== null && p > 0);
+                    if (prices.length > 0) {
+                        return Math.min(...prices);
+                    }
+                }
+            }
+        }
+        return null;
+    };
+
     const extractIPI = (root) => {
         // Estratégia 1: Campo específico
         for (const selector of selectors.ipiField) {
@@ -150,12 +183,12 @@ export const pageParser = (selectors) => {
     // --- Extração Principal ---
     const nome = extractText(productRoot, selectors.productName);
     const sku = extractText(productRoot, selectors.productSKU);
-    const descricao = extractText(productRoot, selectors.productDescription);
+    const descricao = extractContent(productRoot, selectors.productDescription, { removeChild: 'h2' });
     const estoque = parseStock(extractText(productRoot, selectors.stock));
     const imagens = extractImageUrls(productRoot, selectors.productImages);
 
     // --- Lógica de Preços ---
-    const precoRegular = parsePrice(extractText(productRoot, selectors.productPrice));
+    const precoRegular = extractAndGetLowestPrice(productRoot, selectors.productPrice);
     const precoPromocional = parsePrice(extractText(productRoot, selectors.promoPrice));
     const precoMultiplo = extractMultiplePrice(productRoot);
 
