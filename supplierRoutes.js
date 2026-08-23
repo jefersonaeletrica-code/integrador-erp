@@ -29,7 +29,9 @@ export default (db, supplierConnections) => {
         }
     });
 
-    router.get('/supplier-connections', async (req, res) => {
+    router.get('/supplier-connections', async (req, res) => { // A rota agora é assíncrona
+        // Lê os dados mais recentes do banco de dados a cada requisição
+        const { supplierConnections } = await db.readDb();
         const connectionsWithSafeCredentials = supplierConnections.map(conn => {
             const safeCreds = { ...conn.credentials };
             if (safeCreds.password) {
