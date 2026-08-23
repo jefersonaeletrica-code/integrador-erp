@@ -40,7 +40,9 @@ export class DismatalScraper {
             listItemName: ['.product-name', '.product-title', 'h3', 'a.link'],
             listItemSKU: ['.product-sku', '.product-code', '[data-sku]'],
             listItemPrice: ['.product-price', '.price', '.price-tag', '[data-price]'],
-            listItemStock: ['.product-stock', '.stock-status', '[data-stock-status]'],
+            // Seletores para estados alternativos na página do produto
+            productNotFound: ['.not-found-container', '.product-not-found', '.empty-results'],
+            captchaContainer: ['#captcha-container', 'div.g-recaptcha', '[data-captcha]'],
         };
     }
 
@@ -176,15 +178,27 @@ export class DismatalScraper {
 
 
         try {
-            this.logger.info(`[DismatalScraper] Aguardando o conteúdo dinâmico do produto carregar (URL: ${page.url()})...`);
-            // A espera mais robusta é simplesmente aguardar que o container principal do produto
-            // esteja visível na página. Isso é mais rápido e confiável do que `waitForFunction`
-            // para este cenário. Usamos `findSelector` para testar múltiplos seletores.
-            const containerSelector = await findSelector(page, this.selectors.productDetailContainer, 120000); // Timeout de 2 minutos
-            
-            this.logger.info(`[DismatalScraper] Conteúdo do produto carregado (usando seletor '${containerSelector}'). Prosseguindo com a extração.`);
+            this.logger.info(`[DismatalScraper] Aguardando o conteúdo do produto ou um estado alternativo (erro, captcha)...`);
+
+            const raceResult = await Promise.race([
+                findSelector(page, this.selectors.productDetailContainer, 120000).then(selector => ({ state: 'product', selector })),
+                findSelector(page, this.selectors.productNotFound, 120000).then(selector => ({ state: 'not_found', selector })),
+                findSelector(page, this.selectors.captchaContainer, 120000).then(selector => ({ state: 'captcha', selector })),
+            ]);
+
+            if (raceResult.state === 'product') {
+                this.logger.info(`[DismatalScraper] Conteúdo do produto carregado (usando seletor '${raceResult.selector}'). Prosseguindo com a extração.`);
+            } else if (raceResult.state === 'not_found') {
+                this.logger.warn(`[DismatalScraper] Página de 'Produto não encontrado' detectada.`);
+                throw new Error('Produto não encontrado no portal do fornecedor.');
+            } else if (raceResult.state === 'captcha') {
+                this.logger.error(`[DismatalScraper] CAPTCHA detectado. A busca não pode continuar.`);
+                throw new Error('CAPTCHA detectado, bloqueando o acesso do scraper.');
+            } else {
+                // Este caso não deve acontecer com Promise.race, mas é uma salvaguarda.
+                throw new Error('Estado da página indeterminado após o carregamento.');
+            }
         } catch (waitError) {
-            this.logger.error('[DismatalScraper] Timeout ao esperar pelo conteúdo do produto.', waitError);
             
             // LOG APRIMORADO: Extrai e loga o conteúdo do Shadow DOM para depuração.
             if (!page.isClosed()) {
@@ -194,7 +208,11 @@ export class DismatalScraper {
                 await page.screenshot({ path: screenshotPath, fullPage: true });
                 this.logger.info(`[DismatalScraper] Screenshot do erro salvo em: ${screenshotPath}`);
             }
-            throw new Error('O conteúdo do produto não foi carregado na página.');
+            // Se o erro já for específico (ex: CAPTCHA), repassa. Senão, usa uma mensagem de timeout.
+            if (waitError.message.includes('CAPTCHA') || waitError.message.includes('Produto não encontrado')) {
+                throw waitError;
+            }
+            throw new Error(`Timeout: O conteúdo do produto não foi carregado em 2 minutos.`);
         }
 
         // Extrair os dados da página.
