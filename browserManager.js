@@ -44,23 +44,6 @@ class BrowserManager {
         const browserInstance = await initBrowser({ headless: true });
         let { page } = browserInstance;
 
-        // Otimização de Performance: Intercepta requisições para bloquear recursos desnecessários.
-        await page.setRequestInterception(true);
-        page.on('request', (req) => {
-            const resourceType = req.resourceType();
-            const url = req.url();
-            
-            // Bloqueia recursos visuais e scripts de rastreamento/anúncios para acelerar o carregamento
-            // e evitar pop-ups indesejados.
-            if (
-                ['image', 'font', 'media'].includes(resourceType) // Removemos o bloqueio de scripts para garantir que a lógica do site não quebre.
-            ) {
-                req.abort();
-            } else {
-                req.continue();
-            }
-        });
-
         // Otimização de Performance: Desativa o cache para garantir dados frescos,
         // mas isso pode ser ajustado dependendo da necessidade.
         await page.setCacheEnabled(false);

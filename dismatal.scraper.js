@@ -219,10 +219,8 @@ export class DismatalScraper {
             return { sucesso: true, produtos: produtos };
         } catch (error) {
             this.logger.error('[DismatalScraper] Falha ao buscar produtos.', error);
-            // A captura de screenshots de erro agora é tratada dentro de _fetchProductPage
-            // Em vez de lançar o erro, retorna no formato padrão
-            // Garante que o erro seja uma string para evitar problemas de serialização
-            const errorMessage = `Falha ao buscar produtos: ${error instanceof Error ? error.message : String(error)}`;
+            // Retorna o erro no formato padrão para ser enviado via WebSocket.
+            const errorMessage = error instanceof Error ? error.message : String(error);
             return { sucesso: false, erro: errorMessage, produtos: [] };
         }
     }
