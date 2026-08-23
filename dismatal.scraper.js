@@ -233,6 +233,8 @@ export class DismatalScraper {
             this.logger.info(`[DismatalScraper] Aguardando o conteúdo do produto ou um estado alternativo (erro, captcha)...`);
 
             const raceResult = await Promise.race([
+                // SALVAGUARDA: Timeout de segurança para evitar travamento indefinido.
+                new Promise(resolve => setTimeout(() => resolve({ state: 'hard_timeout' }), 30000)),
                 // Adiciona uma promessa que resolve se um spinner ficar visível por muito tempo
                 (async () => {
                     try {
@@ -260,6 +262,9 @@ export class DismatalScraper {
             } else if (raceResult.state === 'loading_stuck') {
                 this.logger.error(`[DismatalScraper] A página parece ter travado em um estado de carregamento.`);
                 throw new Error('A página do produto travou durante o carregamento.');
+            } else if (raceResult.state === 'hard_timeout') {
+                this.logger.error(`[DismatalScraper] Timeout de segurança atingido. A página não respondeu em 30 segundos.`);
+                throw new Error('A página não respondeu em tempo hábil.');
             } else {
                 // Este caso não deve acontecer com Promise.race, mas é uma salvaguarda.
                 throw new Error('Estado da página indeterminado após o carregamento.');
@@ -274,8 +279,8 @@ export class DismatalScraper {
                 await page.screenshot({ path: screenshotPath, fullPage: true });
                 this.logger.info(`[DismatalScraper] Screenshot do erro salvo em: ${screenshotPath}`);
             }
-            // Se o erro já for específico, repassa. Senão, usa uma mensagem de timeout.
-            if (['CAPTCHA', 'Produto não encontrado', 'travou'].some(term => waitError.message.includes(term))) {
+            // Se o erro já for específico, repassa.
+            if (['CAPTCHA', 'Produto não encontrado', 'travou', 'não respondeu'].some(term => waitError.message.includes(term))) {
                 throw waitError;
             }
             throw new Error(`Timeout: O conteúdo do produto não foi carregado em 2 minutos.`);
