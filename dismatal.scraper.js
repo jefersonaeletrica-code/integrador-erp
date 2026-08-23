@@ -228,68 +228,21 @@ export class DismatalScraper {
             this.logger.error('[DismatalScraper] Falha ao salvar o log de conteúdo HTML.', logError);
         }
 
-
+        // LÓGICA DE EXTRAÇÃO OTIMIZADA:
+        // Define o conteúdo capturado como a página estática para garantir que a extração
+        // ocorra no HTML exato que salvamos, evitando problemas com scripts dinâmicos.
         try {
-            this.logger.info(`[DismatalScraper] Aguardando o conteúdo do produto ou um estado alternativo (erro, captcha)...`);
-
-            const raceResult = await Promise.race([
-                // SALVAGUARDA: Timeout de segurança para evitar travamento indefinido.
-                new Promise(resolve => setTimeout(() => resolve({ state: 'hard_timeout' }), 30000)),
-                // Adiciona uma promessa que resolve se um spinner ficar visível por muito tempo
-                (async () => {
-                    try {
-                        await page.waitForSelector(this.selectors.loadingSpinner.join(','), { visible: true, timeout: 15000 });
-                        // Se o spinner ainda estiver lá após 15s, consideramos que a página travou.
-                        return { state: 'loading_stuck', selector: this.selectors.loadingSpinner[0] };
-                    } catch (e) {
-                        // Se o spinner não aparecer ou desaparecer, esta promessa nunca vencerá a corrida, o que é bom.
-                        return new Promise(() => {}); // Retorna uma promessa que nunca resolve
-                    }
-                })(),
-                findSelector(page, this.selectors.productDetailContainer, 120000).then(selector => ({ state: 'product', selector })),
-                findSelector(page, this.selectors.productNotFound, 120000).then(selector => ({ state: 'not_found', selector })),
-                findSelector(page, this.selectors.captchaContainer, 120000).then(selector => ({ state: 'captcha', selector })),
-            ]);
-
-            if (raceResult.state === 'product') {
-                this.logger.info(`[DismatalScraper] Conteúdo do produto carregado (usando seletor '${raceResult.selector}'). Prosseguindo com a extração.`);
-            } else if (raceResult.state === 'not_found') {
-                this.logger.warn(`[DismatalScraper] Página de 'Produto não encontrado' detectada.`);
-                throw new Error('Produto não encontrado no portal do fornecedor.');
-            } else if (raceResult.state === 'captcha') {
-                this.logger.error(`[DismatalScraper] CAPTCHA detectado. A busca não pode continuar.`);
-                throw new Error('CAPTCHA detectado, bloqueando o acesso do scraper.');
-            } else if (raceResult.state === 'loading_stuck') {
-                this.logger.error(`[DismatalScraper] A página parece ter travado em um estado de carregamento.`);
-                throw new Error('A página do produto travou durante o carregamento.');
-            } else if (raceResult.state === 'hard_timeout') {
-                this.logger.error(`[DismatalScraper] Timeout de segurança atingido. A página não respondeu em 30 segundos.`);
-                throw new Error('A página não respondeu em tempo hábil.');
-            } else {
-                // Este caso não deve acontecer com Promise.race, mas é uma salvaguarda.
-                throw new Error('Estado da página indeterminado após o carregamento.');
-            }
-        } catch (waitError) {
-            
-            // LOG APRIMORADO: Extrai e loga o conteúdo do Shadow DOM para depuração.
-            if (!page.isClosed()) {
-                const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
-                fs.mkdirSync(screenshotDir, { recursive: true });
-                const screenshotPath = path.join(screenshotDir, `dismatal-product-error-${Date.now()}.png`);
-                await page.screenshot({ path: screenshotPath, fullPage: true });
-                this.logger.info(`[DismatalScraper] Screenshot do erro salvo em: ${screenshotPath}`);
-            }
-            // Se o erro já for específico, repassa.
-            if (['CAPTCHA', 'Produto não encontrado', 'travou', 'não respondeu'].some(term => waitError.message.includes(term))) {
-                throw waitError;
-            }
-            throw new Error(`Timeout: O conteúdo do produto não foi carregado em 2 minutos.`);
+            const pageContent = await page.content();
+            this.logger.info(`[DismatalScraper] Definindo conteúdo HTML estático para extração.`);
+            await page.setContent(pageContent, { waitUntil: 'domcontentloaded' });
+        } catch (error) {
+            this.logger.error('[DismatalScraper] Falha ao definir o conteúdo HTML da página.', error);
+            throw new Error(`Falha ao processar o HTML da página do produto: ${error.message}`);
         }
 
         // Extrair os dados da página.
         this.logger.info(`[DismatalScraper] URL final: ${page.url()}`);
         const extractedProducts = await this.extractProductData(page, searchTerm, this.selectors.productDetailContainer);
-
         return extractedProducts;
     }
 
