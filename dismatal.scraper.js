@@ -381,6 +381,19 @@ export class DismatalScraper {
             this.logger.debug(`[DismatalScraper] Clicando no botão 'Adicionar'.`);
             await page.click(addButtonSelector);
 
+            // Tira um screenshot imediatamente após o clique para depuração visual.
+            try {
+                const debugDir = path.join(process.cwd(), 'debug_screenshots');
+                fs.mkdirSync(debugDir, { recursive: true });
+                const screenshotPath = path.join(debugDir, `dismatal-after-add-click-${Date.now()}.png`);
+                await page.screenshot({ path: screenshotPath, fullPage: true });
+                this.logger.info(`[DismatalScraper] Screenshot após clique em 'Adicionar' salvo em: ${screenshotPath}`);
+            } catch (screenshotError) {
+                this.logger.error('[DismatalScraper] Falha ao capturar screenshot após o clique.', screenshotError);
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 1000)); // Pausa para o pop-up renderizar
+
             // 4. Aguardar o pop-up de aviso de estoque e extrair o texto.
             // O seletor busca por um contêiner de diálogo que contenha o texto específico.
             const stockWarningSelector = '.mat-dialog-container:has-text("Disponíveis apenas")';
