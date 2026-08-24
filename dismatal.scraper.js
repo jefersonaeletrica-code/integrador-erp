@@ -353,6 +353,49 @@ export class DismatalScraper {
     }
 
     /**
+     * Tenta extrair o estoque dinamicamente, forçando o aparecimento do pop-up de aviso.
+     * @param {import('puppeteer').Page} page
+     * @returns {Promise<number|null>}
+     * @private
+     */
+    async _extractDynamicStock(page) {
+        this.logger.info('[DismatalScraper] Iniciando estratégia de extração de estoque dinâmico.');
+        try {
+            // 1. Encontrar o campo de quantidade. Usamos um seletor robusto.
+            const quantityInputSelector = 'input[data-test="QUANTITY-INPUT-VALUE"]';
+            await page.waitForSelector(quantityInputSelector, { visible: true, timeout: 5000 });
+
+            // 2. Preencher com um valor muito alto.
+            this.logger.debug(`[DismatalScraper] Preenchendo o campo de quantidade com um valor alto.`);
+            // O page.evaluate é mais confiável para limpar e definir o valor em campos complexos.
+            await page.evaluate(selector => {
+                const input = document.querySelector(selector);
+                if (input) input.value = '10000000';
+            }, quantityInputSelector);
+
+            // 3. Encontrar e clicar no botão "Adicionar".
+            const addButtonSelector = 'button.add-product.solo-button';
+            await page.waitForSelector(addButtonSelector, { visible: true, timeout: 5000 });
+            this.logger.debug(`[DismatalScraper] Clicando no botão 'Adicionar'.`);
+            await page.click(addButtonSelector);
+
+            // 4. Aguardar o pop-up de aviso de estoque e extrair o texto.
+            // O seletor busca por um contêiner de diálogo que contenha o texto específico.
+            const stockWarningSelector = '.mat-dialog-container:has-text("Disponíveis apenas")';
+            this.logger.debug(`[DismatalScraper] Aguardando pop-up de aviso de estoque.`);
+            const warningElement = await page.waitForSelector(stockWarningSelector, { visible: true, timeout: 10000 });
+            const warningText = await warningElement.evaluate(el => el.textContent);
+
+            // 5. Usar o parser de estoque para extrair o número do texto.
+            const stock = await page.evaluate(text => parseInt(text.match(/(\d+)/)?.[1] || null, 10), warningText);
+            this.logger.info(`[DismatalScraper] Estoque dinâmico extraído com sucesso: ${stock}`);
+            return stock;
+        } catch (error) {
+            this.logger.warn(`[DismatalScraper] Estratégia de estoque dinâmico falhou: ${error.message}. O estoque pode não ser retornado.`);
+            return null;
+        }
+    }
+    /**
      * Extrai dados do produto da página atual.
      * @param {import('puppeteer').Page} page
      * @param {string} searchTerm
@@ -371,16 +414,20 @@ export class DismatalScraper {
             return [];
         }
 
-        // A validação de SKU foi removida. Confiamos que a navegação nos levou ao produto correto.
-        // O SKU buscado é mantido, e o SKU da página é salvo como um campo separado.
+        // Tenta obter o estoque dinamicamente após a extração principal.
+        const dynamicStock = await this._extractDynamicStock(page);
+
+        // Se o estoque dinâmico foi encontrado, ele sobrepõe o que foi extraído inicialmente.
+        if (dynamicStock !== null) {
+            produtoExtraido.estoque = dynamicStock;
+        }
+
+        // O SKU buscado é mantido, e o SKU da página é salvo como um campo separado para referência.
         const produtoFinal = {
             ...produtoExtraido,
             sku: searchTerm, // O SKU original que foi buscado.
             codigoFornecedor: produtoExtraido.sku, // O código de referência encontrado na página.
         };
-
-        // Remove a propriedade 'sku' duplicada do objeto principal, se existir, para evitar confusão.
-        delete produtoFinal.sku;
 
         this.logger.info('[DismatalScraper] Extração do produto bem-sucedida.', { skuBuscado: searchTerm, skuNaPagina: produtoFinal.codigoFornecedor });
         return [produtoFinal];
