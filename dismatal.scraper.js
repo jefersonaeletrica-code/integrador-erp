@@ -367,20 +367,23 @@ export class DismatalScraper {
             const quantityInputSelector = 'input[data-test="QUANTITY-INPUT-VALUE"]';
             await page.waitForSelector(quantityInputSelector, { visible: true, timeout: 5000 });
 
-            // 2. Simula interação humana para preencher o campo de quantidade.
-            this.logger.debug('[DismatalScraper] Limpando e preenchendo o campo de quantidade via simulação de teclado.');
-            
-            // Clica 3 vezes para selecionar todo o conteúdo do input.
-            await page.click(quantityInputSelector, { clickCount: 3 });
-            await page.keyboard.press('Backspace'); // Limpa o campo.
-            
-            // Digita o valor alto. O delay simula um usuário digitando.
-            // Não usamos pontos, pois o campo de máscara deve formatar automaticamente.
-            await page.type(quantityInputSelector, '10000000', { delay: 30 });
+            // 2. Executa a manipulação do input dentro do contexto do navegador para garantir que o Angular detecte as alterações.
+            this.logger.debug('[DismatalScraper] Preenchendo quantidade via page.evaluate para garantir a detecção de mudanças pelo Angular.');
+            await page.evaluate((selector) => {
+                const input = document.querySelector(selector);
+                if (!input) return;
 
-            // Pressiona Tab para sair do campo e acionar a validação (blur).
-            await page.keyboard.press('Tab');
+                // Foca no elemento
+                input.focus();
+                // Define o valor diretamente
+                input.value = '10000000';
+                // Dispara o evento 'input' que muitos frameworks usam para detectar mudanças.
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                // Dispara o evento 'blur' para simular o usuário saindo do campo, o que geralmente aciona a validação.
+                input.dispatchEvent(new Event('blur', { bubbles: true }));
+            }, quantityInputSelector);
 
+            await page.waitForTimeout(500); // Pequena pausa para o framework processar a validação.
             // 3. Encontrar e clicar no botão "Adicionar".
             // Voltando a focar no botão interno, mas com uma abordagem de clique mais nativa.
             const addButtonSelector = 'button.add-product.solo-button';
