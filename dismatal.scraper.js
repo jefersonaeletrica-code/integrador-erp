@@ -380,15 +380,13 @@ export class DismatalScraper {
 
             // 3. Encontrar e clicar no botão "Adicionar".
             const addButtonSelector = 'button.add-product.solo-button';
-            this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar' com elementHandle.click().`);
+            this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar' com page.click().`);
 
             await page.waitForSelector(`${addButtonSelector}:not([disabled])`, { visible: true, timeout: 8000 });
 
-            // Usa elementHandle.click(), que é uma alternativa robusta ao clique por coordenadas.
-            const elementHandle = await page.$(addButtonSelector);
-            if (!elementHandle) throw new Error("Não foi possível encontrar o elemento do botão 'Adicionar'.");
-            await elementHandle.click({ delay: 100 });
-            this.logger.info(`[DismatalScraper] Clique com elementHandle.click() executado no botão 'Adicionar'.`);
+            // Usando a mesma técnica que funcionou para o modal de boas-vindas.
+            await page.click(addButtonSelector, { delay: 100 });
+            this.logger.info(`[DismatalScraper] Clique com page.click() executado no botão 'Adicionar'.`);
 
 
             // Tira um screenshot imediatamente após o clique para depuração visual.
