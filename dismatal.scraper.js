@@ -384,9 +384,20 @@ export class DismatalScraper {
 
             await page.waitForSelector(`${addButtonSelector}:not([disabled])`, { visible: true, timeout: 8000 });
 
-            // Tenta um clique duplo para garantir a interação, conforme solicitado.
-            await page.click(addButtonSelector, { clickCount: 2, delay: 100 });
-            this.logger.info(`[DismatalScraper] Clique duplo executado no botão 'Adicionar'.`);
+            // Abordagem final e mais robusta: Dispara um evento de clique diretamente no DOM.
+            // Isso contorna as camadas de abstração do Puppeteer e simula o evento
+            // da forma mais nativa possível para o navegador.
+            this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar' com dispatchEvent.`);
+            await page.evaluate((selector) => {
+                const button = document.querySelector(selector);
+                if (button) {
+                    const event = new MouseEvent('click', { view: window, bubbles: true, cancelable: true });
+                    button.dispatchEvent(event);
+                } else {
+                    throw new Error(`Botão com seletor "${selector}" não foi encontrado no DOM para o clique via dispatchEvent.`);
+                }
+            }, addButtonSelector);
+            this.logger.info(`[DismatalScraper] Clique com dispatchEvent executado no botão 'Adicionar'.`);
 
 
             // Tira um screenshot imediatamente após o clique para depuração visual.
