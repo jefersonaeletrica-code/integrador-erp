@@ -367,18 +367,19 @@ export class DismatalScraper {
             const quantityInputSelector = 'input[data-test="QUANTITY-INPUT-VALUE"]';
             await page.waitForSelector(quantityInputSelector, { visible: true, timeout: 5000 });
 
-            // 2. Foca, limpa e digita no campo de quantidade para simular um usuário real.
-            // Isso é mais confiável para frameworks como Angular.
-            this.logger.debug(`[DismatalScraper] Simulando digitação de valor alto no campo de quantidade.`);
-            await page.focus(quantityInputSelector);
-            // Limpa o campo antes de digitar
-            await page.evaluate((selector) => { document.querySelector(selector).value = '' }, quantityInputSelector);
-            // Digita o número com pontos para acionar a validação automática do site.
-            await page.type(quantityInputSelector, '10.000.000', { delay: 50 });
+            // 2. Define o valor e dispara os eventos 'input' e 'blur' para garantir que o Angular detecte a mudança.
+            this.logger.debug(`[DismatalScraper] Preenchendo quantidade e disparando eventos para validação.`);
+            await page.evaluate((selector) => {
+                const input = document.querySelector(selector);
+                if (input) {
+                    input.value = '10.000.000';
+                    // Dispara o evento 'input' para que o Angular reconheça a alteração do valor.
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    // Dispara o evento 'blur' para acionar a validação final do campo.
+                    input.dispatchEvent(new Event('blur', { bubbles: true }));
+                }
+            }, quantityInputSelector);
 
-            // PASSO INTERMEDIÁRIO: Clica fora do campo para disparar o evento 'blur' e validar o valor.
-            this.logger.debug('[DismatalScraper] Clicando fora do campo de quantidade para validar o valor.');
-            await page.click('body');
 
             await new Promise(resolve => setTimeout(resolve, 500)); // Pausa para o framework processar a validação.
 
