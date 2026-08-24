@@ -373,11 +373,8 @@ export class DismatalScraper {
             await page.focus(quantityInputSelector);
             // Limpa o campo antes de digitar
             await page.evaluate((selector) => { document.querySelector(selector).value = '' }, quantityInputSelector);
-            await page.type(quantityInputSelector, '10000000', { delay: 50 }); // Adiciona um pequeno delay
-
-            // NOVO PASSO: Clica fora do campo para disparar o evento 'blur' e validar o valor.
-            this.logger.debug('[DismatalScraper] Clicando fora do campo de quantidade para validar o valor.');
-            await page.click('body'); // Clicar no corpo da página é uma forma segura de remover o foco.
+            // Digita o número com pontos para acionar a validação automática do site.
+            await page.type(quantityInputSelector, '10.000.000', { delay: 50 });
 
             await new Promise(resolve => setTimeout(resolve, 500)); // Pausa para o framework processar a validação.
 
