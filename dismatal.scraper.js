@@ -367,21 +367,19 @@ export class DismatalScraper {
             const quantityInputSelector = 'input[data-test="QUANTITY-INPUT-VALUE"]';
             await page.waitForSelector(quantityInputSelector, { visible: true, timeout: 5000 });
 
-            // 2. Define o valor e dispara os eventos 'input' e 'blur' para garantir que o Angular detecte a mudança.
-            this.logger.debug(`[DismatalScraper] Preenchendo quantidade e disparando eventos para validação.`);
-            await page.evaluate((selector) => {
-                const input = document.querySelector(selector);
-                if (input) {
-                    input.value = '10.000.000';
-                    // Dispara o evento 'input' para que o Angular reconheça a alteração do valor.
-                    input.dispatchEvent(new Event('input', { bubbles: true }));
-                    // Dispara o evento 'blur' para acionar a validação final do campo.
-                    input.dispatchEvent(new Event('blur', { bubbles: true }));
-                }
-            }, quantityInputSelector);
+            // 2. Simula interação humana para preencher o campo de quantidade.
+            this.logger.debug('[DismatalScraper] Limpando e preenchendo o campo de quantidade via simulação de teclado.');
+            
+            // Clica 3 vezes para selecionar todo o conteúdo do input.
+            await page.click(quantityInputSelector, { clickCount: 3 });
+            await page.keyboard.press('Backspace'); // Limpa o campo.
+            
+            // Digita o valor alto. O delay simula um usuário digitando.
+            // Não usamos pontos, pois o campo de máscara deve formatar automaticamente.
+            await page.type(quantityInputSelector, '10000000', { delay: 30 });
 
-
-            await new Promise(resolve => setTimeout(resolve, 500)); // Pausa para o framework processar a validação.
+            // Pressiona Tab para sair do campo e acionar a validação (blur).
+            await page.keyboard.press('Tab');
 
             // 3. Encontrar e clicar no botão "Adicionar".
             // Voltando a focar no botão interno, mas com uma abordagem de clique mais nativa.
