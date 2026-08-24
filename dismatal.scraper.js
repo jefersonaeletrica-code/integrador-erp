@@ -380,20 +380,15 @@ export class DismatalScraper {
 
             // 3. Encontrar e clicar no botão "Adicionar".
             const addButtonSelector = 'button.add-product.solo-button';
-            this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar' por coordenadas.`);
+            this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar' com elementHandle.click().`);
 
             await page.waitForSelector(`${addButtonSelector}:not([disabled])`, { visible: true, timeout: 8000 });
 
-            // Abordagem de clique por coordenadas, a mais robusta.
+            // Usa elementHandle.click(), que é uma alternativa robusta ao clique por coordenadas.
             const elementHandle = await page.$(addButtonSelector);
             if (!elementHandle) throw new Error("Não foi possível encontrar o elemento do botão 'Adicionar'.");
-
-            const box = await elementHandle.boundingBox();
-            if (!box) throw new Error("Não foi possível obter as coordenadas do botão 'Adicionar'.");
-
-            // Clica no centro exato do elemento.
-            await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { delay: 50 });
-            this.logger.info(`[DismatalScraper] Clique por coordenadas executado no botão 'Adicionar'.`);
+            await elementHandle.click({ delay: 100 });
+            this.logger.info(`[DismatalScraper] Clique com elementHandle.click() executado no botão 'Adicionar'.`);
 
 
             // Tira um screenshot imediatamente após o clique para depuração visual.
