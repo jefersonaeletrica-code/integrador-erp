@@ -383,19 +383,19 @@ export class DismatalScraper {
             await new Promise(resolve => setTimeout(resolve, 500)); // Pausa para o framework processar a validação.
 
             // 3. Encontrar e clicar no botão "Adicionar".
-            // O clique deve ser no componente pai <app-button-add-warn-product> e não no <button> interno.
-            const addButtonSelector = 'app-button-add-warn-product';
+            // Voltando a focar no botão interno, mas com uma abordagem de clique mais nativa.
+            const addButtonSelector = 'button.add-product.solo-button';
             await page.waitForSelector(`${addButtonSelector}:not([disabled])`, { visible: true, timeout: 8000 });
 
-            // Abordagem final e mais robusta: Dispara um evento de clique diretamente no DOM.
-            // Isso contorna as camadas de abstração do Puppeteer e simula o evento
-            // da forma mais nativa possível para o navegador.
-            this.logger.debug(`[DismatalScraper] Tentando clicar no componente do botão 'Adicionar' com dispatchEvent.`);
+            // Abordagem de clique nativa via `evaluate`.
+            this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar' com element.click() nativo.`);
             await page.evaluate((selector) => {
-                const buttonComponent = document.querySelector(selector);
-                if (buttonComponent) {
-                    const event = new MouseEvent('click', { view: window, bubbles: true, cancelable: true });
-                    buttonComponent.dispatchEvent(event);
+                const button = document.querySelector(selector);
+                if (button) {
+                    // Rola para a visão, foca e então clica.
+                    button.scrollIntoView({ block: 'center' });
+                    button.focus();
+                    button.click(); // Dispara o clique nativo do elemento no DOM.
                 } else {
                     throw new Error(`Botão com seletor "${selector}" não foi encontrado no DOM para o clique via dispatchEvent.`);
                 }
