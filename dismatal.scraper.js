@@ -367,24 +367,25 @@ export class DismatalScraper {
             const quantityInputSelector = 'input[data-test="QUANTITY-INPUT-VALUE"]';
             await page.waitForSelector(quantityInputSelector, { visible: true, timeout: 5000 });
 
-            // 2. Interage diretamente com o componente Angular para garantir a detecção de mudanças.
-            this.logger.debug('[DismatalScraper] Preenchendo quantidade via manipulação direta do componente Angular.');
-            await page.evaluate((selector) => {
-                const input = document.querySelector(selector);
-                if (!input) return;
+            // 2. Foca no campo e simula a digitação humana para contornar máscaras de input.
+            this.logger.debug('[DismatalScraper] Focando e limpando o campo de quantidade.');
+            await page.focus(quantityInputSelector);
+            
+            // Simula Ctrl+A (selecionar tudo) e Backspace para limpar o campo de forma robusta.
+            await page.keyboard.down('Control');
+            await page.keyboard.press('A');
+            await page.keyboard.up('Control');
+            await page.keyboard.press('Backspace');
 
-                // Acessa as ferramentas de depuração do Angular (se disponíveis em 'window.ng')
-                const ng = window.ng;
-                if (ng) {
-                    // Obtém a instância do componente Angular associada ao elemento de input
-                    const component = ng.getComponent(input);
-                    if (component && typeof component.setValue === 'function') {
-                        // Usa o método do próprio componente para definir o valor
-                        component.setValue(10000000);
-                        // Marca o campo como "tocado" para simular o evento de blur
-                        if (typeof component.onTouched === 'function') component.onTouched();
-                    }
-                }
+            // Digita o valor caractere por caractere para permitir que a máscara de input processe.
+            this.logger.debug('[DismatalScraper] Digitanto o valor de alta quantidade lentamente.');
+            await page.type(quantityInputSelector, '10000000', { delay: 50 });
+
+            // Dispara um evento de input final para garantir que o Angular detecte a mudança.
+            this.logger.debug('[DismatalScraper] Disparando evento de input final.');
+            await page.evaluate(selector => {
+                const input = document.querySelector(selector);
+                input.dispatchEvent(new Event('input', { bubbles: true }));
             }, quantityInputSelector);
 
             await new Promise(resolve => setTimeout(resolve, 500)); // Pequena pausa para o framework processar a validação.
