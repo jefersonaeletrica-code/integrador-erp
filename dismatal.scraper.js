@@ -376,12 +376,14 @@ export class DismatalScraper {
             // Digita o número com pontos para acionar a validação automática do site.
             await page.type(quantityInputSelector, '10.000.000', { delay: 50 });
 
+            // PASSO INTERMEDIÁRIO: Clica fora do campo para disparar o evento 'blur' e validar o valor.
+            this.logger.debug('[DismatalScraper] Clicando fora do campo de quantidade para validar o valor.');
+            await page.click('body');
+
             await new Promise(resolve => setTimeout(resolve, 500)); // Pausa para o framework processar a validação.
 
             // 3. Encontrar e clicar no botão "Adicionar".
             const addButtonSelector = 'button.add-product.solo-button';
-            this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar' com page.click().`);
-
             await page.waitForSelector(`${addButtonSelector}:not([disabled])`, { visible: true, timeout: 8000 });
 
             // Abordagem final e mais robusta: Dispara um evento de clique diretamente no DOM.
