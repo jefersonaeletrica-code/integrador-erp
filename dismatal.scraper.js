@@ -379,12 +379,21 @@ export class DismatalScraper {
 
             // 3. Encontrar e clicar no botão "Adicionar".
             const addButtonSelector = 'button.add-product.solo-button';
-            // Espera o botão estar visível e não desabilitado.
-            await page.waitForSelector(`${addButtonSelector}:not([disabled])`, { visible: true, timeout: 5000 });
-            this.logger.debug(`[DismatalScraper] Clicando no botão 'Adicionar'.`);
-            // Usa page.evaluate para um clique mais robusto, que pode contornar
-            // elementos sobrepostos ou problemas de detecção do Puppeteer.
-            await page.evaluate(selector => document.querySelector(selector).click(), addButtonSelector);
+            this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar'.`);
+
+            // Abordagem de clique mais robusta:
+            // 1. Rola o elemento para a visão.
+            // 2. Espera por estabilidade.
+            // 3. Tenta um clique via JS, com fallback para o clique do Puppeteer.
+            await page.evaluate(selector => {
+                const element = document.querySelector(selector);
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, addButtonSelector);
+
+            await page.waitForSelector(`${addButtonSelector}:not([disabled])`, { visible: true, timeout: 8000 });
+            await page.click(addButtonSelector, { delay: 100 }); // Usa o clique do Puppeteer com um pequeno delay.
 
 
             // Tira um screenshot imediatamente após o clique para depuração visual.
