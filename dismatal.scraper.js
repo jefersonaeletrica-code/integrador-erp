@@ -383,7 +383,7 @@ export class DismatalScraper {
                 input.dispatchEvent(new Event('blur', { bubbles: true }));
             }, quantityInputSelector);
 
-            await page.waitForTimeout(500); // Pequena pausa para o framework processar a validação.
+            await new Promise(resolve => setTimeout(resolve, 500)); // Pequena pausa para o framework processar a validação.
             // 3. Encontrar e clicar no botão "Adicionar".
             // Voltando a focar no botão interno, mas com uma abordagem de clique mais nativa.
             const addButtonSelector = 'button.add-product.solo-button';
