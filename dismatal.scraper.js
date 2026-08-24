@@ -375,30 +375,17 @@ export class DismatalScraper {
             await page.evaluate((selector) => { document.querySelector(selector).value = '' }, quantityInputSelector);
             await page.type(quantityInputSelector, '10000000', { delay: 50 }); // Adiciona um pequeno delay
 
-            // NOVO PASSO: Pressiona 'Enter' para validar o valor inserido.
-            this.logger.debug('[DismatalScraper] Pressionando Enter para validar a quantidade.');
-            await page.keyboard.press('Enter');
+            // NOVO PASSO: Clica fora do campo para disparar o evento 'blur' e validar o valor.
+            this.logger.debug('[DismatalScraper] Clicando fora do campo de quantidade para validar o valor.');
+            await page.click('body'); // Clicar no corpo da página é uma forma segura de remover o foco.
 
             await new Promise(resolve => setTimeout(resolve, 500)); // Pausa para o framework processar a validação.
 
             // 3. Encontrar e clicar no botão "Adicionar".
             const addButtonSelector = 'button.add-product.solo-button';
-            this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar'.`);
             this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar' por coordenadas.`);
 
-            // Abordagem de clique mais robusta:
-            // 1. Rola o elemento para a visão.
-            // 2. Espera por estabilidade.
-            // 3. Tenta um clique via JS, com fallback para o clique do Puppeteer.
-            await page.evaluate(selector => {
-                const element = document.querySelector(selector);
-                if (element) {
-                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-            }, addButtonSelector);
-
             await page.waitForSelector(`${addButtonSelector}:not([disabled])`, { visible: true, timeout: 8000 });
-            await page.click(addButtonSelector, { delay: 100 }); // Usa o clique do Puppeteer com um pequeno delay.
 
             // Abordagem de clique por coordenadas, a mais robusta.
             const elementHandle = await page.$(addButtonSelector);
