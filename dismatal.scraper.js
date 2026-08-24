@@ -375,11 +375,16 @@ export class DismatalScraper {
             await page.evaluate((selector) => { document.querySelector(selector).value = '' }, quantityInputSelector);
             await page.type(quantityInputSelector, '10000000', { delay: 50 }); // Adiciona um pequeno delay
 
-            await new Promise(resolve => setTimeout(resolve, 500)); // Pausa para o framework processar o input
+            // NOVO PASSO: Pressiona 'Enter' para validar o valor inserido.
+            this.logger.debug('[DismatalScraper] Pressionando Enter para validar a quantidade.');
+            await page.keyboard.press('Enter');
+
+            await new Promise(resolve => setTimeout(resolve, 500)); // Pausa para o framework processar a validação.
 
             // 3. Encontrar e clicar no botão "Adicionar".
             const addButtonSelector = 'button.add-product.solo-button';
             this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar'.`);
+            this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar' por coordenadas.`);
 
             // Abordagem de clique mais robusta:
             // 1. Rola o elemento para a visão.
@@ -394,6 +399,17 @@ export class DismatalScraper {
 
             await page.waitForSelector(`${addButtonSelector}:not([disabled])`, { visible: true, timeout: 8000 });
             await page.click(addButtonSelector, { delay: 100 }); // Usa o clique do Puppeteer com um pequeno delay.
+
+            // Abordagem de clique por coordenadas, a mais robusta.
+            const elementHandle = await page.$(addButtonSelector);
+            if (!elementHandle) throw new Error("Não foi possível encontrar o elemento do botão 'Adicionar'.");
+
+            const box = await elementHandle.boundingBox();
+            if (!box) throw new Error("Não foi possível obter as coordenadas do botão 'Adicionar'.");
+
+            // Clica no centro exato do elemento.
+            await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { delay: 50 });
+            this.logger.info(`[DismatalScraper] Clique por coordenadas executado no botão 'Adicionar'.`);
 
 
             // Tira um screenshot imediatamente após o clique para depuração visual.
