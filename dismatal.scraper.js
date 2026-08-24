@@ -367,20 +367,24 @@ export class DismatalScraper {
             const quantityInputSelector = 'input[data-test="QUANTITY-INPUT-VALUE"]';
             await page.waitForSelector(quantityInputSelector, { visible: true, timeout: 5000 });
 
-            // 2. Executa a manipulação do input dentro do contexto do navegador para garantir que o Angular detecte as alterações.
-            this.logger.debug('[DismatalScraper] Preenchendo quantidade via page.evaluate para garantir a detecção de mudanças pelo Angular.');
+            // 2. Interage diretamente com o componente Angular para garantir a detecção de mudanças.
+            this.logger.debug('[DismatalScraper] Preenchendo quantidade via manipulação direta do componente Angular.');
             await page.evaluate((selector) => {
                 const input = document.querySelector(selector);
                 if (!input) return;
 
-                // Foca no elemento
-                input.focus();
-                // Define o valor diretamente
-                input.value = '10000000';
-                // Dispara o evento 'input' que muitos frameworks usam para detectar mudanças.
-                input.dispatchEvent(new Event('input', { bubbles: true }));
-                // Dispara o evento 'blur' para simular o usuário saindo do campo, o que geralmente aciona a validação.
-                input.dispatchEvent(new Event('blur', { bubbles: true }));
+                // Acessa as ferramentas de depuração do Angular (se disponíveis em 'window.ng')
+                const ng = window.ng;
+                if (ng) {
+                    // Obtém a instância do componente Angular associada ao elemento de input
+                    const component = ng.getComponent(input);
+                    if (component && typeof component.setValue === 'function') {
+                        // Usa o método do próprio componente para definir o valor
+                        component.setValue(10000000);
+                        // Marca o campo como "tocado" para simular o evento de blur
+                        if (typeof component.onTouched === 'function') component.onTouched();
+                    }
+                }
             }, quantityInputSelector);
 
             await new Promise(resolve => setTimeout(resolve, 500)); // Pequena pausa para o framework processar a validação.
