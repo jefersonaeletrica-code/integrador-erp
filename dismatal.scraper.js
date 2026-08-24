@@ -388,15 +388,17 @@ export class DismatalScraper {
             await page.waitForSelector(`${addButtonSelector}:not([disabled])`, { visible: true, timeout: 8000 });
 
             // Abordagem de clique nativa via `evaluate`.
-            this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar' simulando a sequência de eventos mousedown e mouseup.`);
+            this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar' simulando a sequência completa de eventos (mousedown, mouseup, click).`);
             await page.evaluate((selector) => {
                 const button = document.querySelector(selector);
                 if (button) {
                     // Simula a sequência completa de eventos de um clique real do mouse.
                     const downEvent = new MouseEvent('mousedown', { view: window, bubbles: true, cancelable: true });
                     const upEvent = new MouseEvent('mouseup', { view: window, bubbles: true, cancelable: true });
+                    const clickEvent = new MouseEvent('click', { view: window, bubbles: true, cancelable: true });
                     button.dispatchEvent(downEvent);
                     button.dispatchEvent(upEvent);
+                    button.dispatchEvent(clickEvent);
                 } else {
                     throw new Error(`Botão com seletor "${selector}" não foi encontrado no DOM para o clique via dispatchEvent.`);
                 }
