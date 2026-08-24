@@ -365,13 +365,15 @@ export class DismatalScraper {
             const quantityInputSelector = 'input[data-test="QUANTITY-INPUT-VALUE"]';
             await page.waitForSelector(quantityInputSelector, { visible: true, timeout: 5000 });
 
-            // 2. Preencher com um valor muito alto.
-            this.logger.debug(`[DismatalScraper] Preenchendo o campo de quantidade com um valor alto.`);
-            // O page.evaluate é mais confiável para limpar e definir o valor em campos complexos.
-            await page.evaluate(selector => {
-                const input = document.querySelector(selector);
-                if (input) input.value = '10000000';
-            }, quantityInputSelector);
+            // 2. Foca, limpa e digita no campo de quantidade para simular um usuário real.
+            // Isso é mais confiável para frameworks como Angular.
+            this.logger.debug(`[DismatalScraper] Simulando digitação de valor alto no campo de quantidade.`);
+            await page.focus(quantityInputSelector);
+            // Limpa o campo antes de digitar
+            await page.evaluate((selector) => { document.querySelector(selector).value = '' }, quantityInputSelector);
+            await page.type(quantityInputSelector, '10000000', { delay: 50 }); // Adiciona um pequeno delay
+
+            await new Promise(resolve => setTimeout(resolve, 500)); // Pausa para o framework processar o input
 
             // 3. Encontrar e clicar no botão "Adicionar".
             const addButtonSelector = 'button.add-product.solo-button';
