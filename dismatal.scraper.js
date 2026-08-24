@@ -384,10 +384,13 @@ export class DismatalScraper {
             const stockWarningSelector = '.mat-dialog-container:has-text("Disponíveis apenas")';
             this.logger.debug(`[DismatalScraper] Aguardando pop-up de aviso de estoque.`);
             const warningElement = await page.waitForSelector(stockWarningSelector, { visible: true, timeout: 10000 });
-            const warningText = await warningElement.evaluate(el => el.textContent);
 
-            // 5. Usar o parser de estoque para extrair o número do texto.
-            const stock = await page.evaluate(text => parseInt(text.match(/(\d+)/)?.[1] || null, 10), warningText);
+            // 5. Captura o conteúdo HTML da página *com o pop-up visível*.
+            const pageContentWithPopup = await page.content();
+            this.logger.debug(`[DismatalScraper] Conteúdo HTML com pop-up capturado.`);
+
+            // 6. Executa o parser de estoque no conteúdo capturado.
+            const stock = await page.evaluate(pageParser, { ...this.selectors, productDetailContainer: 'body' }).then(p => p?.estoque);
             this.logger.info(`[DismatalScraper] Estoque dinâmico extraído com sucesso: ${stock}`);
             return stock;
         } catch (error) {
