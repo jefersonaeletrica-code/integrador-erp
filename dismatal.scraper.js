@@ -384,9 +384,9 @@ export class DismatalScraper {
 
             await page.waitForSelector(`${addButtonSelector}:not([disabled])`, { visible: true, timeout: 8000 });
 
-            // Usando a mesma técnica que funcionou para o modal de boas-vindas.
-            await page.click(addButtonSelector, { delay: 100 });
-            this.logger.info(`[DismatalScraper] Clique com page.click() executado no botão 'Adicionar'.`);
+            // Tenta um clique duplo para garantir a interação, conforme solicitado.
+            await page.click(addButtonSelector, { clickCount: 2, delay: 100 });
+            this.logger.info(`[DismatalScraper] Clique duplo executado no botão 'Adicionar'.`);
 
 
             // Tira um screenshot imediatamente após o clique para depuração visual.
