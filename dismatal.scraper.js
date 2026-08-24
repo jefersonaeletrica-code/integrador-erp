@@ -385,13 +385,23 @@ export class DismatalScraper {
             this.logger.debug(`[DismatalScraper] Aguardando pop-up de aviso de estoque.`);
             const warningElement = await page.waitForSelector(stockWarningSelector, { visible: true, timeout: 10000 });
 
-            // 5. Captura o conteúdo HTML da página *com o pop-up visível*.
+            // 5. Salva o HTML da página COM O POP-UP para depuração.
             const pageContentWithPopup = await page.content();
-            this.logger.debug(`[DismatalScraper] Conteúdo HTML com pop-up capturado.`);
+            try {
+                const debugDir = path.join(process.cwd(), 'debug_screenshots');
+                fs.mkdirSync(debugDir, { recursive: true });
+                const htmlLogPath = path.join(debugDir, `dismatal-stock-popup-${Date.now()}.html`);
+                fs.writeFileSync(htmlLogPath, pageContentWithPopup, 'utf8');
+                this.logger.info(`[DismatalScraper] Conteúdo HTML com pop-up de estoque salvo em: ${htmlLogPath}`);
+            } catch (logError) {
+                this.logger.error('[DismatalScraper] Falha ao salvar o log de conteúdo HTML do pop-up.', logError);
+            }
 
-            // 6. Executa o parser de estoque no conteúdo capturado.
-            const stock = await page.evaluate(pageParser, { ...this.selectors, productDetailContainer: 'body' }).then(p => p?.estoque);
-            this.logger.info(`[DismatalScraper] Estoque dinâmico extraído com sucesso: ${stock}`);
+            // 6. Extrai o texto do pop-up e usa o parser para obter o número.
+            // Esta abordagem é mais direta e menos propensa a erros do que re-parsear a página inteira.
+            const warningText = await warningElement.evaluate(el => el.textContent);
+            const stock = parseInt(warningText.match(/(\d+)/)?.[1] || '0', 10);
+            this.logger.info(`[DismatalScraper] Estoque dinâmico extraído do pop-up: ${stock}`);
             return stock;
         } catch (error) {
             this.logger.warn(`[DismatalScraper] Estratégia de estoque dinâmico falhou: ${error.message}. O estoque pode não ser retornado.`);
