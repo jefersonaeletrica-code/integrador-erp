@@ -387,6 +387,19 @@ export class DismatalScraper {
             const addButtonSelector = 'button.add-product.solo-button';
             await page.waitForSelector(`${addButtonSelector}:not([disabled])`, { visible: true, timeout: 8000 });
 
+            // Salva o HTML ANTES do clique para depuração.
+            try {
+                const pageContentBeforeClick = await page.content();
+                const debugDir = path.join(process.cwd(), 'debug_screenshots');
+                fs.mkdirSync(debugDir, { recursive: true });
+                const htmlLogPath = path.join(debugDir, `dismatal-before-add-click-${Date.now()}.html`);
+                fs.writeFileSync(htmlLogPath, pageContentBeforeClick, 'utf8');
+                this.logger.info(`[DismatalScraper] Conteúdo HTML antes do clique salvo em: ${htmlLogPath}`);
+            } catch (logError) {
+                this.logger.error('[DismatalScraper] Falha ao salvar o log de conteúdo HTML antes do clique.', logError);
+            }
+
+
             // Abordagem final: Mover o mouse sobre o botão e clicar nas coordenadas.
             // Isso simula a interação humana da forma mais fiel possível.
             this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar' movendo o mouse e clicando nas coordenadas.`);
