@@ -383,18 +383,19 @@ export class DismatalScraper {
             await new Promise(resolve => setTimeout(resolve, 500)); // Pausa para o framework processar a validação.
 
             // 3. Encontrar e clicar no botão "Adicionar".
-            const addButtonSelector = 'button.add-product.solo-button';
+            // O clique deve ser no componente pai <app-button-add-warn-product> e não no <button> interno.
+            const addButtonSelector = 'app-button-add-warn-product';
             await page.waitForSelector(`${addButtonSelector}:not([disabled])`, { visible: true, timeout: 8000 });
 
             // Abordagem final e mais robusta: Dispara um evento de clique diretamente no DOM.
             // Isso contorna as camadas de abstração do Puppeteer e simula o evento
             // da forma mais nativa possível para o navegador.
-            this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar' com dispatchEvent.`);
+            this.logger.debug(`[DismatalScraper] Tentando clicar no componente do botão 'Adicionar' com dispatchEvent.`);
             await page.evaluate((selector) => {
-                const button = document.querySelector(selector);
-                if (button) {
+                const buttonComponent = document.querySelector(selector);
+                if (buttonComponent) {
                     const event = new MouseEvent('click', { view: window, bubbles: true, cancelable: true });
-                    button.dispatchEvent(event);
+                    buttonComponent.dispatchEvent(event);
                 } else {
                     throw new Error(`Botão com seletor "${selector}" não foi encontrado no DOM para o clique via dispatchEvent.`);
                 }
