@@ -305,9 +305,11 @@ export class DismatalScraper {
 
             // 4. Aguardar o pop-up de aviso de estoque e extrair o texto.
             // O seletor busca por um contêiner de diálogo que contenha o texto específico.
-            const stockWarningSelector = '.mat-dialog-container:has-text("Disponíveis apenas")';
+            // Seletor mais específico para o elemento que contém o texto do estoque.
+            const stockWarningSelector = '.mat-dialog-container span:has-text("Disponíveis apenas")';
             this.logger.debug(`[DismatalScraper] Aguardando pop-up de aviso de estoque.`);
             const warningElement = await page.waitForSelector(stockWarningSelector, { visible: true, timeout: 10000 });
+
 
             // 5. Salva o HTML da página COM O POP-UP para depuração.
             const pageContentWithPopup = await page.content();
