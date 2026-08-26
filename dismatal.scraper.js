@@ -282,11 +282,14 @@ export class DismatalScraper {
 
             // Abordagem mais robusta: usar o clique direto no elementHandle.
             // Isso é mais confiável do que clicar por coordenadas.
-            this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar'.`);
-            const elementHandle = await page.$(addButtonSelector);
-            if (!elementHandle) throw new Error("Não foi possível encontrar o elemento do botão 'Adicionar' para o clique.");
-            await elementHandle.click({ delay: 50 });
-            this.logger.info(`[DismatalScraper] Clique executado no botão 'Adicionar'.`);
+            this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar' via page.evaluate.`);
+            await page.evaluate((selector) => {
+                const button = document.querySelector(selector);
+                if (button) {
+                    button.click();
+                }
+            }, addButtonSelector);
+            this.logger.info(`[DismatalScraper] Clique executado no botão 'Adicionar' via page.evaluate.`);
 
 
             // Tira um screenshot imediatamente após o clique para depuração visual.
