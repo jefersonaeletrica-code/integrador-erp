@@ -71,6 +71,12 @@ export const pageParser = (selectors) => {
                 for (const child of clone.children) {
                     child.style.marginBottom = '1em';
                 }
+                // Adiciona um espaçamento específico entre o título "Conteúdo da embalagem" e seu parágrafo.
+                const packageContentParagraph = clone.querySelector('.package_content > p');
+                if (packageContentParagraph) {
+                    // Adiciona uma margem superior para separá-lo do h3.
+                    packageContentParagraph.style.marginTop = '1em';
+                }
 
                 return clone.innerHTML.trim();
             }
@@ -110,7 +116,9 @@ export const pageParser = (selectors) => {
 
     const parseStock = (text) => {
         if (!text) return null;
-        const matches = text.match(/(\d+)/);
+        // Regex ajustada para capturar apenas o número que precede "em estoque" ou "peças".
+        // Isso evita capturar outros números que possam estar no texto.
+        const matches = text.match(/(\d+)\s*(pecas|peça|em estoque)/i);
         if (matches?.[1]) {
             const stock = parseInt(matches[1], 10);
             return !isNaN(stock) && stock >= 0 ? stock : null;
