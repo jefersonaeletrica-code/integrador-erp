@@ -3,14 +3,14 @@
  * @description CLI para executar o scraping do portal Dismatal.
  * Suporta múltiplas fontes de dados (SKU único, CSV, JSON) e formatos de saída.
  */
-import { argv }_from 'node:process';
-import { getEnv, getScraperConfig }_from './config/index.js';
-import { initLogger, getLogger }_from './utils/logger.js';
-import { loadInternalIds }_from './utils/loaders.js';
-import { displayResults, saveReports }_from './utils/reports.js';
-import { initBrowser, closeBrowser }_from './core/browser.js';
-import { authenticate }_from './auth.js';
-import { DismatalProductPipelineAdapter }_from './core/dismatal-product-adapter.js';
+import { argv } from 'node:process';
+import { getEnv, getScraperConfig } from './config/index.js';
+import { initLogger, getLogger } from './utils/logger.js';
+import { loadInternalIds } from './utils/loaders.js';
+import { displayResults, saveReports } from './utils/reports.js';
+import { initBrowser, closeBrowser } from './core/browser.js';
+import { authenticate } from './auth.js';
+import { DismatalProductPipelineAdapter } from './core/dismatal-product-adapter.js';
 
 /**
  * Analisa os argumentos da linha de comando para configurar a execução.
