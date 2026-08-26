@@ -4,13 +4,13 @@
  * Suporta múltiplas fontes de dados (SKU único, CSV, JSON) e formatos de saída.
  */
 import { argv } from 'node:process';
-import { getEnv, getScraperConfig } from './config/index.js';
-import { initLogger, getLogger } from './utils/logger.js';
-import { loadInternalIds } from './utils/loaders.js';
-import { displayResults, saveReports } from './utils/reports.js';
-import { initBrowser, closeBrowser } from './core/browser.js';
+import { getEnv, getScraperConfig } from './config.js';
+import { initLogger, getLogger } from './logger.js';
+import { loadInternalIds } from './loaders.js';
+import { displayResults, saveReports } from './reports.js';
+import { initBrowser, closeBrowser } from './browser.js';
 import { authenticate } from './auth.js';
-import { DismatalProductPipelineAdapter } from './core/dismatal-product-adapter.js';
+import { DismatalProductPipelineAdapter } from './dismatal-product-adapter.js';
 
 /**
  * Analisa os argumentos da linha de comando para configurar a execução.
