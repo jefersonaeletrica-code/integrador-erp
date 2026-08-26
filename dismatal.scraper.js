@@ -261,7 +261,6 @@ export class DismatalScraper {
                 if (input) input.dispatchEvent(new Event('input', { bubbles: true }));
             }, quantityInputSelector);
 
-            await new Promise(resolve => setTimeout(resolve, 500)); // Pequena pausa para o framework processar a validação.
             // 3. Encontrar e clicar no botão "Adicionar".
             // Voltando a focar no botão interno, mas com uma abordagem de clique mais nativa.
             const addButtonSelector = 'button.add-product.solo-button';
@@ -372,7 +371,7 @@ export class DismatalScraper {
         // O SKU buscado é mantido, e o SKU da página é salvo como um campo separado para referência.
         const produtoFinal = {
             ...produtoExtraido,
-            sku: searchTerm, // O SKU original que foi buscado.
+            Código Fornecedor: searchTerm, // O SKU original que foi buscado.
             codigoFornecedor: produtoExtraido.sku, // O código de referência encontrado na página.
         };
 
