@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import db from './db.js';
 import { initBrowser } from './browser.js';
-import { tryPasswordLogin, DEFAULT_LOGIN_SELECTORS } from './auth.js';
+import { tryPasswordLogin, tryCookieAuth, DEFAULT_LOGIN_SELECTORS } from './auth.js';
 import { getLogger } from './logger.js';
 import {
     findSelector,
@@ -155,8 +155,6 @@ export class DismatalScraper {
 
             // Para validar, chamamos diretamente a função de autenticação por cookie.
             // Não passamos pelo orquestrador principal para evitar o fallback para login por senha.
-            // Precisamos importar a função `tryCookieAuth` do `auth.js`
-            const { tryCookieAuth } = await import('./auth.js');
             await tryCookieAuth(page, url, connection.cookies, this.selectors);
 
             return { sucesso: true, mensagem: 'A sessão salva está ativa!' };
