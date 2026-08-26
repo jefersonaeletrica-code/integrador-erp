@@ -472,7 +472,7 @@ export class DismatalScraper {
 
         // A lógica agora é unificada. Se chegamos aqui, a página de produto foi encontrada.
         // Apenas extraímos os dados que estão nela.
-        const produtoExtraido = await page.evaluate(pageParser, { ...this.selectors, productDetailContainer: containerSelectors.join(',') });
+        const produtoExtraido = await page.evaluate(pageParser, { ...this.selectors, productDetailContainer: containerSelectors });
 
         if (!produtoExtraido || !produtoExtraido.nome || !produtoExtraido.preco) {
             this.logger.warn('[DismatalScraper] O parser não conseguiu extrair os dados essenciais (nome/preço) do produto.');
