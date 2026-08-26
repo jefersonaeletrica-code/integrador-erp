@@ -1,8 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 import db from './db.js';
-import { initBrowser, closeBrowser } from './browser.js'; // closeBrowser pode ser removido se não for mais usado diretamente
-import { authenticate, tryPasswordLogin, DEFAULT_LOGIN_SELECTORS } from './auth.js';
+import { initBrowser } from './browser.js';
+import { tryPasswordLogin, DEFAULT_LOGIN_SELECTORS } from './auth.js';
 import { getLogger } from './logger.js';
 import {
     findSelector,
@@ -137,9 +137,7 @@ export class DismatalScraper {
             this.logger.error('[DismatalScraper] Falha na autenticação completa.', error);
             throw error;
         } finally {
-            if (browserInstance) {
-                await closeBrowser(browserInstance);
-            }
+            // O browser não é mais fechado aqui; o gerenciador de instâncias cuidará disso.
         }
     }
 
@@ -166,9 +164,7 @@ export class DismatalScraper {
             this.logger.error('[DismatalScraper] Validação de sessão falhou.', error);
             throw error; // Re-lança o erro para a rota capturar
         } finally {
-            if (browserInstance) {
-                await closeBrowser(browserInstance);
-            }
+            // O browser não é mais fechado aqui.
         }
     }
 
