@@ -371,8 +371,9 @@ export class DismatalScraper {
         // O SKU buscado é mantido, e o SKU da página é salvo como um campo separado para referência.
         const produtoFinal = {
             ...produtoExtraido,
-            'Código Fornecedor': searchTerm, // O SKU original que foi buscado.
-            codigoFornecedor: produtoExtraido.sku, // O código de referência encontrado na página.
+            'Código Fornecedor': produtoExtraido.sku, // O código de referência encontrado na página.
+            estoqueFormatado: `Estoque: ${produtoExtraido.estoque ?? 0} Peças`,
+            sku: searchTerm, // O SKU original que foi buscado.
         };
 
         this.logger.info('[DismatalScraper] Extração do produto bem-sucedida.', { skuBuscado: searchTerm, skuNaPagina: produtoFinal.codigoFornecedor });

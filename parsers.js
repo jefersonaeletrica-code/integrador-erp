@@ -66,6 +66,12 @@ export const pageParser = (selectors) => {
                     const childToRemove = clone.querySelector(removeChild);
                     if (childToRemove) childToRemove.remove();
                 }
+                // Adiciona um espaçamento entre os parágrafos para melhorar a legibilidade.
+                // Esta alteração é apenas visual e será refletida no frontend.
+                clone.querySelectorAll('p').forEach(p => {
+                    p.style.marginBottom = '1em'; // Adiciona uma margem inferior a cada parágrafo.
+                });
+
                 return clone.innerHTML.trim();
             }
         }
