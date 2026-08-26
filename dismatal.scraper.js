@@ -110,34 +110,17 @@ export class DismatalScraper {
      * @param {object} connection - Objeto de conexão com credenciais.
      */
     async performAuthentication(connection) {
-        const { url, username, password } = connection.credentials;
-        let browserInstance = null;
         this.logger.info('[DismatalScraper] Iniciando tarefa de autenticação completa...');
         try {
-            browserInstance = await initBrowser(this.config);
-            const { page } = browserInstance;
-
-            // Chama diretamente a função de login por senha, ignorando a validação de cookies.
-            const authResult = await tryPasswordLogin(page, {
-                url,
-                credentials: { username, password },
-                retryAttempts: 3,
-                retryDelayMs: 2000,
-                browserConfig: this.config,
-            }, this.selectors);
-
-            if (authResult.sessionData) {
-                connection.cookies = authResult.sessionData;
-                await db.updateSupplierConnection(connection);
-                this.logger.info('[DismatalScraper] Sessão salva no banco de dados com sucesso.');
-            }
+            // Força a criação de uma nova instância, ignorando qualquer sessão de cookies existente.
+            // O browserManager se encarregará de criar, autenticar e salvar a nova sessão.
+            await browserManager.getOrCreateInstance(connection, { forceNew: true });
+            this.logger.info('[DismatalScraper] Autenticação forçada e sessão renovada com sucesso através do BrowserManager.');
 
             return { sucesso: true, mensagem: 'Autenticação realizada e sessão salva com sucesso!' };
         } catch (error) {
             this.logger.error('[DismatalScraper] Falha na autenticação completa.', error);
             throw error;
-        } finally {
-            // O browser não é mais fechado aqui; o gerenciador de instâncias cuidará disso.
         }
     }
 
@@ -146,23 +129,15 @@ export class DismatalScraper {
      * @param {object} connection - Objeto de conexão com credenciais e session_data.
      */
     async validateAuthentication(connection) {
-        const { url } = connection.credentials;
-        let browserInstance = null;
         this.logger.info('[DismatalScraper] Iniciando validação de sessão...');
         try {
-            browserInstance = await initBrowser(this.config);
-            const { page } = browserInstance;
-
-            // Para validar, chamamos diretamente a função de autenticação por cookie.
-            // Não passamos pelo orquestrador principal para evitar o fallback para login por senha.
-            await tryCookieAuth(page, url, connection.cookies, this.selectors);
+            // O gerenciador tentará reutilizar a sessão. Se falhar, lançará um erro.
+            await browserManager.getOrCreateInstance(connection);
 
             return { sucesso: true, mensagem: 'A sessão salva está ativa!' };
         } catch (error) {
             this.logger.error('[DismatalScraper] Validação de sessão falhou.', error);
             throw error; // Re-lança o erro para a rota capturar
-        } finally {
-            // O browser não é mais fechado aqui.
         }
     }
 
@@ -371,15 +346,14 @@ export class DismatalScraper {
             await page.keyboard.up('Control');
             await page.keyboard.press('Backspace');
 
-            // Digita o valor caractere por caractere para permitir que a máscara de input processe.
-            this.logger.debug('[DismatalScraper] Digitanto o valor de alta quantidade lentamente.');
-            await page.type(quantityInputSelector, '10000000', { delay: 50 });
+            this.logger.debug('[DismatalScraper] Digitanto o valor de alta quantidade.');
+            await page.type(quantityInputSelector, '999999', { delay: 20 });
 
             // Dispara um evento de input final para garantir que o Angular detecte a mudança.
             this.logger.debug('[DismatalScraper] Disparando evento de input final.');
             await page.evaluate(selector => {
                 const input = document.querySelector(selector);
-                input.dispatchEvent(new Event('input', { bubbles: true }));
+                if (input) input.dispatchEvent(new Event('input', { bubbles: true }));
             }, quantityInputSelector);
 
             await new Promise(resolve => setTimeout(resolve, 500)); // Pequena pausa para o framework processar a validação.
@@ -428,8 +402,6 @@ export class DismatalScraper {
             } catch (screenshotError) {
                 this.logger.error('[DismatalScraper] Falha ao capturar screenshot após o clique.', screenshotError);
             }
-
-            await new Promise(resolve => setTimeout(resolve, 1000)); // Pausa para o pop-up renderizar
 
             // 4. Aguardar o pop-up de aviso de estoque e extrair o texto.
             // O seletor busca por um contêiner de diálogo que contenha o texto específico.

@@ -23,16 +23,18 @@ class BrowserManager {
      * Obtém uma instância de navegador autenticada. Se não existir, cria uma nova.
      * @param {object} connection - O objeto de conexão do fornecedor.
      * @returns {Promise<{browser: import('puppeteer').Browser, page: import('puppeteer').Page}>}
+     * @param {object} [options] - Opções adicionais.
+     * @param {boolean} [options.forceNew=false] - Força a criação de uma nova instância, ignorando a existente.
      */
-    async getOrCreateInstance(connection) {
+    async getOrCreateInstance(connection, options = {}) {
         const connectionId = connection.id;
 
         // 1. Verifica se já existe uma instância válida
-        if (this.instances.has(connectionId)) {
+        if (!options.forceNew && this.instances.has(connectionId)) {
             const instance = this.instances.get(connectionId);
             // A verificação mais robusta é ver se a página ainda está aberta.
             // Se a página foi fechada, a instância não é mais válida.
-            if (instance.page && !instance.page.isClosed()) {
+            if (instance.page && !instance.page.isClosed() && instance.browser.isConnected()) {
                 logger.info(`[BrowserManager] Reutilizando instância do navegador para a conexão ${connectionId}.`);
                 return instance.page;
             }
@@ -40,6 +42,12 @@ class BrowserManager {
             this.instances.delete(connectionId);
         }
 
+        if (options.forceNew && this.instances.has(connectionId)) {
+            logger.warn(`[BrowserManager] Forçando a criação de uma nova instância para a conexão ${connectionId}. Fechando a antiga.`);
+            const oldInstance = this.instances.get(connectionId);
+            await closeBrowser(oldInstance);
+            this.instances.delete(connectionId);
+        }
         // 2. Se não houver instância, cria uma nova
         logger.info(`[BrowserManager] Criando nova instância do navegador para a conexão ${connectionId}...`);
         const browserInstance = await initBrowser({ headless: true });
@@ -58,7 +66,7 @@ class BrowserManager {
             const authResult = await authenticate(page, {
                 url: connection.credentials.url,
                 credentials: connection.credentials,
-                sessionData: connection.cookies,
+                sessionData: options.forceNew ? null : connection.cookies, // Ignora cookies se for forçado um novo login
                 retryAttempts: 3,
             });
 
