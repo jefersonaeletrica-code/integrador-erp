@@ -372,11 +372,12 @@ export class DismatalScraper {
         // Isso sobrescreve os valores originais para que a interface os exiba diretamente.
         const produtoFinal = {
             ...produtoExtraido,
-            // Formata o SKU para ser o título principal, como solicitado.
-            sku: `Código Fornecedor: ${produtoExtraido.sku || 'N/A'}`,
+            // Mantém o nome original do produto como título.
+            nome: produtoExtraido.nome,
+            // Mantém o SKU original para ser exibido com o rótulo "SKU:" no frontend.
+            sku: produtoExtraido.sku || 'N/A',
             estoque: `Estoque: ${produtoExtraido.estoque ?? 0} Peças`,
         };
-        delete produtoFinal.nome; // Remove o campo 'nome' para que o 'sku' formatado seja o título.
         this.logger.info('[DismatalScraper] Extração do produto bem-sucedida.', { skuBuscado: searchTerm, skuNaPagina: produtoExtraido.sku });
         return [produtoFinal];
     }
