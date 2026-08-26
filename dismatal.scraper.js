@@ -368,15 +368,15 @@ export class DismatalScraper {
             produtoExtraido.estoque = dynamicStock;
         }
 
-        // O SKU buscado é mantido, e o SKU da página é salvo como um campo separado para referência.
+        // Formata os campos 'estoque' e 'sku' para a exibição desejada no frontend.
+        // Isso sobrescreve os valores originais para que a interface os exiba diretamente.
         const produtoFinal = {
             ...produtoExtraido,
-            'Código Fornecedor': produtoExtraido.sku, // O código de referência encontrado na página.
-            estoqueFormatado: `Estoque: ${produtoExtraido.estoque ?? 0} Peças`,
-            sku: searchTerm, // O SKU original que foi buscado.
+            estoque: `Estoque: ${produtoExtraido.estoque ?? 0} Peças`,
+            sku: `Código Fornecedor: ${produtoExtraido.sku || 'N/A'}`,
         };
 
-        this.logger.info('[DismatalScraper] Extração do produto bem-sucedida.', { skuBuscado: searchTerm, skuNaPagina: produtoFinal.codigoFornecedor });
+        this.logger.info('[DismatalScraper] Extração do produto bem-sucedida.', { skuBuscado: searchTerm, skuNaPagina: produtoExtraido.sku });
         return [produtoFinal];
     }
 }
