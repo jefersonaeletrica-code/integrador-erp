@@ -68,7 +68,7 @@ class BrowserManager {
                 credentials: connection.credentials,
                 sessionData: options.forceNew ? null : connection.cookies, // Ignora cookies se for forçado um novo login
                 retryAttempts: 3,
-            });
+            }, options.selectors);
 
             // A página pode ter sido recriada durante a autenticação
             page = authResult.page;

@@ -1,13 +1,9 @@
 import fs from 'fs';
 import path from 'path';
-import db from './db.js';
-import { initBrowser } from './browser.js';
-import { tryPasswordLogin, tryCookieAuth, DEFAULT_LOGIN_SELECTORS } from './auth.js';
 import { getLogger } from './logger.js';
 import {
     findSelector,
     pageParser,
-    listPageParser,
     isValidSKU
 } from './parsers.js';
 import browserManager from './browserManager.js';
@@ -20,89 +16,9 @@ export class DismatalScraper {
     constructor(config) {
         this.config = config;
         this.logger = getLogger();
-        this.selectors = {
-            // --- Seletores de Autenticação (baseado no seu exemplo) ---
-            ...DEFAULT_LOGIN_SELECTORS,
-            loginModal: ['[role="dialog"]', '.modal', '.login-modal', '.mat-dialog-container'],
-
-            // --- Seletores de Busca ---
-            searchInput: [
-                'input[placeholder*="sku"]', 'input[placeholder*="SKU"]',
-                'input[placeholder*="produto"]', 'input[placeholder*="Produto"]',
-                'input.search-input', '.search-field input', 'input[type="search"]'
-            ],
-
-            // --- Contêineres e Estados da Página ---
-            productDetailContainer: ['div.product-details', '.product-details-info', 'app-detalhe-produto', '[data-product-container]'],
-            productListItem: ['.product-grid', '.product-list', '.items-list', '.product-item', '.product-card'],
-            productNotFound: ['.not-found-container', '.product-not-found', '.empty-results'],
-            captchaContainer: ['#captcha-container', 'div.g-recaptcha', '[data-captcha]'],
-            loadingSpinner: ['.spinner', 'app-loading', '[class*="loading"]', '[class*="spinner"]'],
-
-            // --- Detalhes do Produto (Página Individual) ---
-            productName: [
-                '[data-product-name]', '[itemprop="name"]', 'h1.product-title',
-                'h1.product-name', '.product-name h1', 'div.product-description span.title-product', 'h1'
-            ],
-            productDescription: [
-                'div.description-feature',
-                '[data-product-description]',
-                '.product-description'
-            ],
-            productSKU: [
-                '[data-sku]', '[data-product-sku]', '[itemprop="sku"]', '.sku',
-                '.product-sku', '.codigo-produto', 'div.cod-prod div.code span'
-            ],
-            productPrice: [
-                'div.price-group__unity-price span', // Seletor mais específico para o preço unitário.
-                '[data-price]', '[data-product-price]', '[itemprop="price"]', // Seletores genéricos.
-                '.product-price', '.price-value', '.preco-tabela'
-            ],
-            promoPrice: [
-                '[data-promo-price]', '[data-sale-price]', '.promotional-price',
-                '.sale-price', '.preco-promocional'
-            ],
-            stock: [
-                'div.available-stock[style*="cursor: pointer"]', // Seletor mais específico adicionado
-                'div.available-stock', // Seletor específico para o estoque disponível.
-                '[data-stock]', '[data-product-stock]', '[itemprop="availability"]',
-                '.product-stock', '.stock-available', '.estoque', '.stock-info', '.disponivel-time-lead'
-            ],
-            productImages: [
-                '.product-media img', 'img.product-image', '[data-product-image]'
-            ],
-
-            // --- Detalhes do Produto (Página de Lista) ---
-            listItemName: [
-                '.product-name', '.product-title', 'h3', 'a.link'
-            ],
-            listItemSKU: [
-                '.product-sku', '.product-code', '[data-sku]'
-            ],
-            listItemPrice: [
-                '.product-price', '.price', '.price-tag', '[data-price]'
-            ],
-
-            // --- Seletores de Preços Múltiplos / Atacado ---
-            multipleTable: [
-                '[data-multiplos-table]', '.tabela-multiplos', '.tabela-atacado',
-                '.compre-pague-menos', 'table.multiplos'
-            ],
-            multipleLowerPrice: [
-                '[data-multiple-price]', '.multiplo-preco', 'td[data-price]'
-            ],
-            multipleQuantity: [
-                '[data-multiple-qty]', '.multiplo-quantidade', 'td[data-qty]'
-            ],
-
-            // --- Seletores de Informações Tributárias (IPI) ---
-            tributaryInfo: [
-                '[data-tributary-info]', '.infos-tributarias', '.tax-information'
-            ],
-            ipiField: [
-                '[data-ipi-value]', '.ipi-percent', '.ipi-value', 'span.ipi'
-            ],
-        };
+        // Carrega os seletores de um arquivo de configuração JSON externo.
+        const selectorsPath = path.join(process.cwd(), 'dismatal.selectors.json');
+        this.selectors = JSON.parse(fs.readFileSync(selectorsPath, 'utf8'));
     }
 
     /**
@@ -114,7 +30,7 @@ export class DismatalScraper {
         try {
             // Força a criação de uma nova instância, ignorando qualquer sessão de cookies existente.
             // O browserManager se encarregará de criar, autenticar e salvar a nova sessão.
-            await browserManager.getOrCreateInstance(connection, { forceNew: true });
+            await browserManager.getOrCreateInstance(connection, { forceNew: true, selectors: this.selectors });
             this.logger.info('[DismatalScraper] Autenticação forçada e sessão renovada com sucesso através do BrowserManager.');
 
             return { sucesso: true, mensagem: 'Autenticação realizada e sessão salva com sucesso!' };
@@ -132,7 +48,7 @@ export class DismatalScraper {
         this.logger.info('[DismatalScraper] Iniciando validação de sessão...');
         try {
             // O gerenciador tentará reutilizar a sessão. Se falhar, lançará um erro.
-            await browserManager.getOrCreateInstance(connection);
+            await browserManager.getOrCreateInstance(connection, { selectors: this.selectors });
 
             return { sucesso: true, mensagem: 'A sessão salva está ativa!' };
         } catch (error) {
@@ -276,7 +192,7 @@ export class DismatalScraper {
         let page;
         try {
             // Otimização: Obter uma página autenticada do gerenciador
-            page = await browserManager.getOrCreateInstance(connection);
+            page = await browserManager.getOrCreateInstance(connection, { selectors: this.selectors });
 
             let produtos = [];
 
