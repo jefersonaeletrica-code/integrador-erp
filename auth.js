@@ -184,38 +184,43 @@ export async function tryCookieAuth(page, url, sessionData, selectors) {
     const logger = getLogger();
     logger.info('[Auth] Tentando validar sessão com dados salvos...');
 
-    if (!sessionData || !sessionData.cookies || sessionData.cookies.length === 0) {
-        throw new Error("Nenhum dado de sessão fornecido para validação.");
-    }
-
-    // OTIMIZAÇÃO: Bloqueia recursos desnecessários para acelerar a validação.
-    await page.setRequestInterception(true);
     const requestHandler = (req) => {
         const resourceType = req.resourceType();
         if (['image', 'font', 'media'].includes(resourceType)) {
             req.abort();
         } else {
-            req.continue();
+            if (!req.isInterceptResolutionHandled()) {
+                req.continue();
+            }
         }
     };
-    page.on('request', requestHandler);
 
-    // More robust session restoration logic:
-    // 1. Go to a blank page to ensure we have a clean context
-    // before setting cookies for a specific domain.
-    await page.goto('about:blank');
+    try {
+        if (!sessionData || !sessionData.cookies || sessionData.cookies.length === 0) {
+            throw new Error("Nenhum dado de sessão fornecido para validação.");
+        }
 
-    // 2. Set cookies for the target domain.
-    await page.setCookie(...sessionData.cookies);
+        // OTIMIZAÇÃO: Bloqueia recursos desnecessários para acelerar a validação.
+        await page.setRequestInterception(true);
+        page.on('request', requestHandler);
 
-    // 3. Now, navigate to the URL. The browser will send the cookies with the request.
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120000 });
+        // More robust session restoration logic:
+        // 1. Go to a blank page to ensure we have a clean context
+        // before setting cookies for a specific domain.
+        await page.goto('about:blank');
 
-    // 4. After the page loads with the cookie-based session, restore localStorage.
-    if (sessionData.localStorage) {
-        await page.evaluate(savedLocalStorage => {
-            for (const key in savedLocalStorage) {
-                localStorage.setItem(key, savedLocalStorage[key]);
+        // 2. Set cookies for the target domain.
+        await page.setCookie(...sessionData.cookies);
+
+        // 3. Now, navigate to the URL. The browser will send the cookies with the request.
+        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120000 });
+
+        // 4. After the page loads with the cookie-based session, restore localStorage.
+        if (sessionData.localStorage) {
+            await page.evaluate(savedLocalStorage => {
+                for (const key in savedLocalStorage) {
+                    localStorage.setItem(key, savedLocalStorage[key]);
+                }
             }
         }, sessionData.localStorage);
         await page.reload({ waitUntil: 'domcontentloaded', timeout: 120000 }); // Reload for the JS to pick up localStorage
@@ -238,11 +243,12 @@ export async function tryCookieAuth(page, url, sessionData, selectors) {
     await page.waitForSelector(selectors.loginButton.join(','), { visible: true, timeout: 15000 });
 
     logger.info('[Auth] Sessão com cookies validada com sucesso.');
-
-    // Desativa a interceptação após a conclusão.
-    page.off('request', requestHandler);
-    await page.setRequestInterception(false);
     return { page, sessionData }; // Retorna a página e os dados de sessão originais, pois são válidos
+    } finally {
+        // Desativa a interceptação após a conclusão, seja sucesso ou falha.
+        page.off('request', requestHandler);
+        if (page.browser().isConnected()) await page.setRequestInterception(false);
+    }
 }
 
 /**
@@ -286,7 +292,9 @@ export async function tryPasswordLogin(page, options, selectors) {
                 if (['image', 'font', 'media'].includes(resourceType)) {
                     req.abort();
                 } else {
-                    req.continue();
+                    if (!req.isInterceptResolutionHandled()) {
+                        req.continue();
+                    }
                 }
             });
             // Desativa o cache para garantir que o fluxo de login não use dados antigos
