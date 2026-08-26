@@ -305,12 +305,8 @@ export class DismatalScraper {
 
             // 4. Aguardar o pop-up de aviso de estoque e extrair o texto.
             // O seletor busca por um contêiner de diálogo que contenha o texto específico.
-            // Seletor mais específico para o elemento que contém o texto do estoque.
-            const stockWarningSelector = '.mat-dialog-container span:has-text("Disponíveis apenas")';
-            this.logger.debug(`[DismatalScraper] Aguardando pop-up de aviso de estoque.`);
-            const warningElement = await page.waitForSelector(stockWarningSelector, { visible: true, timeout: 10000 });
-
-
+            const dialogSelector = '.mat-dialog-container';
+            await page.waitForSelector(dialogSelector, { visible: true, timeout: 10000 });
             // 5. Salva o HTML da página COM O POP-UP para depuração.
             const pageContentWithPopup = await page.content();
             try {
@@ -324,9 +320,21 @@ export class DismatalScraper {
             }
 
             // 6. Extrai o texto do pop-up e usa o parser para obter o número.
-            // Esta abordagem é mais direta e menos propensa a erros do que re-parsear a página inteira.
-            const warningText = await warningElement.evaluate(el => el.textContent);
-            const stock = parseInt(warningText.match(/(\d+)/)?.[1] || '0', 10);
+            // Extrai o dado de estoque diretamente do HTML salvo, conforme solicitado.
+            // Esta abordagem analisa a string de conteúdo da página que já foi capturada.
+            this.logger.info('[DismatalScraper] Analisando o HTML capturado para extrair o estoque do pop-up.');
+            
+            // Regex para encontrar o padrão "Disponíveis apenas XX peças" no HTML.
+            // A regex busca pelo texto e captura o número logo em seguida.
+            const stockMatch = pageContentWithPopup.match(/Disponíveis apenas (\d+)/);
+            const stock = stockMatch ? parseInt(stockMatch[1], 10) : null;
+
+            if (stock === null) {
+                // Se o HTML foi capturado mas o padrão de texto não foi encontrado, lança um erro.
+                this.logger.error('[DismatalScraper] O HTML do pop-up foi capturado, mas o texto "Disponíveis apenas" não foi encontrado na análise.');
+                throw new Error('O texto de estoque não foi encontrado no HTML do pop-up.');
+            }
+
             this.logger.info(`[DismatalScraper] Estoque dinâmico extraído do pop-up: ${stock}`);
             return stock;
         } catch (error) {
