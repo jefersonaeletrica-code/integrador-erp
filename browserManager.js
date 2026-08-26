@@ -34,7 +34,7 @@ class BrowserManager {
             const instance = this.instances.get(connectionId);
             // A verificação mais robusta é ver se a página ainda está aberta.
             // Se a página foi fechada, a instância não é mais válida.
-            if (instance.page && !instance.page.isClosed() && instance.browser.isConnected()) {
+            if (instance.page && !instance.page.isClosed() && instance.browser && typeof instance.browser.isConnected === 'function' && instance.browser.isConnected()) {
                 logger.info(`[BrowserManager] Reutilizando instância do navegador para a conexão ${connectionId}.`);
                 return instance.page;
             }
