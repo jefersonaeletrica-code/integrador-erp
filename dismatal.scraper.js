@@ -372,12 +372,14 @@ export class DismatalScraper {
         // Isso sobrescreve os valores originais para que a interface os exiba diretamente.
         const produtoFinal = {
             ...produtoExtraido,
-            // Mantém o nome original do produto como título.
-            nome: produtoExtraido.nome,
-            // Mantém o SKU original para ser exibido com o rótulo "SKU:" no frontend.
-            sku: produtoExtraido.sku || 'N/A',
+            // Adiciona o "Código Fornecedor" ao nome do produto para exibição proeminente.
+            // Usamos uma quebra de linha HTML (<br>) e um estilo para destacar a informação.
+            nome: `${produtoExtraido.nome}<br><small>Código Fornecedor: ${produtoExtraido.sku || 'N/A'}</small>`,
             estoque: `Estoque: ${produtoExtraido.estoque ?? 0} Peças`,
         };
+        // Remove o campo 'sku' para que a linha "SKU: ..." não seja mais renderizada pela interface.
+        delete produtoFinal.sku;
+
         this.logger.info('[DismatalScraper] Extração do produto bem-sucedida.', { skuBuscado: searchTerm, skuNaPagina: produtoExtraido.sku });
         return [produtoFinal];
     }
