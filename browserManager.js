@@ -51,7 +51,7 @@ class BrowserManager {
         // 2. Se não houver instância, cria uma nova
         logger.info(`[BrowserManager] Criando nova instância do navegador para a conexão ${connectionId}...`);
         const browserInstance = await initBrowser({ headless: true });
-        let { page } = browserInstance;
+        let { browser, page } = browserInstance;
 
         // Otimização de Performance: Habilita o cache para simular um navegador real e acelerar carregamentos.
         await page.setCacheEnabled(true);
@@ -80,7 +80,7 @@ class BrowserManager {
             }
 
             // Armazena a instância completa (browser e page) para uso futuro
-            this.instances.set(connectionId, { browser: page.browser(), page });
+            this.instances.set(connectionId, { browser, page });
             logger.info(`[BrowserManager] Nova instância para a conexão ${connectionId} criada e autenticada com sucesso.`);
 
             // Simula um movimento de mouse para "acordar" a página.

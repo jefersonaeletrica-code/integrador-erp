@@ -91,6 +91,7 @@ export class DismatalScraper {
         // OTIMIZAÇÃO: Bloqueia recursos desnecessários para acelerar o carregamento.
         await page.setRequestInterception(true);
         const requestHandler = (req) => {
+            if (req.isInterceptResolutionHandled()) return;
             if (['image', 'stylesheet', 'font', 'media'].includes(req.resourceType())) {
                 req.abort();
             } else {

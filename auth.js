@@ -185,13 +185,12 @@ export async function tryCookieAuth(page, url, sessionData, selectors) {
     logger.info('[Auth] Tentando validar sessão com dados salvos...');
 
     const requestHandler = (req) => {
+        if (req.isInterceptResolutionHandled()) return;
         const resourceType = req.resourceType();
         if (['image', 'font', 'media'].includes(resourceType)) {
             req.abort();
         } else {
-            if (!req.isInterceptResolutionHandled()) {
-                req.continue();
-            }
+            req.continue();
         }
     };
 
@@ -246,7 +245,7 @@ export async function tryCookieAuth(page, url, sessionData, selectors) {
     } finally {
         // Desativa a interceptação após a conclusão, seja sucesso ou falha.
         page.off('request', requestHandler);
-        if (page.browser().isConnected()) await page.setRequestInterception(false);
+        if (!page.isClosed()) await page.setRequestInterception(false);
     }
 }
 
@@ -267,33 +266,22 @@ export async function tryPasswordLogin(page, options, selectors) {
             logger.info(`[Auth] Tentativa de login completo ${attempt}: navegando para a URL.`);
             
             // **LÓGICA DE RECUPERAÇÃO COMPLETA**
-            // Se a conexão com o browser caiu, reinicia tudo.
-            if (attempt > 1 && (!page.browser() || !page.browser().isConnected())) {
-                logger.warn(`[Auth] Conexão com o navegador perdida. Reiniciando a conexão para a tentativa ${attempt}...`);
+            // Se a página foi fechada (por erro ou desconexão), reinicia tudo.
+            if (attempt > 1 && page.isClosed()) {
+                logger.warn(`[Auth] A página está fechada. Reiniciando a conexão do navegador para a tentativa ${attempt}...`);
                 const newInstance = await initBrowser(browserConfig);
                 page = newInstance.page; // Usa a nova página e o novo browser
-            } else if (attempt > 1 || page.isClosed()) {
-                // Se for apenas a página que fechou (ou por precaução), recria só a página.
-                logger.warn(`[Auth] A página está fechada ou é uma nova tentativa. Recriando a página para garantir estabilidade.`);
-                try {
-                    // Tenta fechar a página anterior se ela ainda estiver aberta
-                    if (!page.isClosed()) {
-                        await page.close();
-                    }
-                } catch (e) { /* Ignora erros ao fechar uma página já problemática */ }
-                page = await page.browser().newPage();
             }
 
             // Otimização de Performance: Bloqueia recursos desnecessários durante o login
             await page.setRequestInterception(true);
             page.on('request', (req) => {
+                if (req.isInterceptResolutionHandled()) return;
                 const resourceType = req.resourceType();
                 if (['image', 'font', 'media'].includes(resourceType)) {
                     req.abort();
                 } else {
-                    if (!req.isInterceptResolutionHandled()) {
-                        req.continue();
-                    }
+                    req.continue();
                 }
             });
             // Desativa o cache para garantir que o fluxo de login não use dados antigos
