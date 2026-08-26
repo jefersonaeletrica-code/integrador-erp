@@ -212,18 +212,6 @@ export class DismatalScraper {
             this.logger.error('[DismatalScraper] Falha ao salvar o log de conteúdo HTML.', logError);
         }
 
-        // LÓGICA DE EXTRAÇÃO OTIMIZADA:
-        // Define o conteúdo capturado como a página estática para garantir que a extração
-        // ocorra no HTML exato que salvamos, evitando problemas com scripts dinâmicos.
-        try {
-            const pageContent = await page.content();
-            this.logger.info(`[DismatalScraper] Definindo conteúdo HTML estático para extração.`);
-            await page.setContent(pageContent, { waitUntil: 'domcontentloaded' });
-        } catch (error) {
-            this.logger.error('[DismatalScraper] Falha ao definir o conteúdo HTML da página.', error);
-            throw new Error(`Falha ao processar o HTML da página do produto: ${error.message}`);
-        }
-
         // Desativa a interceptação para não afetar outras operações.
         page.off('request', requestHandler);
         await page.setRequestInterception(false);
@@ -375,21 +363,13 @@ export class DismatalScraper {
             }
 
 
-            // Abordagem final: Mover o mouse sobre o botão e clicar nas coordenadas.
-            // Isso simula a interação humana da forma mais fiel possível.
-            this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar' movendo o mouse e clicando nas coordenadas.`);
+            // Abordagem mais robusta: usar o clique direto no elementHandle.
+            // Isso é mais confiável do que clicar por coordenadas.
+            this.logger.debug(`[DismatalScraper] Tentando clicar no botão 'Adicionar'.`);
             const elementHandle = await page.$(addButtonSelector);
-            if (!elementHandle) {
-                throw new Error("Não foi possível encontrar o elemento do botão 'Adicionar' para o clique.");
-            }
-            const box = await elementHandle.boundingBox();
-            if (!box) {
-                throw new Error("Não foi possível obter as coordenadas do botão 'Adicionar'.");
-            }
-            // Move o mouse para o centro do botão e então clica.
-            await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 5 });
-            await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2, { delay: 50 });
-            this.logger.info(`[DismatalScraper] Clique por coordenadas executado no botão 'Adicionar'.`);
+            if (!elementHandle) throw new Error("Não foi possível encontrar o elemento do botão 'Adicionar' para o clique.");
+            await elementHandle.click({ delay: 50 });
+            this.logger.info(`[DismatalScraper] Clique executado no botão 'Adicionar'.`);
 
 
             // Tira um screenshot imediatamente após o clique para depuração visual.
