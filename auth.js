@@ -221,8 +221,7 @@ export async function tryCookieAuth(page, url, sessionData, selectors) {
                 for (const key in savedLocalStorage) {
                     localStorage.setItem(key, savedLocalStorage[key]);
                 }
-            }
-        }, sessionData.localStorage);
+            }, sessionData.localStorage);
         await page.reload({ waitUntil: 'domcontentloaded', timeout: 120000 }); // Reload for the JS to pick up localStorage
     }
 
