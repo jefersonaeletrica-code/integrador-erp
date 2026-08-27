@@ -79,6 +79,13 @@ class BrowserManager {
                 await db.updateSupplierConnection(connection);
             }
 
+            // Adiciona um listener para limpar a instância se o navegador for desconectado.
+            // Isso evita que a instância "zumbi" seja mantida no mapa.
+            browser.on('disconnected', () => {
+                logger.warn(`[BrowserManager] Navegador para a conexão ${connectionId} foi desconectado. Removendo instância do cache.`);
+                this.instances.delete(connectionId);
+            });
+
             // Armazena a instância completa (browser e page) para uso futuro
             this.instances.set(connectionId, { browser, page });
             logger.info(`[BrowserManager] Nova instância para a conexão ${connectionId} criada e autenticada com sucesso.`);
