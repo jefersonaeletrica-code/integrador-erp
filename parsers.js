@@ -197,20 +197,25 @@ export const pageParser = (selectors) => {
     const extractUnitBarcode = (root, selArray) => {
         if (!root) return null;
         for (const sel of selArray) {
-            const table = root.querySelector(sel);
-            if (table) {
-                const rows = table.querySelectorAll('tr');
-                for (const row of rows) {
-                    const cells = row.querySelectorAll('td');
-                    // Procura pela linha que começa com 'Unitária'
-                    if (cells.length > 0 && cells[0].textContent.trim().toLowerCase() === 'unitária') {
-                        // O código de barras é a última célula da linha
-                        const barcodeCell = cells[cells.length - 1];
-                        if (barcodeCell && barcodeCell.textContent) {
-                            const barcode = barcodeCell.textContent.trim();
-                            // Retorna apenas se for um código de barras válido (não um traço)
-                            if (!isNaN(barcode.replace(/\s/g, '')) && barcode !== '-') {
-                                return barcode;
+            const panels = root.querySelectorAll(sel);
+            for (const panel of panels) {
+                // Verifica se este é o painel de "Embalagens"
+                if (panel.textContent && panel.textContent.includes('Embalagens')) {
+                    const table = panel.querySelector('table.table-attribute');
+                    if (table) {
+                        const rows = table.querySelectorAll('tr');
+                        for (const row of rows) {
+                            const cells = row.querySelectorAll('td');
+                            // Procura pela linha que começa com 'Unitária'
+                            if (cells.length > 0 && cells[0].textContent.trim().toLowerCase() === 'unitária') {
+                                const barcodeCell = cells[cells.length - 1];
+                                if (barcodeCell && barcodeCell.textContent) {
+                                    const barcode = barcodeCell.textContent.trim();
+                                    // Retorna apenas se for um código de barras válido (não um traço)
+                                    if (!isNaN(barcode.replace(/\s/g, '')) && barcode !== '-') {
+                                        return barcode;
+                                    }
+                                }
                             }
                         }
                     }
