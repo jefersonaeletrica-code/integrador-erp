@@ -929,7 +929,7 @@
                 } else {
                     const productsHtml = data.produtos.map(product => {
                         const price = product.preco ? `R$ ${product.preco.toFixed(2)}` : 'Preço indisponível';
-                        const stock = product.estoque !== null ? `${product.estoque} em estoque` : 'Estoque indisponível';
+                        const stock = product.estoque !== null ? product.estoque : 'Estoque indisponível';
                         const image = product.imagens && product.imagens.length > 0 ? product.imagens[0] : 'https://via.placeholder.com/150';                        
                         const sku = product.codigoFornecedor || product.sku;
 
