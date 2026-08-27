@@ -1,6 +1,6 @@
 {
   "ignore": [
-    "debug_screenshots/*",
+    "debug_screenshots/**",
     "*.test.js"
   ]
 }
