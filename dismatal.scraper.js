@@ -152,6 +152,12 @@ export class DismatalScraper {
             // Otimização: Obter uma página autenticada do gerenciador
             page = await browserManager.getOrCreateInstance(connection, { selectors: this.selectors });
 
+            // Garante que, se a página fechar inesperadamente, a instância seja limpa.
+            page.on('close', () => {
+                this.logger.warn(`[DismatalScraper] A página foi fechada inesperadamente durante a busca. Removendo instância do cache.`);
+                browserManager.instances.delete(connection.id);
+            });
+
             // Apenas tenta a navegação direta se o termo de busca for um SKU válido.
             if (!searchTerm || !isValidSKU(searchTerm)) {
                 throw new Error('O termo de busca não é um SKU válido.');
