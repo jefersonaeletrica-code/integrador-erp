@@ -39,6 +39,9 @@
     "[data-promo-price]", "[data-sale-price]", ".promotional-price",
     ".sale-price", ".preco-promocional"
   ],
+  "taxPrice": [
+    ".price-group__taxes .imposto"
+  ],
   "stock": [
     "div.available-stock[style*=\"cursor: pointer\"]",
     "div.available-stock",

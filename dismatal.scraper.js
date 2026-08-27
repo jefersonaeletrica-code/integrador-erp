@@ -140,49 +140,6 @@ export class DismatalScraper {
     }
 
     /**
-     * Tenta encontrar o produto simulando uma busca manual no site.
-     * @private
-     */
-    async _trySearchStrategy(page, url, searchTerm) {
-        this.logger.info(`[DismatalScraper] Iniciando busca por simulação de usuário para o termo: ${searchTerm}`);
-
-        // 1. Garante que estamos na página inicial para realizar a busca
-        if (!page.url().endsWith('.br/')) {
-            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120000 });
-            // Adiciona uma pausa e rolagem para garantir que a página inicial esteja totalmente renderizada
-            // antes de procurar o campo de busca.
-            this.logger.debug('[DismatalScraper] Página inicial carregada. Aguardando estabilização...');
-            await new Promise(resolve => setTimeout(resolve, 1500));
-            await page.evaluate(() => window.scrollBy(0, 200));
-        }
-
-        // 2. Encontra o campo de busca e digita o termo
-        const searchInputSelector = await findSelector(page, this.selectors.searchInput, 15000);
-        if (!searchInputSelector) throw new Error('Campo de busca não encontrado na página.');
-
-        await page.type(searchInputSelector, searchTerm);
-        await page.keyboard.press('Enter');
-
-        // 3. Aguarda o resultado da busca, que é uma atualização dinâmica, não uma navegação.
-        // Usamos a mesma lógica de "corrida" da navegação direta para aguardar o resultado.
-        this.logger.info('[DismatalScraper] Busca executada. Aguardando resultados dinâmicos...');
-        const raceResult = await Promise.race([
-            new Promise(resolve => setTimeout(() => resolve({ state: 'hard_timeout' }), 30000)),
-            findSelector(page, this.selectors.productDetailContainer, 120000).then(selector => ({ state: 'product', selector })),
-            findSelector(page, this.selectors.productNotFound, 120000).then(selector => ({ state: 'not_found', selector })),
-        ]);
-
-        if (raceResult.state === 'product') {
-            this.logger.info(`[DismatalScraper] Resultados da busca carregados. Prosseguindo com a extração.`);
-        } else if (raceResult.state === 'not_found' || raceResult.state === 'hard_timeout') {
-            this.logger.warn(`[DismatalScraper] A busca não retornou um produto válido ou excedeu o tempo de espera.`);
-            throw new Error('A busca manual não encontrou o produto ou a página não respondeu.');
-        }
-
-        return await this.extractProductData(page, searchTerm, this.selectors.productDetailContainer);
-    }
-
-    /**
      * Busca produtos no portal.
      * @param {object} connection - Objeto de conexão com credenciais.
      * @param {string} searchTerm - O termo a ser buscado.
@@ -195,27 +152,16 @@ export class DismatalScraper {
             // Otimização: Obter uma página autenticada do gerenciador
             page = await browserManager.getOrCreateInstance(connection, { selectors: this.selectors });
 
-            let produtos = [];
-
-
-            // --- ESTRATÉGIA 1: Tentar Navegação Direta (mais rápido) ---
-            try {
-                // Apenas tenta a navegação direta se o termo de busca for um SKU válido.
-                if (searchTerm && isValidSKU(searchTerm)) {
-                    this.logger.info(`[DismatalScraper] Estratégia 1: Tentando navegação direta para o SKU: ${searchTerm}`);
-                    produtos = await this._tryDirectNavigation(page, url, searchTerm);
-                } else {
-                    // Se não for um SKU, pula direto para a busca manual.
-                    throw new Error('Termo de busca não é um SKU válido, pulando para a Estratégia 2.');
-                }
-            } catch (e) {
-                this.logger.warn(`[DismatalScraper] Estratégia 1 (Navegação Direta) falhou ou foi pulada: ${e.message}. Iniciando Estratégia 2 (Busca Manual).`);
-                // --- ESTRATÉGIA 2: Fallback para Busca Manual ---
-                produtos = await this._trySearchStrategy(page, url, searchTerm);
+            // Apenas tenta a navegação direta se o termo de busca for um SKU válido.
+            if (!searchTerm || !isValidSKU(searchTerm)) {
+                throw new Error('O termo de busca não é um SKU válido.');
             }
 
+            this.logger.info(`[DismatalScraper] Tentando navegação direta para o SKU: ${searchTerm}`);
+            const produtos = await this._tryDirectNavigation(page, url, searchTerm);
+
             if (produtos.length === 0) {
-                this.logger.warn('[DismatalScraper] Nenhuma das estratégias encontrou um produto para o termo de busca.');
+                this.logger.warn('[DismatalScraper] A navegação direta não encontrou um produto para o termo de busca.');
                 return { sucesso: false, erro: 'Nenhum produto foi encontrado com este SKU.', produtos: [] };
             }
             this.logger.info(`[DismatalScraper] Busca concluída. Total de produtos: ${produtos.length}.`);
