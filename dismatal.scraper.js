@@ -319,8 +319,12 @@ export class DismatalScraper {
         const produtoFinal = {
             ...produtoExtraido,
             // Adiciona o "Código Fornecedor" ao nome do produto para exibição proeminente.
-            // Usamos uma quebra de linha HTML (<br>) e um estilo para destacar a informação.
-            nome: `${produtoExtraido.nome}<br><small>Código Fornecedor: ${produtoExtraido.sku || 'N/A'}</small>`,
+            // Usamos quebras de linha HTML (<br>) e um estilo para destacar as informações.
+            nome: `
+                ${produtoExtraido.nome}
+                <br><small>Código Fornecedor: ${produtoExtraido.sku || 'N/A'}</small>
+                ${produtoExtraido.barcode ? `<br><small>Código de Barras: ${produtoExtraido.barcode}</small>` : ''}
+            `,
             estoque: `Estoque: ${produtoExtraido.estoque ?? 0} Peças`,
         };
         // Remove o campo 'sku' para que a linha "SKU: ..." não seja mais renderizada pela interface.

@@ -194,12 +194,39 @@ export const pageParser = (selectors) => {
         return null;
     };
 
+    const extractUnitBarcode = (root, selArray) => {
+        if (!root) return null;
+        for (const sel of selArray) {
+            const table = root.querySelector(sel);
+            if (table) {
+                const rows = table.querySelectorAll('tr');
+                for (const row of rows) {
+                    const cells = row.querySelectorAll('td');
+                    // Procura pela linha que começa com 'Unitária'
+                    if (cells.length > 0 && cells[0].textContent.trim().toLowerCase() === 'unitária') {
+                        // O código de barras é a última célula da linha
+                        const barcodeCell = cells[cells.length - 1];
+                        if (barcodeCell && barcodeCell.textContent) {
+                            const barcode = barcodeCell.textContent.trim();
+                            // Retorna apenas se for um código de barras válido (não um traço)
+                            if (!isNaN(barcode.replace(/\s/g, '')) && barcode !== '-') {
+                                return barcode;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        return null;
+    };
+
     // --- Extração Principal ---
     const nome = extractText(productRoot, selectors.productName);
     const sku = extractText(productRoot, selectors.productSKU);
     const descricao = extractContent(productRoot, selectors.productDescription, { removeChild: 'h2' });
     const estoque = parseStock(extractText(productRoot, selectors.stock));
     const imagens = extractImageUrls(productRoot, selectors.productImages);
+    const barcode = extractUnitBarcode(productRoot, selectors.packagingTable);
 
     // --- Lógica de Preços ---
     // Prioridade 1: Tenta extrair o "Total com Impostos"
@@ -226,6 +253,7 @@ export const pageParser = (selectors) => {
         preco: precoFinal,
         estoque,
         imagens,
+        barcode,
         ipi,
         precoMultiplo,
     };

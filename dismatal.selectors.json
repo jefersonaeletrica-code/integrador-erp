@@ -70,6 +70,9 @@
   "multipleQuantity": [
     "[data-multiple-qty]", ".multiplo-quantidade", "td[data-qty]"
   ],
+  "packagingTable": [
+    "mat-expansion-panel:has-text('Embalagens') table.table-attribute"
+  ],
   "tributaryInfo": [
     "[data-tributary-info]", ".infos-tributarias", ".tax-information"
   ],
