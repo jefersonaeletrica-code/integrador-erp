@@ -235,6 +235,7 @@ export const pageParser = (selectors) => {
 
     let precoFinal = null;
     let estoque = parseStock(extractText(productRoot, selectors.stock));
+    let precoMultiplo = null;
 
     if (isUnavailable) {
         precoFinal = null; // Preço será tratado como indisponível
@@ -246,7 +247,7 @@ export const pageParser = (selectors) => {
         // Prioridade 2: Lógica de fallback para outros preços
         const precoRegular = extractAndGetLowestPrice(productRoot, selectors.productPrice);
         const precoPromocional = parsePrice(extractText(productRoot, selectors.promoPrice));
-        const precoMultiplo = extractMultiplePrice(productRoot);
+        precoMultiplo = extractMultiplePrice(productRoot);
         // Usa o preço com impostos se ele for válido, senão, busca o menor entre os outros.
         precoFinal = precoComImpostos || getLowestValidPrice([precoRegular, precoPromocional, precoMultiplo]);
     }
