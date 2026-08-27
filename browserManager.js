@@ -34,9 +34,17 @@ class BrowserManager {
             const instance = this.instances.get(connectionId);
             // A verificação mais robusta é ver se a página ainda está aberta.
             // Se a página foi fechada, a instância não é mais válida.
-            if (instance.page && !instance.page.isClosed() && instance.browser && typeof instance.browser.isConnected === 'function' && instance.browser.isConnected()) {
-                logger.info(`[BrowserManager] Reutilizando instância do navegador para a conexão ${connectionId}.`);
-                return instance.page;
+            if (instance.browser && instance.browser.isConnected()) {
+                try {
+                    // "Aquece" a conexão para garantir que ela ainda está respondendo.
+                    await instance.browser.version();
+                    logger.info(`[BrowserManager] Reutilizando instância do navegador para a conexão ${connectionId}.`);
+                    return instance.page;
+                } catch (e) {
+                    logger.warn(`[BrowserManager] A instância para a conexão ${connectionId} parecia conectada, mas não respondeu. Removendo.`);
+                    await closeBrowser(instance).catch(err => logger.error('[BrowserManager] Erro ao fechar instância que não respondeu.', err));
+                    this.instances.delete(connectionId);
+                }
             }
             logger.warn(`[BrowserManager] Instância para a conexão ${connectionId} encontrada, mas o navegador não está conectado. Removendo.`);
             this.instances.delete(connectionId);
