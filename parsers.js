@@ -229,27 +229,34 @@ export const pageParser = (selectors) => {
     const nome = extractText(productRoot, selectors.productName);
     const sku = extractText(productRoot, selectors.productSKU);
     const descricao = extractContent(productRoot, selectors.productDescription, { removeChild: 'h2' });
-    const estoque = parseStock(extractText(productRoot, selectors.stock));
     const imagens = extractImageUrls(productRoot, selectors.productImages);
     const barcode = extractUnitBarcode(productRoot, selectors.packagingTable);
+    const isUnavailable = !!productRoot.querySelector(selectors.productUnavailable.join(','));
 
-    // --- Lógica de Preços ---
-    // Prioridade 1: Tenta extrair o "Total com Impostos"
-    const precoComImpostos = parsePrice(extractText(productRoot, selectors.taxPrice));
+    let precoFinal = null;
+    let estoque = parseStock(extractText(productRoot, selectors.stock));
 
-    // Prioridade 2: Lógica de fallback para outros preços
-    const precoRegular = extractAndGetLowestPrice(productRoot, selectors.productPrice);
-    const precoPromocional = parsePrice(extractText(productRoot, selectors.promoPrice));
-    const precoMultiplo = extractMultiplePrice(productRoot);
+    if (isUnavailable) {
+        precoFinal = null; // Preço será tratado como indisponível
+        estoque = 0; // Estoque é zero
+    } else {
+        // --- Lógica de Preços para produtos disponíveis ---
+        // Prioridade 1: Tenta extrair o "Total com Impostos"
+        const precoComImpostos = parsePrice(extractText(productRoot, selectors.taxPrice));
+        // Prioridade 2: Lógica de fallback para outros preços
+        const precoRegular = extractAndGetLowestPrice(productRoot, selectors.productPrice);
+        const precoPromocional = parsePrice(extractText(productRoot, selectors.promoPrice));
+        const precoMultiplo = extractMultiplePrice(productRoot);
+        // Usa o preço com impostos se ele for válido, senão, busca o menor entre os outros.
+        precoFinal = precoComImpostos || getLowestValidPrice([precoRegular, precoPromocional, precoMultiplo]);
+    }
 
-    // Usa o preço com impostos se ele for válido, senão, busca o menor entre os outros.
-    const precoFinal = precoComImpostos || getLowestValidPrice([precoRegular, precoPromocional, precoMultiplo]);
 
     // --- Lógica de IPI ---
     const ipi = extractIPI(productRoot);
 
-    // Validação final: um produto precisa ter nome e preço para ser considerado válido.
-    if (!nome || !precoFinal) return null;
+    // Validação final: um produto precisa ter um nome para ser considerado válido.
+    if (!nome) return null;
 
     return {
         nome,

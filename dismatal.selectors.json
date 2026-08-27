@@ -15,6 +15,9 @@
   "productDetailContainer": ["div.product-details", ".product-details-info", "app-detalhe-produto", "[data-product-container]"],
   "productListItem": [".product-grid", ".product-list", ".items-list", ".product-item", ".product-card"],
   "productNotFound": [".not-found-container", ".product-not-found", ".empty-results"],
+  "productUnavailable": [
+    ".product-unavailable"
+  ],
   "captchaContainer": ["#captcha-container", "div.g-recaptcha", "[data-captcha]"],
   "loadingSpinner": [".spinner", "app-loading", "[class*=\"loading\"]", "[class*=\"spinner\"]"],
   "productName": [

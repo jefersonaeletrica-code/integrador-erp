@@ -326,6 +326,7 @@ export class DismatalScraper {
                 ${produtoExtraido.barcode ? `<br><small>Código de Barras: ${produtoExtraido.barcode}</small>` : ''}
             `,
             estoque: `Estoque: ${produtoExtraido.estoque ?? 0} Peças`,
+            preco: produtoExtraido.preco, // Passa o preço (que pode ser null) para o frontend
         };
         // Remove o campo 'sku' para que a linha "SKU: ..." não seja mais renderizada pela interface.
         delete produtoFinal.sku;
