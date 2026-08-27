@@ -202,11 +202,16 @@ export const pageParser = (selectors) => {
     const imagens = extractImageUrls(productRoot, selectors.productImages);
 
     // --- Lógica de Preços ---
+    // Prioridade 1: Tenta extrair o "Total com Impostos"
+    const precoComImpostos = parsePrice(extractText(productRoot, selectors.taxPrice));
+
+    // Prioridade 2: Lógica de fallback para outros preços
     const precoRegular = extractAndGetLowestPrice(productRoot, selectors.productPrice);
     const precoPromocional = parsePrice(extractText(productRoot, selectors.promoPrice));
     const precoMultiplo = extractMultiplePrice(productRoot);
 
-    const precoFinal = getLowestValidPrice([precoRegular, precoPromocional, precoMultiplo]);
+    // Usa o preço com impostos se ele for válido, senão, busca o menor entre os outros.
+    const precoFinal = precoComImpostos || getLowestValidPrice([precoRegular, precoPromocional, precoMultiplo]);
 
     // --- Lógica de IPI ---
     const ipi = extractIPI(productRoot);
