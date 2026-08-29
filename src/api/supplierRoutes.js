@@ -6,7 +6,7 @@ import { addToQueue } from '../core/scraperQueue.js';
 
 const router = express.Router();
 
-export default (db, supplierConnections) => {
+export default (db) => {
     // --- ROTAS DE GERENCIAMENTO DE CONEXÕES DE FORNECEDORES ---
     
     router.post('/supplier-connections', async (req, res) => {
@@ -22,7 +22,6 @@ export default (db, supplierConnections) => {
                 [name, type, JSON.stringify(credentials)]
             );
             const newConnection = { id: result.insertId, name, type, credentials };
-            supplierConnections.push(newConnection);
             res.status(201).json({ sucesso: true, connection: newConnection });
         } catch (e) {
             res.status(500).json({ sucesso: false, erro: e.message });
@@ -44,7 +43,10 @@ export default (db, supplierConnections) => {
 
     router.get('/supplier-connections/:id', async (req, res) => {
         const { id } = req.params;
-        const connection = supplierConnections.find(c => c.id == id);
+        const pool = db.getPool();
+        const [rows] = await pool.execute('SELECT * FROM supplier_connections WHERE id = ?', [id]);
+        const connection = rows[0];
+
         if (!connection) {
             return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
         }
@@ -60,20 +62,14 @@ export default (db, supplierConnections) => {
             return res.status(400).json({ sucesso: false, erro: 'Nome, tipo e credenciais são obrigatórios.' });
         }
 
-        const connectionIndex = supplierConnections.findIndex(c => c.id == id);
-        if (connectionIndex === -1) {
-            return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
-        }
-
         try {
             const pool = db.getPool();
-            await pool.execute(
+            const [result] = await pool.execute(
                 'UPDATE supplier_connections SET name = ?, type = ?, credentials = ? WHERE id = ?',
                 [name, type, JSON.stringify(credentials), id]
             );
-            const updatedConnection = { ...supplierConnections[connectionIndex], name, type, credentials };
-            supplierConnections[connectionIndex] = updatedConnection;
-            res.json({ sucesso: true, connection: updatedConnection });
+            if (result.affectedRows === 0) return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada para atualizar.' });
+            res.json({ sucesso: true, connection: { id: parseInt(id, 10), name, type, credentials } });
         } catch (e) {
             res.status(500).json({ sucesso: false, erro: e.message });
         }
@@ -82,24 +78,26 @@ export default (db, supplierConnections) => {
     router.delete('/supplier-connections/:id', async (req, res) => {
         const { id } = req.params;
 
-        const connectionIndex = supplierConnections.findIndex(c => c.id == id);
-        if (connectionIndex === -1) {
-            return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
-        }
-
         try {
             const pool = db.getPool();
-            await pool.execute('DELETE FROM supplier_connections WHERE id = ?', [id]);
-            supplierConnections.splice(connectionIndex, 1);
+            const [result] = await pool.execute('DELETE FROM supplier_connections WHERE id = ?', [id]);
+            if (result.affectedRows === 0) return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada para remover.' });
             res.json({ sucesso: true, mensagem: 'Conexão de fornecedor removida com sucesso.' });
         } catch (e) {
             res.status(500).json({ sucesso: false, erro: e.message });
         }
     });
 
+    // Helper para buscar conexão por ID
+    const findConnectionById = async (id) => {
+        const pool = db.getPool();
+        const [rows] = await pool.execute('SELECT * FROM supplier_connections WHERE id = ?', [id]);
+        return rows[0] ? { ...rows[0], credentials: JSON.parse(rows[0].credentials), cookies: rows[0].session_data ? JSON.parse(rows[0].session_data) : null } : null;
+    };
+
     router.post('/supplier-connections/:id/authenticate', async (req, res) => {
         const { id } = req.params;
-        const connection = supplierConnections.find(c => c.id == id);
+        const connection = await findConnectionById(id);
 
         if (!connection) return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
         if (connection.type !== 'dismatal_webscraper') return res.status(400).json({ sucesso: false, erro: 'Função disponível apenas para conexões Dismatal.' });
@@ -118,7 +116,7 @@ export default (db, supplierConnections) => {
 
     router.post('/supplier-connections/:id/validate-authentication', async (req, res) => {
         const { id } = req.params;
-        const connection = supplierConnections.find(c => c.id == id);
+        const connection = await findConnectionById(id);
 
         if (!connection) return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
         if (connection.type !== 'dismatal_webscraper') return res.status(400).json({ sucesso: false, erro: 'Função disponível apenas para conexões Dismatal.' });
@@ -144,7 +142,7 @@ export default (db, supplierConnections) => {
     router.post('/supplier-connections/:id/products', async (req, res) => {
         const { id } = req.params;
         const { searchTerm } = req.body;
-        const connection = supplierConnections.find(c => c.id == id);
+        const connection = await findConnectionById(id);
 
         if (!connection) return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
         if (connection.type !== 'dismatal_webscraper') return res.status(400).json({ sucesso: false, erro: 'Busca de produtos disponível apenas para conexões Dismatal.' });
