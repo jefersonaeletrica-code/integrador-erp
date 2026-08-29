@@ -529,11 +529,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     try {
                         const formData = new FormData(modalForm);
-                        const type = formData.get('type');
-                        const body = { name: formData.get('name'), type, credentials: {} };
+                        const erpType = formData.get('type');
+                        const body = { name: formData.get('name'), type: erpType, credentials: {} };
 
                         if (type === 'erp') {
-                            const erpType = formData.get('type');
+                            // O tipo da conexão é 'erp', mas o subtipo (bling/cisspoder) está no campo 'type' do form.
                             if (erpType === 'bling') {
                                 body.credentials.client_id = formData.get('client_id');
                                 body.credentials.client_secret = formData.get('client_secret');
@@ -572,11 +572,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     try {
                         const formData = new FormData(modalForm);
-                        const type = formData.get('type');
-                        const body = { name: formData.get('name'), type, credentials: {} };
+                        const erpType = formData.get('type');
+                        const body = { name: formData.get('name'), type: erpType, credentials: {} };
 
                         if (type === 'erp') {
-                            const erpType = formData.get('type');
+                            // O tipo da conexão é 'erp', mas o subtipo (bling/cisspoder) está no campo 'type' do form.
                             if (erpType === 'bling') {
                                 body.credentials.client_id = formData.get('client_id');
                                 body.credentials.client_secret = formData.get('client_secret');
