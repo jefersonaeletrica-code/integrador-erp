@@ -6,7 +6,8 @@ const router = express.Router();
 
 // Heurística para determinar se o termo de busca é um SKU.
 // Aceita letras, números e hífens, com no mínimo 5 caracteres.
-const isSku = (term) => /^[a-zA-Z0-9-]{5,}$/.test(term);
+// Não considera um SKU se for composto apenas por letras.
+const isSku = (term) => /^[a-zA-Z0-9-]{5,}$/.test(term) && !/^[a-zA-Z]+$/.test(term);
 
 export default (db, erpConnections) => {
     const logger = getLogger();
@@ -159,7 +160,7 @@ export default (db, erpConnections) => {
      */
     router.post('/erp-connections/:id/products', async (req, res) => {
         const { id } = req.params;
-        const { searchTerm } = req.body;
+        const { searchTerm, page = 1 } = req.body;
 
         if (!searchTerm || searchTerm.trim() === '') {
             return res.status(400).json({ sucesso: false, erro: 'O termo de busca é obrigatório.' });
@@ -174,20 +175,30 @@ export default (db, erpConnections) => {
 
         try {
             let apiProducts = [];
+            let paginationInfo = { currentPage: parseInt(page, 10), totalPages: 1, totalItems: 0 };
 
             if (connection.type === 'bling') {
                 await erpService.getBlingConnectionStatus(connection, db); // Garante token válido
                 const rawData = isSku(searchTerm)
-                    ? await erpService.fetchBlingProductsByCode(connection, searchTerm)
-                    : await erpService.fetchBlingProductsByName(connection, searchTerm);
+                    ? await erpService.fetchBlingProductsByCode(connection, searchTerm, page)
+                    : await erpService.fetchBlingProductsByName(connection, searchTerm, page);
                 apiProducts = rawData.data || [];
+                const totalItems = rawData.meta?.total ?? 0;
+                const limit = rawData.meta?.limit ?? 100;
+                paginationInfo.totalPages = totalItems > 0 ? Math.ceil(totalItems / limit) : 1;
+                paginationInfo.totalItems = totalItems;
 
             } else if (connection.type === 'cisspoder') {
                 await erpService.ensureCissPoderTokenIsValid(connection, db); // Garante token válido
                 const rawData = isSku(searchTerm)
-                    ? await erpService.fetchCissPoderProductsByCode(connection, searchTerm)
-                    : await erpService.fetchCissPoderProductsByName(connection, searchTerm);
+                    ? await erpService.fetchCissPoderProductsByCode(connection, searchTerm, page)
+                    : await erpService.fetchCissPoderProductsByName(connection, searchTerm, page);
                 apiProducts = rawData.data || [];
+                const totalItems = rawData.total ?? 0;
+                // A API CissPoder não retorna o limite por página, mas a documentação sugere que é 20.
+                const limit = 20;
+                paginationInfo.totalPages = totalItems > 0 ? Math.ceil(totalItems / limit) : 1;
+                paginationInfo.totalItems = totalItems;
 
             } else {
                 return res.status(400).json({ sucesso: false, erro: `Tipo de conexão ERP '${connection.type}' não suportado.` });

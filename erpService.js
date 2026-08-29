@@ -70,7 +70,7 @@ export const fetchBlingProductsByName = async (connection, name, pagina = 1) => 
 export const fetchBlingProductsByCode = async (connection, code, pagina = 1) => {
     const searchParams = {
         criterio: '5',
-        tipo: 'T&codigo',
+        tipo: 'T',
         codigo: code
     };
     return fetchBlingProductPage(connection, pagina, searchParams);
