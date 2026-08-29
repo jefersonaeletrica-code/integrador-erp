@@ -174,7 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * =================================================================
      */
     const modal = document.getElementById('form-modal');
-    const modalTitle = document.getElementById('modal-title');
+    const modalTitle = modal.querySelector('.modal-title');
     const formFields = document.getElementById('form-fields');
     const modalForm = document.getElementById('modal-form');
     const closeModalBtn = document.querySelector('.modal-close');
@@ -368,36 +368,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const tableRows = connections.map(conn => `
-                <tr>
-                    <td>${conn.id}</td>
-                    <td>${conn.name}</td>
-                    <td>${conn.type.replace('_', ' ')}</td>
-                    <td>
-                        <button class="btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Verificar se a sessão salva ainda é válida">Validar Sessão</button>
-                        <button class="btn-small btn-warning" data-action="auth-supplier" data-id="${conn.id}" title="Forçar um novo login para renovar a sessão">Renovar Sessão</button>
-                        <button class="btn-small" data-action="edit-supplier" data-id="${conn.id}">Editar</button>
-                        <button class="btn-small btn-danger" data-action="remove-supplier" data-id="${conn.id}">Remover</button>
-                    </td>
-                </tr>
+            const connectionCards = connections.map(conn => `
+                <div class="connection-card supplier-card">
+                    <div class="card-header">
+                        <i class="fas fa-truck card-icon"></i>
+                    </div>
+                    <div class="card-body">
+                        <h3 class="card-title">${conn.name}</h3>
+                        <p class="card-subtitle">${conn.type.replace(/_/g, ' ')}</p>
+                    </div>
+                    <div class="card-footer">
+                        <div class="action-group">
+                            <button class="btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Verificar se a sessão salva ainda é válida">Validar</button>
+                            <button class="btn-small btn-warning" data-action="auth-supplier" data-id="${conn.id}" title="Forçar um novo login para renovar a sessão">Renovar</button>
+                        </div>
+                        <div class="action-group">
+                            <button class="btn-small" data-action="edit-supplier" data-id="${conn.id}">Editar</button>
+                            <button class="btn-small btn-danger" data-action="remove-supplier" data-id="${conn.id}">Remover</button>
+                        </div>
+                    </div>
+                </div>
             `).join('');
 
             pageContent.innerHTML = `
-                <button class="btn-primary" data-action="add-supplier">Adicionar Conexão de Fornecedor</button>
-                <br>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Nome</th>
-                            <th>Tipo</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${tableRows}
-                    </tbody>
-                </table>
+                <div class="page-header"><button class="btn-primary" data-action="add-supplier">Adicionar Conexão de Fornecedor</button></div>
+                <div class="connections-grid">${connectionCards}</div>
             `;
         } catch (error) {
             renderError(error);
