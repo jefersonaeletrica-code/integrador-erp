@@ -1,19 +1,18 @@
 import http from 'http';
 import { WebSocketServer } from 'ws';
 import { createApp } from './app.js';
-import db from './db.js';
-import { getLogger } from './logger.js';
-import { loadInitialData } from './productService.js';
+import * as db from './database/db.mysql.js';
+import { getLogger } from './core/logger.js';
 
 const logger = getLogger();
 const PORT = process.env.PORT || 3000;
 
 async function startServer() {
     // Garante que o módulo de DB seja carregado antes de qualquer outra coisa.
-    await db.initialize();
+    await db.initializeDatabase();
 
     // Inicializa o banco de dados e carrega os dados iniciais
-    const { app } = await createApp();
+    const { app } = await createApp(db);
 
     const server = http.createServer(app);
     const wss = new WebSocketServer({ server });
