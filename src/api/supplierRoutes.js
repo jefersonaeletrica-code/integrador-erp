@@ -163,10 +163,14 @@ export default (db) => {
             // A busca agora é síncrona em relação à requisição HTTP.
             // O `addToQueue` garante que apenas uma busca ocorra por vez no backend.
             const scraper = new DismatalScraper({ headless: true });
-            const result = await addToQueue(() => scraper.fetchProducts(connection, searchTerm));
+            const scraperResult = await addToQueue(() => scraper.fetchProducts(connection, searchTerm));
 
-            // Retorna o resultado diretamente na resposta da API.
-            res.status(200).json(result);
+            // Garante que a resposta para o frontend seja sempre consistente,
+            // enviando o objeto de sucesso e a lista de produtos extraída do resultado do scraper.
+            if (!scraperResult.sucesso) {
+                return res.status(404).json({ sucesso: false, erro: scraperResult.erro, products: [] });
+            }
+            res.status(200).json({ sucesso: true, products: scraperResult.produtos });
         } catch (e) {
             res.status(500).json({ sucesso: false, erro: `Erro durante a busca de produtos: ${e.message}` });
         }

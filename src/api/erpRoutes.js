@@ -213,7 +213,7 @@ export default (db) => {
             const products = apiProducts.map(p => ({
                 sku: p.codigo,
                 name: p.nome,
-                stock: p.saldoFisicoTotal ?? p.estoque ?? 'N/A', // Usa saldoFisicoTotal (Bling) ou estoque (CissPoder)
+                stock: p.saldoFisicoTotal ?? p.estoque ?? null, // Garante que o estoque seja numérico ou nulo, nunca 'N/A'.
                 price: p.preco ?? null // Ambas as APIs agora retornam 'preco'
             }));
 
