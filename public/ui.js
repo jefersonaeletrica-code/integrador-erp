@@ -1,61 +1,65 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- Lógica do Sidebar (Expandir/Recolher e Submenus) ---
-    // Esta seção foi reescrita do zero para uma solução final e robusta, corrigindo os problemas anteriores.
+    // Esta seção foi reescrita do zero para uma solução final e robusta.
     const sidebar = document.querySelector('.sidebar');
     const toggleBtn = document.querySelector('.toggle-btn');
     const submenuToggles = document.querySelectorAll('.submenu-toggle');
 
     // Restaura o estado do menu salvo no localStorage ao carregar a página.
     if (sidebar && localStorage.getItem('sidebarCollapsed') === 'true') {
-        // Adiciona a classe sem disparar a transição na carga inicial
         sidebar.style.transition = 'none';
         sidebar.classList.add('collapsed');
-        // Força o navegador a aplicar o estilo e então reativa a transição
         setTimeout(() => {
             sidebar.style.transition = '';
         }, 0);
     }
 
     /**
-     * Função auxiliar para fechar TODOS os submenus abertos.
-     * Remove a classe 'open' dos links e dos contêineres de submenu.
+     * Fecha todos os submenus abertos.
      */
     const closeAllSubmenus = () => {
         submenuToggles.forEach(toggle => {
             toggle.classList.remove('open');
-            if (toggle.nextElementSibling?.classList.contains('submenu')) {
+            if (toggle.nextElementSibling) {
                 toggle.nextElementSibling.classList.remove('open');
             }
         });
     };
 
     /**
-     * Manipulador para o botão principal que recolhe/expande a barra lateral.
+     * Manipulador para o botão principal de expandir/recolher.
      */
     if (toggleBtn && sidebar) {
-        toggleBtn.addEventListener('click', () => {
-            // REGRA 1: Se o menu está expandido e vai ser recolhido, fecha os submenus primeiro.
-            if (!sidebar.classList.contains('collapsed')) {
+        toggleBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            const isCollapsing = !sidebar.classList.contains('collapsed');
+            
+            // REGRA 1: Se o menu está prestes a ser recolhido, fecha todos os submenus.
+            if (isCollapsing) {
                 closeAllSubmenus();
             }
+
             sidebar.classList.toggle('collapsed');
-            // Salva o novo estado no localStorage.
             localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
         });
     }
 
     /**
-     * Manipulador para os itens de menu que possuem um submenu.
+     * Manipulador para os itens de menu com submenus.
      */
     if (submenuToggles && sidebar) {
         submenuToggles.forEach(toggle => {
             toggle.addEventListener('click', (e) => {
                 e.preventDefault();
+                const wasOpen = toggle.classList.contains('open');
+
                 if (sidebar.classList.contains('collapsed')) {
+                    // REGRA 2: Se o menu está recolhido, expande e abre o submenu clicado.
                     sidebar.classList.remove('collapsed');
                     localStorage.setItem('sidebarCollapsed', 'false');
                 }
-                const wasOpen = toggle.classList.contains('open');
+
+                // REGRA 3: Comportamento de acordeão.
                 closeAllSubmenus();
                 if (!wasOpen) {
                     toggle.classList.add('open');
