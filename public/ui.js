@@ -668,15 +668,16 @@ document.addEventListener('DOMContentLoaded', () => {
      * =================================================================
      */
     pageContent.addEventListener('click', async (e) => {
-        const action = e.target.dataset.action;
-        const id = e.target.dataset.id;
-        if (!action) return;
+        // Usa .closest() para garantir que o evento seja capturado mesmo se o clique for no ícone dentro do botão.
+        const actionButton = e.target.closest('[data-action]');
+        if (!actionButton) return;
+
+        const { action, id } = actionButton.dataset;
 
         // Ações que não abrem o modal (Testar, Autenticar)
         if (action === 'test-supplier' || action === 'auth-supplier') {
-            const button = e.target;
-            button.classList.add('loading');
-            button.disabled = true;
+            actionButton.classList.add('loading');
+            actionButton.disabled = true;
 
             const endpointAction = action === 'test-supplier' ? 'validate-authentication' : 'authenticate';
             try {
@@ -685,8 +686,8 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (error) {
                 showToast(`Erro: ${error.message}`, 'error');
             } finally {
-                button.classList.remove('loading');
-                button.disabled = false;
+                actionButton.classList.remove('loading');
+                actionButton.disabled = false;
             }
             return; // Finaliza o evento aqui
         }
