@@ -5,6 +5,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleBtn = document.querySelector('.toggle-btn');
     const submenuToggles = document.querySelectorAll('.submenu-toggle');
 
+    // Restaura o estado do menu salvo no localStorage ao carregar a página.
+    if (sidebar && localStorage.getItem('sidebarCollapsed') === 'true') {
+        sidebar.classList.add('collapsed');
+    }
+
     /**
      * Função auxiliar para fechar TODOS os submenus abertos.
      * Remove a classe 'open' dos links e dos contêineres de submenu.
@@ -29,6 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 closeAllSubmenus();
             }
             sidebar.classList.toggle('collapsed');
+            // Salva o novo estado no localStorage.
+            localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
         });
     }
 
@@ -46,6 +53,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     sidebar.classList.remove('collapsed');
                     toggle.classList.add('open');
                     toggle.nextElementSibling.classList.add('open');
+                    // Salva o novo estado (expandido) no localStorage.
+                    localStorage.setItem('sidebarCollapsed', 'false');
                 } else { // CASO B: A barra lateral está expandida.
                     const wasThisOpen = toggle.classList.contains('open');
                     // REGRA 3: Funciona como um "acordeão". Fecha tudo...
