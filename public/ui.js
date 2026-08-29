@@ -323,10 +323,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const getLogoUrl = (type) => {
                 switch (type) {
                     case 'bling':
-                        return 'https://www.bling.com.br/imagens/front/bling_2.svg';
+                        return 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTyCyc1U2qRicEBKhPjnI3Ft1Bs3yyJZgQMlA4hnRxdzonDq0ZrfJoe8QM3&s=10';
                     case 'cisspoder':
-                        // URL de um logotipo genérico para CissPoder, pode ser substituído por um local.
-                        return 'https://www.ciss.com.br/wp-content/uploads/2023/08/logo-ciss-white.svg';
+                        return 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTRa6-tBjEJA0heCJ1rH2-7Nzw_gt1wRjrx8qXflMItYIQt9M4z5mMCv8k&s=10';
                     default:
                         return ''; // Fallback
                 }

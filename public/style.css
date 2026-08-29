@@ -524,8 +524,9 @@ td .btn {
 }
 
 .dark-mode .connection-card .logo-cisspoder {
-    /* O logo do CissPoder é branco, então precisa de um filtro para ser visível no tema claro */
-    /* Este filtro não se aplica no dark mode, onde ele já é visível. */
+    /* O novo logo tem um fundo branco, então adicionamos um estilo para integrá-lo melhor no tema escuro. */
+    background-color: white;
+    border-radius: var(--border-radius);
 }
 
 .connection-card .card-body {
