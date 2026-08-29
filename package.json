@@ -17,8 +17,8 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "mysql2": "^3.10.1",
-    "puppeteer": "^22.18.0",
-    "puppeteer-core": "^22.18.0",
+    "puppeteer": "^25.9.0",
+    "puppeteer-core": "^25.9.0",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
     "ws": "^8.18.0"
