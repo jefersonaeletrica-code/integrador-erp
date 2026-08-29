@@ -1,10 +1,11 @@
-// Carrega as variáveis de ambiente do arquivo .env
+// IMPORTANTE: dotenv deve ser a PRIMEIRA importação para garantir que as variáveis de ambiente
+// estejam disponíveis para todos os outros módulos no momento em que são carregados.
 import dotenv from 'dotenv';
 dotenv.config();
 
 import http from 'http';
 import { WebSocketServer } from 'ws';
-import { createApp } from './app.js';
+import { createApp } from './app.js'; // app.js depende de variáveis de ambiente
 import * as db from './database/db.mysql.js';
 import { getLogger } from './core/logger.js';
 
@@ -12,8 +13,8 @@ const logger = getLogger();
 const PORT = process.env.PORT || 3000;
 
 async function startServer() {
-    // Garante que o módulo de DB seja carregado antes de qualquer outra coisa.
-    await db.initializeDatabase();
+    // Agora que dotenv.config() foi executado primeiro, a inicialização do DB funcionará.
+    await db.initializeDatabase(); 
 
     // Inicializa o banco de dados e carrega os dados iniciais
     const { app } = await createApp(db);
