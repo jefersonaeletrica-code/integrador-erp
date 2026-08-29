@@ -1,12 +1,12 @@
 import fs from 'fs';
 import path from 'path';
-import { getLogger } from './logger.js';
+import { getLogger } from '../core/logger.js';
 import {
     findSelector,
     pageParser,
     isValidSKU
 } from './parsers.js';
-import browserManager from './browserManager.js';
+import browserManager from '../core/browserManager.js';
 
 /**
  * @class DismatalScraper
@@ -17,7 +17,7 @@ export class DismatalScraper {
         this.config = config;
         this.logger = getLogger();
         // Carrega os seletores de um arquivo de configuração JSON externo.
-        const selectorsPath = path.join(process.cwd(), 'dismatal.selectors.json');
+        const selectorsPath = path.join(process.cwd(), 'src', 'config', 'dismatal.selectors.json');
         this.selectors = JSON.parse(fs.readFileSync(selectorsPath, 'utf8'));
     }
 

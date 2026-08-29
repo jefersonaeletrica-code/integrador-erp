@@ -96,7 +96,15 @@ export default (db) => {
     const findConnectionById = async (id) => {
         const pool = db.getPool();
         const [rows] = await pool.execute('SELECT * FROM supplier_connections WHERE id = ?', [id]);
-        return rows[0] ? { ...rows[0], credentials: JSON.parse(rows[0].credentials), cookies: rows[0].session_data ? JSON.parse(rows[0].session_data) : null } : null;
+        if (!rows[0]) {
+            return null;
+        }
+        const connection = rows[0];
+        // Garante que os campos JSON sejam parseados de forma segura, apenas se forem strings.
+        const credentials = typeof connection.credentials === 'string' ? JSON.parse(connection.credentials) : connection.credentials;
+        const cookies = typeof connection.session_data === 'string' ? JSON.parse(connection.session_data) : connection.session_data;
+
+        return { ...connection, credentials, cookies };
     };
 
     router.post('/supplier-connections/:id/authenticate', async (req, res) => {
