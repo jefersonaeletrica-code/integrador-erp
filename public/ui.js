@@ -389,8 +389,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         <p class="card-status">Status: <span class="status status-${conn.status}">${conn.status.replace(/_/g, ' ')}</span></p>
                     </div>
                     <div class="card-footer">
-                        <button class="btn-small" data-action="edit-erp" data-id="${conn.id}">Editar</button>
-                        <button class="btn-small btn-danger" data-action="remove-erp" data-id="${conn.id}">Remover</button>
+                        <button class="card-action-btn" data-action="edit-erp" data-id="${conn.id}" data-tooltip="Editar">
+                            <i class="fas fa-pencil-alt"></i>
+                        </button>
+                        <button class="card-action-btn danger" data-action="remove-erp" data-id="${conn.id}" data-tooltip="Remover">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
                     </div>
                 </div>
             `).join('');

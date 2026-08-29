@@ -567,3 +567,52 @@ td .btn {
     display: flex;
     gap: 0.5rem;
 }
+
+/* Estilos para os novos botões de ação nos cards */
+.card-action-btn {
+    background-color: transparent;
+    border: 1px solid transparent;
+    color: var(--color-text-offset);
+    cursor: pointer;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color var(--transition-speed) ease, color var(--transition-speed) ease;
+    position: relative; /* Para o tooltip */
+}
+
+.card-action-btn:hover {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+}
+
+.card-action-btn.danger:hover {
+    background-color: var(--color-danger);
+    color: white;
+}
+
+/* Estilo para o Tooltip */
+.card-action-btn::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 125%; /* Posiciona o tooltip acima do botão */
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--color-text);
+    color: var(--color-bg-offset);
+    padding: 0.3rem 0.6rem;
+    border-radius: var(--border-radius);
+    font-size: 0.75rem;
+    white-space: nowrap;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity var(--transition-speed) ease, visibility var(--transition-speed) ease;
+}
+
+.card-action-btn:hover::after {
+    opacity: 1;
+    visibility: visible;
+}
