@@ -9,30 +9,41 @@ const router = express.Router();
 // Não considera um SKU se for composto apenas por letras.
 const isSku = (term) => /^[a-zA-Z0-9-]{5,}$/.test(term) && !/^[a-zA-Z]+$/.test(term);
 
-export default (db, erpConnections) => {
+export default (db) => {
     const logger = getLogger();
 
     // --- ROTAS DE GERENCIAMENTO DE CONEXÕES ERP ---
+    const findErpConnectionById = async (id) => {
+        const pool = db.getPool();
+        const [rows] = await pool.execute('SELECT * FROM erp_connections WHERE id = ?', [id]);
+        if (!rows[0]) return null;
+        return { ...rows[0], credentials: JSON.parse(rows[0].credentials) };
+    };
 
     router.get('/erp-connections', async (req, res) => {
-        const connectionsWithStatus = await Promise.all(erpConnections.map(async (conn) => {
-            let status = 'not_applicable';
-            if (conn.type === 'bling') {
-                status = await erpService.getBlingConnectionStatus(conn, db);
-            } else if (conn.type === 'cisspoder') {
-                status = await erpService.getCissPoderConnectionStatus(conn, db);
-            }
+        try {
+            const pool = db.getPool();
+            const [connections] = await pool.execute('SELECT * FROM erp_connections');
 
-            const safeCreds = { ...conn.credentials };
-            if (safeCreds.password) safeCreds.password = '******';
-            if (safeCreds.client_secret) safeCreds.client_secret = '******';
-            if (safeCreds.access_token) safeCreds.access_token = safeCreds.access_token.substring(0, 8) + '...';
-            if (safeCreds.refresh_token) safeCreds.refresh_token = '******';
+            const connectionsWithStatus = await Promise.all(connections.map(async (conn) => {
+                const parsedConn = { ...conn, credentials: JSON.parse(conn.credentials) };
+                let status = 'not_applicable';
+                if (parsedConn.type === 'bling') {
+                    status = await erpService.getBlingConnectionStatus(parsedConn, db);
+                } else if (parsedConn.type === 'cisspoder') {
+                    status = await erpService.getCissPoderConnectionStatus(parsedConn, db);
+                }
 
-            return { ...conn, credentials: safeCreds, status };
-        }));
+                const { password, client_secret, access_token, refresh_token, ...safeCredentials } = parsedConn.credentials;
+                const displayCredentials = { ...safeCredentials };
+                if (access_token) displayCredentials.access_token = '******';
 
-        res.json({ sucesso: true, connections: connectionsWithStatus });
+                return { ...parsedConn, credentials: displayCredentials, status };
+            }));
+            res.json({ sucesso: true, connections: connectionsWithStatus });
+        } catch (e) {
+            res.status(500).json({ sucesso: false, erro: `Falha ao buscar conexões ERP: ${e.message}` });
+        }
     });
 
     router.post('/erp-connections', async (req, res) => {
@@ -48,7 +59,6 @@ export default (db, erpConnections) => {
                 [name, type, JSON.stringify(credentials)]
             );
             const newConnection = { id: result.insertId, name, type, credentials };
-            erpConnections.push(newConnection);
             res.status(201).json({ sucesso: true, connection: newConnection });
         } catch (e) {
             res.status(500).json({ sucesso: false, erro: e.message });
@@ -63,21 +73,19 @@ export default (db, erpConnections) => {
             return res.status(400).json({ sucesso: false, erro: 'Nome, tipo e credenciais são obrigatórios.' });
         }
 
-        const connectionIndex = erpConnections.findIndex(c => c.id == id);
-        if (connectionIndex === -1) {
-            return res.status(404).json({ sucesso: false, erro: 'Conexão ERP não encontrada.' });
-        }
-
         try {
-            const connection = erpConnections[connectionIndex];
+            const connection = await findErpConnectionById(id);
+            if (!connection) {
+                return res.status(404).json({ sucesso: false, erro: 'Conexão ERP não encontrada.' });
+            }
+
             // Mantém tokens existentes (ex: refresh_token do Bling) ao mesclar.
             const newCredentials = { ...(connection.credentials || {}), ...credentials };
             // Cria o objeto de conexão atualizado completo.
             const updatedConnection = { ...connection, name, type, credentials: newCredentials };
 
             // Passa o objeto completo para a função de atualização do banco de dados.
-            await db.updateDb({ connection: updatedConnection });
-            erpConnections[connectionIndex] = updatedConnection;
+            await db.updateDb({ connection: updatedConnection }); // Assumindo que updateDb lida com a atualização no DB
 
             res.json({ sucesso: true, connection: updatedConnection });
         } catch (e) {
@@ -88,15 +96,10 @@ export default (db, erpConnections) => {
     router.delete('/erp-connections/:id', async (req, res) => {
         const { id } = req.params;
 
-        const connectionIndex = erpConnections.findIndex(c => c.id == id);
-        if (connectionIndex === -1) {
-            return res.status(404).json({ sucesso: false, erro: 'Conexão não encontrada.' });
-        }
-
         try {
             const pool = db.getPool();
-            await pool.execute('DELETE FROM erp_connections WHERE id = ?', [id]);
-            erpConnections.splice(connectionIndex, 1);
+            const [result] = await pool.execute('DELETE FROM erp_connections WHERE id = ?', [id]);
+            if (result.affectedRows === 0) return res.status(404).json({ sucesso: false, erro: 'Conexão não encontrada para remover.' });
             res.json({ sucesso: true, mensagem: 'Conexão removida com sucesso.' });
         } catch (e) {
             res.status(500).json({ sucesso: false, erro: e.message });
@@ -107,7 +110,7 @@ export default (db, erpConnections) => {
 
     router.get('/auth/:connectionId/bling', (req, res) => {
         const { connectionId } = req.params;
-        const connection = erpConnections.find(c => c.id == connectionId);
+        const connection = await findErpConnectionById(connectionId);
 
         if (!connection || connection.type !== 'bling') {
             return res.status(404).json({ sucesso: false, erro: 'Conexão Bling não encontrada.' });
@@ -126,7 +129,7 @@ export default (db, erpConnections) => {
 
         const stateParams = new URLSearchParams(state);
         const connectionId = stateParams.get('connId');
-        const connection = erpConnections.find(c => c.id == connectionId);
+        const connection = await findErpConnectionById(connectionId);
 
         if (!connection) {
             return res.status(400).send('Conexão inválida ou não encontrada a partir do state.');
@@ -168,7 +171,7 @@ export default (db, erpConnections) => {
             return res.status(400).json({ sucesso: false, erro: 'O termo de busca é obrigatório.' });
         }
 
-        const connection = erpConnections.find(c => c.id == id);
+        const connection = await findErpConnectionById(id);
         if (!connection) {
             return res.status(404).json({ sucesso: false, erro: 'Conexão ERP não encontrada.' });
         }
@@ -225,7 +228,7 @@ export default (db, erpConnections) => {
 
     router.get('/produtos/:connectionId', async (req, res) => {
         const { connectionId } = req.params;
-        const connection = erpConnections.find(c => c.id == connectionId);
+        const connection = await findErpConnectionById(connectionId);
 
         if (!connection) {
             return res.status(404).json({ sucesso: false, erro: 'Conexão não encontrada.' });
