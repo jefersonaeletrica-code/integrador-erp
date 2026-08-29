@@ -1,5 +1,5 @@
 import { getLogger, createRequestId } from './logger.js';
-import { findSelector } from './parsers.js';
+import { findSelector } from '../scrapers/parsers.js';
 import { initBrowser } from './browser.js'; // Importa a função de inicialização
 import fs from 'fs';
 import path from 'path';
