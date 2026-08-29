@@ -71,10 +71,10 @@ export default (db, erpConnections) => {
         try {
             const connection = erpConnections[connectionIndex];
             // Mantém tokens existentes (ex: refresh_token do Bling) ao mesclar.
-            const mergedCredentials = { ...(connection.credentials || {}), ...credentials };
-            const updatedConnection = { ...connection, name, type: type, credentials: mergedCredentials };
+            const newCredentials = { ...(connection.credentials || {}), ...credentials };
+            const updatedConnection = { ...connection, name, type, credentials: newCredentials };
 
-            await db.updateDb({ connection: { id, name, type: type, credentials: mergedCredentials } });
+            await db.updateDb({ connection: updatedConnection });
             erpConnections[connectionIndex] = updatedConnection;
 
             res.json({ sucesso: true, connection: updatedConnection });
