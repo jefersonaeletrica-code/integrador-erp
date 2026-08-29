@@ -15,8 +15,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const self = e.currentTarget;
             const submenu = self.nextElementSibling;
 
-            // Se o menu lateral estiver colapsado, expande-o primeiro para mostrar os sub-itens.
-            if (sidebar.classList.contains('collapsed')) {
+            const wasCollapsed = sidebar.classList.contains('collapsed');
+            // Se o menu lateral estiver colapsado, expande-o.
+            if (wasCollapsed) {
                 sidebar.classList.remove('collapsed');
             }
 
@@ -29,8 +30,15 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (submenu && submenu.classList.contains('submenu')) {
-                submenu.classList.toggle('open');
-                self.classList.toggle('open');
+                // Se o menu estava colapsado, a ação deve ser sempre abrir o submenu.
+                // Se já estava expandido, a ação é de alternar (toggle).
+                if (wasCollapsed) {
+                    submenu.classList.add('open');
+                    self.classList.add('open');
+                } else {
+                    submenu.classList.toggle('open');
+                    self.classList.toggle('open');
+                }
             }
         });
     });
