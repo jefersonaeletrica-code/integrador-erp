@@ -453,8 +453,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 );
                 const actionGroup2 = createElement('div', { class: 'action-group' });
                 actionGroup2.append(
-                    createElement('button', { class: 'card-action-btn', 'data-action': 'edit-supplier', 'data-id': conn.id, 'data-tooltip': 'Editar' }, '<i class="fas fa-pencil-alt"></i>'),
-                    createElement('button', { class: 'card-action-btn danger', 'data-action': 'remove-supplier', 'data-id': conn.id, 'data-tooltip': 'Remover' }, '<i class="fas fa-trash-alt"></i>')
+                    (() => {
+                        const btn = createElement('button', { class: 'card-action-btn', 'data-action': 'edit-supplier', 'data-id': conn.id, 'data-tooltip': 'Editar' });
+                        btn.appendChild(createElement('i', { class: 'fas fa-pencil-alt' }));
+                        return btn;
+                    })(),
+                    (() => {
+                        const btn = createElement('button', { class: 'card-action-btn danger', 'data-action': 'remove-supplier', 'data-id': conn.id, 'data-tooltip': 'Remover' });
+                        btn.appendChild(createElement('i', { class: 'fas fa-trash-alt' }));
+                        return btn;
+                    })()
                 );
                 cardFooter.append(actionGroup1, actionGroup2);
 
