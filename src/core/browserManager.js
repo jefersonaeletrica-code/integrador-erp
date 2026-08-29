@@ -2,6 +2,7 @@ import { initBrowser, closeBrowser } from './browser.js'; // browser.js também 
 import { authenticate } from './auth.js'; // auth.js já está em src/core
 import puppeteer from 'puppeteer';
 import { getLogger } from './logger.js'; // logger.js também vai para src/core
+import { getLogger } from './logger.js';
 import db from '../db.js'; // db.js estará em src/
 
 const logger = getLogger();

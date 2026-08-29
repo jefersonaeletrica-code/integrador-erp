@@ -48,8 +48,8 @@ export async function initBrowser(config) {
  * @param {{browser: import('puppeteer').Browser}} browserInstance - A instância do navegador a ser fechada.
  */
 export async function closeBrowser(instance) {
-    if (instance && instance.browser && instance.browser.isConnected()) {        
-        await instance.browser.disconnect(); // Apenas desconecta, não fecha o navegador remoto
+    if (instance && instance.browser && instance.browser.isConnected()) {
+        await instance.browser.close(); // Fecha a conexão com o navegador remoto
         getLogger().info('Conexão com o navegador remoto fechada.');
     }
     // Libera o bloqueio para que uma nova instância possa ser criada no futuro.
