@@ -1,91 +1,86 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // --- Lógica do Tema Escuro (Dark Mode) ---
-    const themeSwitch = document.getElementById('theme-switch-checkbox');
-    const currentTheme = localStorage.getItem('theme');
-
-    // Aplica o tema na carga inicial
-    if (currentTheme) {
-        document.body.classList.toggle('dark-mode', currentTheme === 'dark');
-        themeSwitch.checked = currentTheme === 'dark';
-    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-        // Se não houver tema salvo, usa a preferência do sistema
-        document.body.classList.add('dark-mode');
-        themeSwitch.checked = true;
-        localStorage.setItem('theme', 'dark');
-    }
-
-    // Listener para o interruptor de tema
-    themeSwitch.addEventListener('change', function() {
-        if (this.checked) {
-            document.body.classList.add('dark-mode');
-            localStorage.setItem('theme', 'dark');
-        } else {
-            document.body.classList.remove('dark-mode');
-            localStorage.setItem('theme', 'light');
-        }
-    });
-
-    // --- Lógica do Sidebar (Expandir/Recolher e Submenus) ---
-    // Esta seção foi reescrita do zero para uma solução final e robusta.
-    const sidebar = document.querySelector('.sidebar');
-    const toggleBtn = document.querySelector('.toggle-btn');
-    const submenuToggles = document.querySelectorAll('.submenu-toggle');
-
-    // Restaura o estado do menu salvo no localStorage ao carregar a página.
-    if (sidebar && localStorage.getItem('sidebarCollapsed') === 'true') {
-        sidebar.style.transition = 'none';
-        sidebar.classList.add('collapsed');
-        setTimeout(() => {
-            sidebar.style.transition = '';
-        }, 0);
-    }
-
     /**
-     * Fecha todos os submenus abertos.
+     * Inicializa a lógica do seletor de tema (Dark Mode).
+     * É seguro e só executa se o seletor existir na página.
      */
-    const closeAllSubmenus = () => {
-        submenuToggles.forEach(toggle => {
-            toggle.classList.remove('open');
-            if (toggle.nextElementSibling) {
-                toggle.nextElementSibling.classList.remove('open');
+    function initializeThemeSwitcher() {
+        const themeSwitch = document.getElementById('theme-switch-checkbox');
+        if (!themeSwitch) return;
+
+        const currentTheme = localStorage.getItem('theme');
+
+        // Aplica o tema na carga inicial
+        if (currentTheme) {
+            document.body.classList.toggle('dark-mode', currentTheme === 'dark');
+            themeSwitch.checked = currentTheme === 'dark';
+        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            // Se não houver tema salvo, usa a preferência do sistema
+            document.body.classList.add('dark-mode');
+            themeSwitch.checked = true;
+            localStorage.setItem('theme', 'dark');
+        }
+
+        // Listener para o interruptor de tema
+        themeSwitch.addEventListener('change', function() {
+            if (this.checked) {
+                document.body.classList.add('dark-mode');
+                localStorage.setItem('theme', 'dark');
+            } else {
+                document.body.classList.remove('dark-mode');
+                localStorage.setItem('theme', 'light');
             }
         });
-    };
+    }
 
     /**
-     * Manipulador para o botão principal de expandir/recolher.
+     * Inicializa a lógica da barra lateral (sidebar).
+     * É seguro e só executa se os elementos da barra lateral existirem.
      */
-    if (toggleBtn && sidebar) {
+    function initializeSidebar() {
+        const sidebar = document.querySelector('.sidebar');
+        const toggleBtn = document.querySelector('.toggle-btn');
+        const submenuToggles = document.querySelectorAll('.submenu-toggle');
+
+        if (!sidebar || !toggleBtn) return;
+
+        // Restaura o estado do menu salvo no localStorage ao carregar a página.
+        if (localStorage.getItem('sidebarCollapsed') === 'true') {
+            sidebar.style.transition = 'none';
+            sidebar.classList.add('collapsed');
+            setTimeout(() => {
+                sidebar.style.transition = '';
+            }, 0);
+        }
+
+        const closeAllSubmenus = () => {
+            submenuToggles.forEach(toggle => {
+                toggle.classList.remove('open');
+                if (toggle.nextElementSibling) {
+                    toggle.nextElementSibling.classList.remove('open');
+                }
+            });
+        };
+
         toggleBtn.addEventListener('click', (e) => {
             e.preventDefault();
             const isCollapsing = !sidebar.classList.contains('collapsed');
-            
-            // REGRA 1: Se o menu está prestes a ser recolhido, fecha todos os submenus.
             if (isCollapsing) {
                 closeAllSubmenus();
             }
-
             sidebar.classList.toggle('collapsed');
             localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
         });
-    }
 
-    /**
-     * Manipulador para os itens de menu com submenus.
-     */
-    if (submenuToggles && sidebar) {
         submenuToggles.forEach(toggle => {
             toggle.addEventListener('click', (e) => {
                 e.preventDefault();
                 const wasOpen = toggle.classList.contains('open');
 
                 if (sidebar.classList.contains('collapsed')) {
-                    // REGRA 2: Se o menu está recolhido, expande e abre o submenu clicado.
                     sidebar.classList.remove('collapsed');
                     localStorage.setItem('sidebarCollapsed', 'false');
                 }
 
-                // REGRA 3: Comportamento de acordeão.
                 closeAllSubmenus();
                 if (!wasOpen) {
                     toggle.classList.add('open');
@@ -94,6 +89,9 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
     }
+
+    initializeThemeSwitcher();
+    initializeSidebar();
 
     // --- Lógica do Modal ---
     const modal = document.getElementById('form-modal');
