@@ -4,7 +4,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleBtn = document.querySelector('.toggle-btn');
     const submenuToggles = document.querySelectorAll('.submenu-toggle');
 
-    const toggleSidebar = () => sidebar.classList.toggle('collapsed');
+    const toggleSidebar = () => {
+        sidebar.classList.toggle('collapsed');
+
+        // Se o menu for colapsado, fecha todos os submenus abertos.
+        if (sidebar.classList.contains('collapsed')) {
+            document.querySelectorAll('.submenu.open').forEach(openSubmenu => {
+                openSubmenu.classList.remove('open');
+                // Também remove a classe 'open' do link que controla o submenu.
+                if (openSubmenu.previousElementSibling.classList.contains('submenu-toggle')) {
+                    openSubmenu.previousElementSibling.classList.remove('open');
+                }
+            });
+        }
+    };
     if (toggleBtn) {
         toggleBtn.addEventListener('click', toggleSidebar);
     }
