@@ -4,62 +4,55 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleBtn = document.querySelector('.toggle-btn');
     const submenuToggles = document.querySelectorAll('.submenu-toggle');
 
-    // Função auxiliar para fechar todos os submenus abertos
-    const closeAllSubmenus = () => {
-        document.querySelectorAll('.submenu.open').forEach(openSubmenu => {
-            openSubmenu.classList.remove('open');
-            // Também remove a classe 'open' do link que controla o submenu.
-            if (openSubmenu.previousElementSibling?.classList.contains('submenu-toggle')) {
-                openSubmenu.previousElementSibling.classList.remove('open');
-            }
-        });
-    };
-
     // Manipulador para o botão de colapsar/expandir principal
-    const handleToggleSidebar = () => {
-        const isCollapsing = !sidebar.classList.contains('collapsed');
-        sidebar.classList.toggle('collapsed');
+    toggleBtn.addEventListener('click', () => {
+        const isCurrentlyExpanded = !sidebar.classList.contains('collapsed');
 
-        // Se o menu estiver sendo colapsado, fecha todos os submenus.
-        if (isCollapsing) {
-            closeAllSubmenus();
+        // Se o menu está expandido e vai ser colapsado, fecha todos os submenus primeiro.
+        if (isCurrentlyExpanded) {
+            document.querySelectorAll('.submenu.open').forEach(submenu => {
+                submenu.classList.remove('open');
+                if (submenu.previousElementSibling?.classList.contains('submenu-toggle')) {
+                    submenu.previousElementSibling.classList.remove('open');
+                }
+            });
         }
-    };
 
-    if (toggleBtn) {
-        toggleBtn.addEventListener('click', handleToggleSidebar);
-    }
+        // Alterna o estado colapsado do menu.
+        sidebar.classList.toggle('collapsed');
+    });
 
     // Manipulador para os itens de menu com submenus
-    const handleSubmenuToggle = (e) => {
-        e.preventDefault();
-        const self = e.currentTarget;
-        const submenu = self.nextElementSibling;
-        const isThisSubmenuOpen = self.classList.contains('open');
-
-        // Se o menu principal estiver colapsado...
-        if (sidebar.classList.contains('collapsed')) {
-            // ...expande o menu principal.
-            sidebar.classList.remove('collapsed');
-            
-            // E abre o submenu clicado.
-            submenu.classList.add('open');
-            self.classList.add('open');
-        } else { // Se o menu principal já estiver expandido...
-            // Primeiro, fecha todos os submenus para um comportamento limpo.
-            closeAllSubmenus();
-
-            // Se o submenu clicado não estava aberto, abre-o.
-            // (Se já estava aberto, o closeAllSubmenus já o fechou, resultando em um 'toggle').
-            if (!isThisSubmenuOpen) {
-                submenu.classList.add('open');
-                self.classList.add('open');
-            }
-        }
-    };
-
     submenuToggles.forEach(toggle => {
-        toggle.addEventListener('click', handleSubmenuToggle);
+        toggle.addEventListener('click', (e) => {
+            e.preventDefault();
+
+            const isSidebarCollapsed = sidebar.classList.contains('collapsed');
+
+            if (isSidebarCollapsed) {
+                // Se o menu está colapsado, expande-o e abre o submenu clicado.
+                sidebar.classList.remove('collapsed');
+                toggle.classList.add('open');
+                toggle.nextElementSibling.classList.add('open');
+            } else {
+                // Se o menu está expandido, implementa o comportamento de "acordeão".
+                const wasThisOneOpen = toggle.classList.contains('open');
+
+                // Fecha todos os submenus.
+                document.querySelectorAll('.submenu.open').forEach(submenu => {
+                    submenu.classList.remove('open');
+                    if (submenu.previousElementSibling?.classList.contains('submenu-toggle')) {
+                        submenu.previousElementSibling.classList.remove('open');
+                    }
+                });
+
+                // Se o submenu clicado não estava aberto, abre-o.
+                if (!wasThisOneOpen) {
+                    toggle.classList.add('open');
+                    toggle.nextElementSibling.classList.add('open');
+                }
+            }
+        });
     });
 
     // --- Lógica do Modal ---
