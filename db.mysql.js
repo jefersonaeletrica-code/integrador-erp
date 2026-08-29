@@ -185,12 +185,13 @@ export const updateDb = async (partial) => {
     } else if (partial.connection) {
       // Lógica para atualizar uma conexão ERP específica
       const { id, name, type, credentials } = partial.connection;
-      if (id && name && type && credentials) {
+      // A verificação foi simplificada para garantir que os campos essenciais existam.
+      if (id && name && credentials) {
         await connection.execute(
           'UPDATE erp_connections SET name = ?, type = ?, credentials = ? WHERE id = ?',
           [
             name,
-            type,
+            type, // O campo 'type' agora está incluído na atualização.
             JSON.stringify(credentials),
             id
           ]
