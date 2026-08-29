@@ -136,7 +136,7 @@ export const readDb = async () => {
     const [produtos] = await connection.query('SELECT * FROM produtos_importados');
 
     return {
-      connections: connections.map(c => ({...c, credentials: typeof c.credentials === 'string' ? JSON.parse(c.credentials) : c.credentials })),
+      connections: connections.map(c => ({...c, credentials: safeJsonParse(c.credentials) })),
       supplierConnections: supplierConnections.map(c => ({
         ...c, 
         credentials: safeJsonParse(c.credentials),
