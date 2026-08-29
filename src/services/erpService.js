@@ -22,8 +22,14 @@ const getService = (type) => {
     }
 };
 export async function getErpConnectionStatus(connection, db) {
-    const service = getService(connection.type);
-    return service.getBlingConnectionStatus(connection, db); // getBlingConnectionStatus é um nome genérico aqui
+    // CORREÇÃO: Chama a função de status correta com base no tipo de conexão.
+    if (connection.type === 'bling') {
+        return blingService.getBlingConnectionStatus(connection, db);
+    }
+    if (connection.type === 'cisspoder') {
+        return cissPoderService.getCissPoderConnectionStatus(connection, db);
+    }
+    return 'disconnected'; // Retorna 'disconnected' para tipos não suportados.
 }
 
 export async function ensureValidToken(connection, db) {
