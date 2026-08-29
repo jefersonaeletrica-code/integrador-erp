@@ -12,12 +12,24 @@ const isSku = (term) => /^[a-zA-Z0-9-]{5,}$/.test(term) && !/^[a-zA-Z]+$/.test(t
 export default (db) => {
     const logger = getLogger();
 
+    // Helper para parsear JSON de forma segura, evitando que a aplicação quebre.
+    const safeJsonParse = (data) => {
+        if (typeof data === 'string') {
+            try {
+                return JSON.parse(data);
+            } catch (e) {
+                return null; // Retorna null se a string JSON for inválida
+            }
+        }
+        return data; // Retorna o dado como está se já for um objeto
+    };
+
     // --- ROTAS DE GERENCIAMENTO DE CONEXÕES ERP ---
     const findErpConnectionById = async (id) => {
         const pool = db.getPool();
         const [rows] = await pool.execute('SELECT * FROM erp_connections WHERE id = ?', [id]);
         if (!rows[0]) return null;
-        return { ...rows[0], credentials: JSON.parse(rows[0].credentials) };
+        return { ...rows[0], credentials: safeJsonParse(rows[0].credentials) };
     };
 
     router.get('/erp-connections', async (req, res) => {
@@ -26,12 +38,19 @@ export default (db) => {
             const [connections] = await pool.execute('SELECT * FROM erp_connections');
 
             const connectionsWithStatus = await Promise.all(connections.map(async (conn) => {
-                const parsedConn = { ...conn, credentials: JSON.parse(conn.credentials) };
-                let status = 'not_applicable';
-                // A lógica de status agora é abstraída pelo erpService
-                status = await erpService.getErpConnectionStatus(parsedConn, db);
-
-                const { password, client_secret, access_token, refresh_token, ...safeCredentials } = parsedConn.credentials;
+                const parsedConn = { ...conn, credentials: safeJsonParse(conn.credentials) };
+                let status;
+                try {
+                    // A lógica de status agora é abstraída pelo erpService
+                    status = await erpService.getErpConnectionStatus(parsedConn, db);
+                } catch (statusError) {
+                    // Se a verificação de status de uma conexão falhar, registramos o erro
+                    // e definimos o status como 'error' em vez de quebrar toda a requisição.
+                    logger.error(`Falha ao obter status para a conexão ERP ID ${conn.id}`, statusError);
+                    status = 'error';
+                }
+                // Adiciona um fallback para um objeto vazio para evitar erros de desestruturação se as credenciais forem nulas.
+                const { password, client_secret, access_token, refresh_token, ...safeCredentials } = parsedConn.credentials || {};
                 const displayCredentials = { ...safeCredentials };
                 if (access_token) displayCredentials.access_token = '******';
 

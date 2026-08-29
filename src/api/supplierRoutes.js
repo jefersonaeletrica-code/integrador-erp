@@ -7,6 +7,20 @@ import { addToQueue } from '../core/scraperQueue.js';
 const router = express.Router();
 
 export default (db) => {
+    const logger = getLogger();
+
+    // Helper para parsear JSON de forma segura, evitando que a aplicação quebre.
+    const safeJsonParse = (data) => {
+        if (typeof data === 'string') {
+            try {
+                return JSON.parse(data);
+            } catch (e) {
+                return null; // Retorna null se a string JSON for inválida
+            }
+        }
+        return data; // Retorna o dado como está se já for um objeto
+    };
+
     // --- ROTAS DE GERENCIAMENTO DE CONEXÕES DE FORNECEDORES ---
     
     router.post('/supplier-connections', async (req, res) => {
@@ -34,8 +48,9 @@ export default (db) => {
 
         // Remove senhas e outros dados sensíveis antes de enviar para o cliente.
         const connectionsWithSafeCredentials = supplierConnections.map(conn => {
+            // Adiciona um fallback para um objeto vazio para evitar erros de desestruturação se as credenciais forem nulas.
             // Cria uma cópia segura das credenciais, omitindo a senha.
-            const { password, ...safeCredentials } = conn.credentials;
+            const { password, ...safeCredentials } = conn.credentials || {};
             return { ...conn, credentials: { ...safeCredentials, password: password ? '******' : undefined } };
         });
         res.json({ sucesso: true, connections: connectionsWithSafeCredentials });
@@ -50,8 +65,7 @@ export default (db) => {
                 return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
             }
             const connection = rows[0];
-            // Garante que as credenciais sejam enviadas como um objeto JSON, não uma string.
-            connection.credentials = typeof connection.credentials === 'string' ? JSON.parse(connection.credentials) : connection.credentials;
+            connection.credentials = safeJsonParse(connection.credentials);
             res.json({ sucesso: true, connection });
         } catch (e) {
             res.status(500).json({ sucesso: false, erro: `Erro ao buscar conexão: ${e.message}` });
@@ -101,8 +115,8 @@ export default (db) => {
         }
         const connection = rows[0];
         // Garante que os campos JSON sejam parseados de forma segura, apenas se forem strings.
-        const credentials = typeof connection.credentials === 'string' ? JSON.parse(connection.credentials) : connection.credentials;
-        const cookies = typeof connection.session_data === 'string' ? JSON.parse(connection.session_data) : connection.session_data;
+        const credentials = safeJsonParse(connection.credentials);
+        const cookies = safeJsonParse(connection.session_data);
 
         return { ...connection, credentials, cookies };
     };

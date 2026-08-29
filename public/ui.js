@@ -206,7 +206,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const options = { method, headers: { 'Content-Type': 'application/json' } };
         if (body) options.body = JSON.stringify(body);
         const response = await fetch(endpoint, options);
-        if (!response.ok) throw new Error((await response.json()).erro || `Erro de HTTP: ${response.status}`);
+        if (!response.ok) {
+            // Tenta ler a resposta como JSON, mas se falhar, lê como texto.
+            // Isso garante que a mensagem de erro real seja capturada, mesmo que não seja um JSON válido.
+            let errorMessage;
+            try {
+                const errorBody = await response.json();
+                errorMessage = errorBody.erro || JSON.stringify(errorBody);
+            } catch (e) {
+                errorMessage = await response.text();
+            }
+            throw new Error(errorMessage || `Erro de HTTP: ${response.status}`);
+        }
         return response.json();
     };
 
@@ -250,13 +261,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 let fieldsHtml = '';
                 if (type === 'bling') {
                     fieldsHtml = `
-                        <div class="form-group"><label for="client_id">Client ID</label><input type="text" id="client_id" name="client_id" value="${creds.client_id || ''}" required></div>
-                        <div class="form-group"><label for="client_secret">Client Secret</label><input type="password" id="client_secret" name="client_secret" value="${creds.client_secret || ''}" required></div>
-                        <div class="form-group"><label for="redirect_uri">Redirect URI</label><input type="text" id="redirect_uri" name="redirect_uri" value="${creds.redirect_uri || ''}" placeholder="Ex: https://seu-dominio.com/api/callback" required></div>
+                        <div class="form-group"><label for="client_id">ID do Cliente (Client ID)</label><input type="text" id="client_id" name="client_id" value="${creds.client_id || ''}" required></div>
+                        <div class="form-group"><label for="client_secret">Segredo do Cliente (Client Secret)</label><input type="password" id="client_secret" name="client_secret" value="${creds.client_secret || ''}" required></div>
+                        <div class="form-group"><label for="redirect_uri">URI de Redirecionamento</label><input type="text" id="redirect_uri" name="redirect_uri" value="${creds.redirect_uri || ''}" placeholder="Ex: https://seu-dominio.com/api/callback" required></div>
                     `;
                 } else if (type === 'cisspoder') {
                     fieldsHtml = `
-                        <div class="form-group"><label for="auth_url">URL de Autenticação</label><input type="text" id="auth_url" name="auth_url" value="${creds.auth_url || ''}" placeholder="Ex: https://servidor.dataciss.com.br" required></div>
+                        <div class="form-group"><label for="auth_url">URL de Autenticação</label><input type="text" id="auth_url" name="auth_url" value="${creds.auth_url || ''}" placeholder="Ex: https://api.servidor.com.br" required></div>
                         <div class="form-group"><label for="username">Usuário</label><input type="text" id="username" name="username" value="${creds.username || ''}" required></div>
                         <div class="form-group"><label for="password">Senha</label><input type="password" id="password" name="password" value="${creds.password || ''}" required></div>
                     `;
@@ -302,7 +313,8 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoading();
         try {
             const { connections } = await api('/api/erp-connections');
-
+    
+            // Explicitly handle the case where the API returns an empty array.
             if (!connections || connections.length === 0) {
                 pageContent.innerHTML = '<div class="empty-state"><p>Nenhuma conexão ERP encontrada.</p><button class="btn-primary" data-action="add-erp">Adicionar Conexão ERP</button></div>';
                 return;
@@ -349,7 +361,8 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoading();
         try {
             const { connections } = await api('/api/supplier-connections');
-
+    
+            // Explicitly handle the case where the API returns an empty array.
             if (!connections || connections.length === 0) {
                 pageContent.innerHTML = '<div class="empty-state"><p>Nenhuma conexão de fornecedor encontrada.</p><button class="btn-primary" data-action="add-supplier">Adicionar Conexão de Fornecedor</button></div>';
                 return;
@@ -361,8 +374,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${conn.name}</td>
                     <td>${conn.type.replace('_', ' ')}</td>
                     <td>
-                        <button class="btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Testar Conexão">Testar</button>
-                        <button class="btn-small btn-warning" data-action="auth-supplier" data-id="${conn.id}" title="Forçar nova autenticação">Autenticar</button>
+                        <button class="btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Verificar se a sessão salva ainda é válida">Validar Sessão</button>
+                        <button class="btn-small btn-warning" data-action="auth-supplier" data-id="${conn.id}" title="Forçar um novo login para renovar a sessão">Renovar Sessão</button>
                         <button class="btn-small" data-action="edit-supplier" data-id="${conn.id}">Editar</button>
                         <button class="btn-small btn-danger" data-action="remove-supplier" data-id="${conn.id}">Remover</button>
                     </td>
@@ -468,14 +481,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const connectionId = document.getElementById('erp-connection-select').value;
             const searchTerm = document.getElementById('product-search-term').value;
-
+            
             resultsContainer.innerHTML = '<p>Buscando produtos...</p>';
 
             try {
                 const { products, pagination } = await api(`/api/erp-connections/${connectionId}/products`, 'POST', { searchTerm, page });
 
+                // Explicitly handle the case where the search returns no products.
                 if (!products || products.length === 0) {
-                    resultsContainer.innerHTML = '<p>Nenhum produto encontrado com o termo informado.</p>';
+                    resultsContainer.innerHTML = '<div class="empty-state"><p>Nenhum produto encontrado com o termo informado.</p></div>';
                     return;
                 }
 
@@ -512,19 +526,20 @@ document.addEventListener('DOMContentLoaded', () => {
             // 1. Fetch ERP connections to populate the selector
             const { connections } = await api('/api/erp-connections');
 
+            // Explicitly handle the case where there are no connections to search from.
             if (!connections || connections.length === 0) {
-                searchFormContainer.innerHTML = '<p>Nenhuma conexão ERP ativa encontrada. Adicione uma em "Integrações" para buscar produtos.</p>';
+                searchFormContainer.innerHTML = '<div class="empty-state"><p>Nenhuma conexão ERP ativa encontrada. Adicione uma em "Integrações" para buscar produtos.</p></div>';
                 return;
             }
 
             // 2. Build the form
             const options = connections
-                .filter(c => c.status === 'connected') // Only show connected ERPs
+                .filter(c => c.status === 'connected') // Only show connected ERPs in the dropdown
                 .map(c => `<option value="${c.id}">${c.name} (${c.type})</option>`)
                 .join('');
 
             if (options.length === 0) {
-                searchFormContainer.innerHTML = '<p>Nenhuma conexão ERP com status "Conectado" foi encontrada. Verifique o status das suas conexões.</p>';
+                searchFormContainer.innerHTML = '<div class="empty-state"><p>Nenhuma conexão ERP com status "Conectado" foi encontrada. Verifique o status das suas conexões.</p></div>';
                 return;
             }
 

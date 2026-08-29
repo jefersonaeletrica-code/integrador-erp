@@ -114,16 +114,24 @@ export const ensureInitialized = () => {
   return initializationPromise;
 };
 
+// Helper para parsear JSON de forma segura, evitando que a aplicação quebre.
+const safeJsonParse = (data) => {
+    if (typeof data === 'string') {
+        try {
+            return JSON.parse(data);
+        } catch (e) {
+            return null; // Retorna null se a string JSON for inválida
+        }
+    }
+    return data; // Retorna o dado como está se já for um objeto
+};
+
 export const readDb = async () => {
   await ensureInitialized(); // Garante que a inicialização terminou
   const connection = await getPool().getConnection();
   try {
-    // Inicia as transações para garantir a consistência
-    // await connection.beginTransaction(); // Não é mais necessário para leituras simples
-
     const [connections] = await connection.query('SELECT * FROM erp_connections');
     const [supplierConnections] = await connection.query('SELECT * FROM supplier_connections');
-
     // Lê os produtos
     const [produtos] = await connection.query('SELECT * FROM produtos_importados');
 
@@ -131,10 +139,10 @@ export const readDb = async () => {
       connections: connections.map(c => ({...c, credentials: typeof c.credentials === 'string' ? JSON.parse(c.credentials) : c.credentials })),
       supplierConnections: supplierConnections.map(c => ({
         ...c, 
-        credentials: typeof c.credentials === 'string' ? JSON.parse(c.credentials) : c.credentials,
+        credentials: safeJsonParse(c.credentials),
         // Garante que os dados da sessão também sejam parseados do JSON.
         // O campo no DB é 'session_data', mas o app usa 'cookies' internamente.
-        cookies: typeof c.session_data === 'string' ? JSON.parse(c.session_data) : c.session_data
+        cookies: safeJsonParse(c.session_data)
       })),
       produtos: produtos.map(p => ({ ...p, preco: parseFloat(p.preco) })) // Garante que o preço seja número
     };
