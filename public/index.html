@@ -4,7 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Integrador ERP</title>
-    <link rel="stylesheet" href="style.css">
+    <!-- Cache Busting: Altere o número da versão (ex: v=1.0.1) a cada implantação para forçar a atualização dos arquivos. -->
+    <link rel="stylesheet" href="style.css?v=1.0.0">
     <!-- Adicionando Font Awesome para ícones -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
@@ -35,18 +36,19 @@
                 </li>
             </ul>
         </div>
-        <div class="theme-switcher">
-            <label class="theme-switch" for="theme-switch-checkbox">
-                <input type="checkbox" id="theme-switch-checkbox" />
-                <span class="slider"></span>
-            </label>
-        </div>
     </div>
 
     <main class="content">
-        <h1 id="main-title">Bem-vindo ao Integrador ERP</h1>
+        <header class="main-header">
+            <h1 id="main-title">Bem-vindo ao Integrador ERP</h1>
+            <button id="theme-toggle-btn" class="theme-toggle-btn" title="Alternar tema">
+                <i class="fas fa-moon moon-icon"></i>
+                <i class="fas fa-sun sun-icon"></i>
+            </button>
+        </header>
         <div id="page-content">
             <!-- Conteúdo das páginas será carregado aqui -->
+            <!-- O container de toasts será criado e inserido aqui pelo ui.js -->
         </div>
     </main>
 
@@ -65,7 +67,6 @@
         </div>
     </div>
 
-    <script src="ui.js"></script>
+    <script src="ui.js?v=1.0.0" defer></script>
 </body>
-</html>
 </html>
