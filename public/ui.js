@@ -20,12 +20,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (toggleBtn && sidebar) {
         toggleBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            const willCollapse = !sidebar.classList.contains('collapsed');
-            // REGRA 1: Se o menu está expandido e vai ser recolhido agora, fecha os submenus primeiro.
-            if (willCollapse) {
+            // Primeiro, alterna o estado da barra lateral.
+            sidebar.classList.toggle('collapsed');
+            // REGRA 1: Se o menu AGORA está recolhido, garante que todos os submenus sejam fechados.
+            if (sidebar.classList.contains('collapsed')) {
                 closeAllSubmenus();
             }
-            sidebar.classList.toggle('collapsed');
         });
     }
 
