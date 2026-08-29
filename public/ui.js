@@ -20,8 +20,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (toggleBtn && sidebar) {
         toggleBtn.addEventListener('click', (e) => {
             e.preventDefault();
-            // REGRA 1: Se o menu está expandido e vai ser recolhido, fecha os submenus primeiro.
-            if (!sidebar.classList.contains('collapsed')) {
+            const willCollapse = !sidebar.classList.contains('collapsed');
+            // REGRA 1: Se o menu está expandido e vai ser recolhido agora, fecha os submenus primeiro.
+            if (willCollapse) {
                 closeAllSubmenus();
             }
             sidebar.classList.toggle('collapsed');
