@@ -26,9 +26,9 @@ export async function initBrowser(config) {
 
     try {
         isBrowserInUse = true; // Bloqueia a criação de novas instâncias
-        const browser = await puppeteer.connect({
-            browserWSEndpoint,
-            timeout: 120000, // Timeout de 2 minutos para a conexão inicial
+        const browser = await puppeteer.launch({
+            browserURL: browserWSEndpoint,
+            ...BROWSER_CONFIG,
         });
         const page = await browser.newPage();
         await page.setViewport(BROWSER_CONFIG.defaultViewport);
