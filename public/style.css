@@ -481,3 +481,73 @@ td .btn {
         gap: 1rem;
     }
 }
+
+/* ==========================================================================
+   5. Connection Cards
+   ========================================================================== */
+
+.connections-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.connection-card {
+    background-color: var(--color-bg-offset);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    transition: transform var(--transition-speed) ease, box-shadow var(--transition-speed) ease;
+}
+
+.connection-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
+}
+
+.connection-card .card-header {
+    padding: 1.5rem 1.5rem 1rem;
+    border-bottom: 1px solid var(--color-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 80px;
+}
+
+.connection-card .erp-logo {
+    height: 30px;
+    max-width: 120px;
+    object-fit: contain;
+}
+
+.dark-mode .connection-card .logo-cisspoder {
+    /* O logo do CissPoder é branco, então precisa de um filtro para ser visível no tema claro */
+    /* Este filtro não se aplica no dark mode, onde ele já é visível. */
+}
+
+.connection-card .card-body {
+    padding: 1rem 1.5rem;
+    flex-grow: 1;
+}
+
+.connection-card .card-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.connection-card .card-status {
+    font-size: 0.9rem;
+    color: var(--color-text-offset);
+}
+
+.connection-card .card-footer {
+    padding: 1rem 1.5rem;
+    border-top: 1px solid var(--color-border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+}

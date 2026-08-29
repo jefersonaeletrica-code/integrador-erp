@@ -320,36 +320,37 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const tableRows = connections.map(conn => `
-                <tr>
-                    <td>${conn.id}</td>
-                    <td>${conn.name}</td>
-                    <td>${conn.type}</td>
-                    <td><span class="status status-${conn.status}">${conn.status.replace('_', ' ')}</span></td>
-                    <td>
+            const getLogoUrl = (type) => {
+                switch (type) {
+                    case 'bling':
+                        return 'https://www.bling.com.br/imagens/front/bling_2.svg';
+                    case 'cisspoder':
+                        // URL de um logotipo genérico para CissPoder, pode ser substituído por um local.
+                        return 'https://www.ciss.com.br/wp-content/uploads/2023/08/logo-ciss-white.svg';
+                    default:
+                        return ''; // Fallback
+                }
+            };
+
+            const connectionCards = connections.map(conn => `
+                <div class="connection-card">
+                    <div class="card-header">
+                        <img src="${getLogoUrl(conn.type)}" alt="Logo ${conn.type}" class="erp-logo ${conn.type === 'cisspoder' ? 'logo-cisspoder' : ''}">
+                    </div>
+                    <div class="card-body">
+                        <h3 class="card-title">${conn.name}</h3>
+                        <p class="card-status">Status: <span class="status status-${conn.status}">${conn.status.replace(/_/g, ' ')}</span></p>
+                    </div>
+                    <div class="card-footer">
                         <button class="btn-small" data-action="edit-erp" data-id="${conn.id}">Editar</button>
                         <button class="btn-small btn-danger" data-action="remove-erp" data-id="${conn.id}">Remover</button>
-                    </td>
-                </tr>
+                    </div>
+                </div>
             `).join('');
 
             pageContent.innerHTML = `
-                <button class="btn-primary" data-action="add-erp">Adicionar Conexão ERP</button>
-                <br>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Nome</th>
-                            <th>Tipo</th>
-                            <th>Status</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${tableRows}
-                    </tbody>
-                </table>
+                <div class="page-header"><button class="btn-primary" data-action="add-erp">Adicionar Conexão ERP</button></div>
+                <div class="connections-grid">${connectionCards}</div>
             `;
         } catch (error) {
             renderError(error);
