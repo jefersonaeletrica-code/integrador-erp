@@ -1,6 +1,6 @@
 import express from 'express';
-import * as erpService from './erpService.js';
-import { getLogger } from './logger.js';
+import * as erpService from '../services/erpService.js';
+import { getLogger } from '../core/logger.js';
 
 const router = express.Router();
 
@@ -142,7 +142,7 @@ export default (db, erpConnections) => {
 
             connection.credentials.access_token = response.data.access_token;
             connection.credentials.refresh_token = response.data.refresh_token;
-            await db.updateDb({ connection: { id: connection.id, credentials: connection.credentials } });
+            await db.updateDb({ connection }); // A função updateDb já espera o objeto de conexão
 
             res.redirect('/?autorizado=true');
         } catch (e) {
