@@ -62,6 +62,21 @@ export default (db) => {
         }
     });
 
+    router.get('/erp-connections/:id', async (req, res) => {
+        const { id } = req.params;
+        try {
+            const connection = await findErpConnectionById(id);
+            if (!connection) {
+                return res.status(404).json({ sucesso: false, erro: 'Conexão ERP não encontrada.' });
+            }
+            // Retorna a conexão encontrada como JSON
+            res.json({ sucesso: true, connection });
+        } catch (e) {
+            logger.error(`Falha ao buscar conexão ERP por ID: ${id}`, e);
+            res.status(500).json({ sucesso: false, erro: `Erro ao buscar conexão: ${e.message}` });
+        }
+    });
+
     router.post('/erp-connections', async (req, res) => {
         const { name, type, credentials } = req.body;
         if (!name || !type || !credentials) {
