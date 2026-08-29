@@ -1,9 +1,9 @@
-import { initBrowser, closeBrowser } from './browser.js';
-import { authenticate } from './auth.js';
+import { initBrowser, closeBrowser } from './browser.js'; // browser.js também vai para src/core
+import { authenticate } from './auth.js'; // auth.js já está em src/core
 import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
-import { getLogger } from './logger.js';
-import db from './db.js';
+import { getLogger } from './logger.js'; // logger.js também vai para src/core
+import db from '../db.js'; // db.js estará em src/
 
 const logger = getLogger();
 

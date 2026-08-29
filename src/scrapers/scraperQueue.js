@@ -1,4 +1,4 @@
-import { getLogger } from './logger.js';
+import { getLogger } from '../core/logger.js';
 
 const logger = getLogger();
 const queue = [];

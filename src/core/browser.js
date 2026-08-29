@@ -1,5 +1,5 @@
 import puppeteer from 'puppeteer';
-import { getLogger } from './logger.js';
+import { getLogger } from './logger.js'; // logger.js também vai para src/core
 
 export const BROWSER_CONFIG = { headless: true, defaultViewport: { width: 1280, height: 800 } };
 

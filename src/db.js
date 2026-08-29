@@ -11,11 +11,11 @@ const db = {
     
     console.log(`Usando driver de banco de dados: ${DB_DRIVER.toUpperCase()}`);
     if (DB_DRIVER === 'json') {
-      dbModule = await import('./db.json.js');
+      dbModule = await import('./database/db.json.js');
     } else if (DB_DRIVER === 'mysql') {
-      dbModule = await import('./db.mysql.js');
+      dbModule = await import('./database/db.mysql.js'); // Caminho já estava correto, apenas confirmando
     } else if (DB_DRIVER === 'mongodb') {
-      dbModule = await import('./db.mongodb.js');
+      dbModule = await import('./database/db.mongodb.js');
     } else {
       throw new Error(`Driver de banco de dados desconhecido: ${DB_DRIVER}`);
     }
