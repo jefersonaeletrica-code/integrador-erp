@@ -108,9 +108,9 @@ export default (db) => {
 
     // --- ROTAS DE AUTENTICAÇÃO E PRODUTOS ERP ---
 
-    router.get('/auth/:connectionId/bling', (req, res) => {
+    router.get('/auth/:connectionId/bling', async (req, res) => {
         const { connectionId } = req.params;
-        const connection = await findErpConnectionById(connectionId);
+        const connection = await findErpConnectionById(connectionId); // Agora funciona, pois a função é async
 
         if (!connection || connection.type !== 'bling') {
             return res.status(404).json({ sucesso: false, erro: 'Conexão Bling não encontrada.' });
@@ -129,7 +129,7 @@ export default (db) => {
 
         const stateParams = new URLSearchParams(state);
         const connectionId = stateParams.get('connId');
-        const connection = await findErpConnectionById(connectionId);
+        const connection = await findErpConnectionById(connectionId); // Agora funciona, pois a função é async
 
         if (!connection) {
             return res.status(400).send('Conexão inválida ou não encontrada a partir do state.');
