@@ -13,7 +13,14 @@ export async function createApp(db) {
     // Middlewares
     app.use(express.json());
 
+    // Configuração das Rotas de API
+    // API routes MUST be declared before the static middleware and the catch-all route.
+    app.use('/api', erpRoutes(db));
+    app.use('/api', supplierRoutes(db));
+    app.use('/api', productRoutes(db));
+
     // Middleware para servir arquivos estáticos com controle de cache inteligente.
+    // Deve vir DEPOIS das rotas de API e ANTES da rota catch-all.
     // Isso ajuda a resolver o problema de "visual diferente" entre o ambiente local e o servidor.
     app.use(express.static(path.join(process.cwd(), 'public'), {
         etag: true, // Habilita o uso de ETags para validação de cache.
@@ -29,10 +36,12 @@ export async function createApp(db) {
         }
     }));
 
-    // Configuração das Rotas
-    app.use('/api', erpRoutes(db));
-    app.use('/api', supplierRoutes(db));
-    app.use('/api', productRoutes(db));
+    // Rota "Catch-All": Para qualquer outra requisição que não seja de API,
+    // serve o index.html. Isso é crucial para o funcionamento do roteamento
+    // no lado do cliente (Single-Page Application).
+    app.get('*', (req, res) => {
+        res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
+    });
 
     return { app };
 }

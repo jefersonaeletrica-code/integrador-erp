@@ -59,11 +59,12 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function initializeSidebar() {
         const sidebar = document.querySelector('.sidebar');
+        const content = document.querySelector('.content'); // Seleciona a área de conteúdo principal
         const toggleBtn = document.querySelector('.toggle-btn');
         const submenuToggles = document.querySelectorAll('.submenu-toggle');
 
         // Validação de segurança para garantir que os elementos essenciais existem.
-        if (!sidebar || !toggleBtn || !submenuToggles.length) return;
+        if (!sidebar || !content || !toggleBtn || !submenuToggles.length) return;
 
         // Restaura o estado do menu salvo no localStorage ao carregar a página.
         if (localStorage.getItem('sidebarCollapsed') === 'true') {
@@ -72,6 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
             setTimeout(() => {
                 sidebar.style.transition = '';
             }, 0);
+            content.classList.add('collapsed'); // Sincroniza o estado do conteúdo
         }
 
         const closeAllSubmenus = () => {
@@ -89,6 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 closeAllSubmenus();
             }
             sidebar.classList.toggle('collapsed');
+            content.classList.toggle('collapsed'); // Alterna a classe no conteúdo também
             // Salva o estado no localStorage para persistência.
             localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
         });
@@ -103,6 +106,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Se a barra lateral estiver colapsada, a primeira ação é expandi-la.
                 if (sidebar.classList.contains('collapsed')) {
                     sidebar.classList.remove('collapsed');
+                    content.classList.remove('collapsed'); // Sincroniza o conteúdo principal
+                    localStorage.setItem('sidebarCollapsed', 'false'); // Atualiza o estado salvo
                     setTimeout(() => {
                         closeAllSubmenus();
                         parentLi.classList.add('open');
@@ -750,6 +755,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Remove a classe ativa de todos os links
         document.querySelectorAll('.menu-links a').forEach(a => a.classList.remove('active'));
         link.classList.add('active');
+
+        // Se o link clicado estiver dentro de um submenu, marca o item pai como ativo também.
+        const parentSubmenuToggle = link.closest('li.open')?.querySelector('.submenu-toggle');
+        if (parentSubmenuToggle) {
+            parentSubmenuToggle.classList.add('active');
+        }
 
         const routeHandler = routes[link.id];
         routeHandler ? routeHandler() : renderWelcomePage();

@@ -70,6 +70,12 @@ body {
     left: 0;
 }
 
+.sidebar-content {
+    flex-grow: 1;
+    overflow-y: auto; /* Adiciona scroll se o menu for muito grande */
+    overflow-x: hidden;
+}
+
 .sidebar.collapsed {
     width: 70px;
 }
@@ -81,6 +87,10 @@ body {
     padding: 1rem;
     height: 60px;
     border-bottom: 1px solid var(--color-border);
+}
+
+.sidebar.collapsed .sidebar-header {
+    justify-content: center; /* Centraliza o ícone do menu quando colapsado */
 }
 
 .logo {
@@ -98,21 +108,40 @@ body {
     font-size: 1.5rem;
 }
 
+.link-text {
+    opacity: 1;
+    transition: opacity var(--transition-speed) ease-out;
+    white-space: nowrap;
+}
+
 .menu-links {
     list-style: none;
-    padding: 1rem 0;
-    flex-grow: 1;
+    padding: 1rem 0; 
 }
 
 .menu-links li a {
     display: flex;
     align-items: center;
+    gap: 1.25rem; /* Adiciona espaço entre o ícone e o texto */
     padding: 0.75rem 1.5rem;
     color: var(--color-text-offset);
     text-decoration: none;
-    white-space: nowrap;
     overflow: hidden;
+    position: relative; /* Necessário para o indicador de item ativo */
     transition: background-color var(--transition-speed) ease, color var(--transition-speed) ease;
+}
+
+/* Estilo para os ícones dentro dos links do menu */
+.menu-links li a .fas {
+    font-size: 1rem; /* Tamanho padronizado */
+    width: 20px; /* Largura fixa para alinhar o texto */
+    text-align: center;
+    transition: transform var(--transition-speed) ease; /* Para a seta do submenu */
+}
+
+/* Estilo para o texto dos links */
+.menu-links li a .link-text {
+    font-weight: 500; /* Torna a fonte um pouco mais forte */
 }
 
 .menu-links li a:hover {
@@ -120,8 +149,26 @@ body {
     color: var(--color-text);
 }
 
+/* Estilo para o link ativo */
+.menu-links li a.active {
+    color: var(--color-primary);
+    font-weight: 600;
+}
+
+/* Indicador visual (barra lateral) para o link ativo */
+.menu-links li a.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 20%;
+    height: 60%;
+    width: 4px;
+    background-color: var(--color-primary);
+    border-radius: 0 4px 4px 0;
+}
+
 .menu-links li.open > .submenu-toggle {
-    color: var(--color-text);
+    color: var(--color-primary);
 }
 
 .menu-links .submenu {
@@ -136,31 +183,75 @@ body {
     max-height: 500px; /* Adjust as needed */
 }
 
+/* Gira a seta do submenu quando ele está aberto */
+.menu-links li.open .arrow {
+    transform: rotate(180deg);
+}
+
 .submenu a {
     padding-left: 3rem !important;
+}
+
+/* Remove o indicador de ativo dos sub-itens para um visual mais limpo */
+.submenu a.active::before {
+    display: none;
 }
 
 .sidebar-footer {
     padding: 1rem;
     border-top: 1px solid var(--color-border);
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
-.theme-switch {
+.theme-toggle-btn {
+    background-color: transparent;
+    border: none;
+    color: var(--color-text-offset);
+    cursor: pointer;
+    padding: 0.75rem;
+    border-radius: var(--border-radius);
     display: flex;
     align-items: center;
-    justify-content: space-between;
+    justify-content: center;
+    width: 100%;
+    gap: 1.25rem; /* Espaçamento entre ícone e texto */
+    transition: background-color var(--transition-speed) ease, color var(--transition-speed) ease;
+}
+
+.theme-toggle-btn:hover {
+    background-color: var(--color-bg);
+    color: var(--color-text);
+}
+
+.theme-toggle-btn .sun-icon,
+.theme-toggle-btn .moon-icon {
+    font-size: 1.2rem;
+}
+
+.theme-toggle-btn .link-text {
     white-space: nowrap;
+}
+
+.sidebar.collapsed .theme-toggle-btn {
+    gap: 0; /* Remove o espaçamento quando colapsado */
+}
+
+.sidebar.collapsed .link-text {
+    opacity: 0;
+    width: 0;
     overflow: hidden;
 }
 
-.main-container {
+.content {
     margin-left: 260px;
     width: calc(100% - 260px);
     padding: 2rem;
     transition: margin-left var(--transition-speed) ease, width var(--transition-speed) ease;
 }
 
-.main-container.collapsed {
+.content.collapsed {
     margin-left: 70px;
     width: calc(100% - 70px);
 }
@@ -374,7 +465,7 @@ td .btn {
     .sidebar {
         width: 70px;
     }
-    .main-container {
+    .content {
         margin-left: 70px;
         width: calc(100% - 70px);
         padding: 1rem;
