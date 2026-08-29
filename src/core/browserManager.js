@@ -1,7 +1,7 @@
 import { initBrowser, closeBrowser } from './browser.js'; // browser.js também vai para src/core
 import { authenticate } from './auth.js'; // auth.js já está em src/core
 import puppeteer from 'puppeteer-extra';
-import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+import AnonymizeUAPlugin from 'puppeteer-extra-plugin-anonymize-ua';
 import { getLogger } from './logger.js'; // logger.js também vai para src/core
 import db from '../db.js'; // db.js estará em src/
 
@@ -13,8 +13,8 @@ const logger = getLogger();
  */
 class BrowserManager {
     constructor() {
-        // Adiciona o plugin de stealth para evitar detecção
-        puppeteer.use(StealthPlugin());
+        // Adiciona o plugin para anonimizar o User-Agent
+        puppeteer.use(AnonymizeUAPlugin());
         // Armazena as instâncias de navegador por ID de conexão
         this.instances = new Map();
     }
