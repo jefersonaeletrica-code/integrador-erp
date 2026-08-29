@@ -568,6 +568,23 @@ td .btn {
     gap: 0.5rem;
 }
 
+.supplier-card .card-icon {
+    font-size: 2.5rem;
+    color: var(--color-text-offset);
+}
+
+.supplier-card .card-subtitle {
+    font-size: 0.9rem;
+    color: var(--color-text-offset);
+    text-transform: capitalize;
+}
+
+.supplier-card .card-footer {
+    flex-wrap: wrap;
+    justify-content: space-between;
+    row-gap: 0.5rem;
+}
+
 /* Estilos para os novos botões de ação nos cards */
 .card-action-btn {
     background-color: transparent;

@@ -323,9 +323,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const getLogoUrl = (type) => {
                 switch (type) {
                     case 'bling':
-                        return 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTyCyc1U2qRicEBKhPjnI3Ft1Bs3yyJZgQMlA4hnRxdzonDq0ZrfJoe8QM3&s=10';
+                        return 'https://www.bling.com.br/imagens/front/bling_2.svg'; // URL oficial e estável
                     case 'cisspoder':
-                        return 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTRa6-tBjEJA0heCJ1rH2-7Nzw_gt1wRjrx8qXflMItYIQt9M4z5mMCv8k&s=10';
+                        return 'https://www.ciss.com.br/wp-content/uploads/2023/08/logo-ciss-white.svg'; // URL oficial e estável
                     default:
                         return ''; // Fallback
                 }
@@ -372,36 +372,31 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const tableRows = connections.map(conn => `
-                <tr>
-                    <td>${conn.id}</td>
-                    <td>${conn.name}</td>
-                    <td>${conn.type.replace('_', ' ')}</td>
-                    <td>
-                        <button class="btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Verificar se a sessão salva ainda é válida">Validar Sessão</button>
-                        <button class="btn-small btn-warning" data-action="auth-supplier" data-id="${conn.id}" title="Forçar um novo login para renovar a sessão">Renovar Sessão</button>
-                        <button class="btn-small" data-action="edit-supplier" data-id="${conn.id}">Editar</button>
-                        <button class="btn-small btn-danger" data-action="remove-supplier" data-id="${conn.id}">Remover</button>
-                    </td>
-                </tr>
+            const connectionCards = connections.map(conn => `
+                <div class="connection-card supplier-card">
+                    <div class="card-header">
+                        <i class="fas fa-truck card-icon"></i>
+                    </div>
+                    <div class="card-body">
+                        <h3 class="card-title">${conn.name}</h3>
+                        <p class="card-subtitle">${conn.type.replace(/_/g, ' ')}</p>
+                    </div>
+                    <div class="card-footer">
+                        <div class="action-group">
+                            <button class="btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Verificar se a sessão salva ainda é válida">Validar</button>
+                            <button class="btn-small btn-warning" data-action="auth-supplier" data-id="${conn.id}" title="Forçar um novo login para renovar a sessão">Renovar</button>
+                        </div>
+                        <div class="action-group">
+                            <button class="card-action-btn" data-action="edit-supplier" data-id="${conn.id}" data-tooltip="Editar"><i class="fas fa-pencil-alt"></i></button>
+                            <button class="card-action-btn danger" data-action="remove-supplier" data-id="${conn.id}" data-tooltip="Remover"><i class="fas fa-trash-alt"></i></button>
+                        </div>
+                    </div>
+                </div>
             `).join('');
 
             pageContent.innerHTML = `
-                <button class="btn-primary" data-action="add-supplier">Adicionar Conexão de Fornecedor</button>
-                <br>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>Nome</th>
-                            <th>Tipo</th>
-                            <th>Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${tableRows}
-                    </tbody>
-                </table>
+                <div class="page-header"><button class="btn-primary" data-action="add-supplier">Adicionar Conexão de Fornecedor</button></div>
+                <div class="connections-grid">${connectionCards}</div>
             `;
         } catch (error) {
             renderError(error);
