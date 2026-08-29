@@ -124,14 +124,14 @@ export const fetchCissPoderPriceAndStock = async (connection, products) => {
     const productIds = products.map(p => p.codigo);
 
     try {
-        const response = await axiosInstance.post(url, { idsSubProduto: productIds }, {
+        const response = await axiosInstance.post(url, { idsubproduto: productIds }, {
             headers: {
                 'Authorization': `Bearer ${connection.credentials.access_token}`,
                 'Content-Type': 'application/json'
             }
         });
 
-        const priceStockMap = new Map(response.data.map(p => [p.idSubProduto, { preco: p.precoVenda, estoque: p.saldoDisponivel }]));
+        const priceStockMap = new Map(response.data.map(p => [p.idsubproduto, { preco: p.precovenda, estoque: p.saldodisponivel }]));
 
         // Enriquece a lista de produtos original com os novos dados.
         return products.map(p => ({
