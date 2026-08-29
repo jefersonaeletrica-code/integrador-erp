@@ -1,3 +1,7 @@
+// Carrega as variáveis de ambiente do arquivo .env
+import dotenv from 'dotenv';
+dotenv.config();
+
 import http from 'http';
 import { WebSocketServer } from 'ws';
 import { createApp } from './app.js';
