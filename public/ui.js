@@ -1,12 +1,12 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- Lógica do Sidebar (Expandir/Recolher e Submenus) ---
-    // Esta seção foi completamente reescrita para uma solução definitiva e robusta.
+    // Esta seção foi reescrita para uma solução final e robusta, corrigindo os problemas anteriores.
     const sidebar = document.querySelector('.sidebar');
     const toggleBtn = document.querySelector('.toggle-btn');
     const submenuToggles = document.querySelectorAll('.submenu-toggle');
 
     /**
-     * Manipulador para o botão principal que recolhe/expande a barra lateral.
+     * Manipulador para o botão principal que recolhe ou expande a barra lateral.
      */
     toggleBtn.addEventListener('click', () => {
         // REGRA 1: Se o menu está expandido e prestes a ser recolhido...
@@ -19,12 +19,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         }
-        // Por fim, alterna o estado principal da barra lateral.
+
+        // Em seguida, alterna o estado de recolhimento da barra lateral.
         sidebar.classList.toggle('collapsed');
     });
 
     /**
-     * Manipulador para os itens de menu que possuem um submenu (ex: Integrações).
+     * Manipulador para os itens de menu que possuem um submenu (ex: "Integrações").
      */
     submenuToggles.forEach(toggle => {
         toggle.addEventListener('click', (e) => {
@@ -32,7 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // CASO 1: A barra lateral está recolhida.
             if (sidebar.classList.contains('collapsed')) {
-                // Ação: Expandir a barra lateral e abrir o submenu clicado.
+                // REGRA 2: Um clique expande a barra e abre o submenu correspondente.
                 sidebar.classList.remove('collapsed');
                 toggle.classList.add('open');
                 toggle.nextElementSibling.classList.add('open');
@@ -40,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             // CASO 2: A barra lateral está expandida.
-            // Ação: Funcionar como um menu "acordeão".
+            // REGRA 3: Funciona como um menu "acordeão".
             const wasThisOpen = toggle.classList.contains('open');
 
             // Primeiro, fecha todos os submenus.
@@ -49,8 +50,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (t.nextElementSibling) t.nextElementSibling.classList.remove('open');
             });
 
-            // Se o submenu que foi clicado não estava aberto, ele é aberto agora.
-            // (Se já estava aberto, a ação acima já o fechou, criando o efeito de toggle).
+            // Se o submenu clicado não estava aberto, ele é aberto.
+            // (Se já estava aberto, a ação acima o terá fechado, criando o efeito de "toggle").
             if (!wasThisOpen) {
                 toggle.classList.add('open');
                 toggle.nextElementSibling.classList.add('open');
