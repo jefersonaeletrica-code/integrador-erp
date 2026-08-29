@@ -1,42 +1,55 @@
 document.addEventListener('DOMContentLoaded', () => {
     /**
+     * =================================================================
+     * MÓDULO DE UI: Inicialização e Componentes Visuais
+     * =================================================================
+     */
+
+    /**
      * Inicializa a lógica do seletor de tema (Dark Mode).
      * É seguro e só executa se o seletor existir na página.
      */
     function initializeThemeSwitcher() {
-        const themeSwitch = document.getElementById('theme-switch-checkbox');
-        if (!themeSwitch) return;
+        const themeToggleButton = document.getElementById('theme-toggle-btn');
+        if (!themeToggleButton) return;
+
+        const sunIcon = themeToggleButton.querySelector('.sun-icon');
+        const moonIcon = themeToggleButton.querySelector('.moon-icon');
+        if (!sunIcon || !moonIcon) return;
 
         const currentTheme = localStorage.getItem('theme');
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
-        // Desativa temporariamente as transições para evitar o "flash" de tema no carregamento.
-        document.body.style.transition = 'none';
+        function applyTheme(theme) {
+            // Desativa transições para evitar "flash" no carregamento da página
+            document.body.style.transition = 'none';
 
-        // Aplica o tema na carga inicial
-        if (currentTheme) {
-            document.body.classList.toggle('dark-mode', currentTheme === 'dark');
-            themeSwitch.checked = currentTheme === 'dark';
-        } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-            // Se não houver tema salvo, usa a preferência do sistema
-            document.body.classList.add('dark-mode');
-            themeSwitch.checked = true;
-            localStorage.setItem('theme', 'dark');
-        }
-
-        // Reativa as transições após a renderização inicial do tema.
-        setTimeout(() => {
-            document.body.style.transition = '';
-        }, 10);
-
-        // Listener para o interruptor de tema
-        themeSwitch.addEventListener('change', function() {
-            if (this.checked) {
+            if (theme === 'dark') {
                 document.body.classList.add('dark-mode');
-                localStorage.setItem('theme', 'dark');
+                sunIcon.style.display = 'block';
+                moonIcon.style.display = 'none';
             } else {
                 document.body.classList.remove('dark-mode');
-                localStorage.setItem('theme', 'light');
+                sunIcon.style.display = 'none';
+                moonIcon.style.display = 'block';
             }
+
+            // Reativa as transições após a aplicação do tema
+            setTimeout(() => {
+                document.body.style.transition = '';
+            }, 10);
+        }
+
+        // Define o tema inicial
+        const initialTheme = currentTheme || (prefersDark ? 'dark' : 'light');
+        applyTheme(initialTheme);
+
+        // Listener para o interruptor de tema
+        themeToggleButton.addEventListener('click', () => {
+            const isDarkMode = document.body.classList.contains('dark-mode');
+            const newTheme = isDarkMode ? 'light' : 'dark';
+            localStorage.setItem('theme', newTheme);
+            applyTheme(newTheme);
         });
     }
 
@@ -49,7 +62,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const toggleBtn = document.querySelector('.toggle-btn');
         const submenuToggles = document.querySelectorAll('.submenu-toggle');
 
-        if (!sidebar || !toggleBtn) return;
+        // Validação de segurança para garantir que os elementos essenciais existem.
+        if (!sidebar || !toggleBtn || !submenuToggles.length) return;
 
         // Restaura o estado do menu salvo no localStorage ao carregar a página.
         if (localStorage.getItem('sidebarCollapsed') === 'true') {
@@ -61,61 +75,99 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const closeAllSubmenus = () => {
-            submenuToggles.forEach(toggle => {
-                toggle.classList.remove('open');
-                if (toggle.nextElementSibling) {
-                    toggle.nextElementSibling.classList.remove('open');
-                }
+            document.querySelectorAll('.menu-links > li.open').forEach(li => {
+                li.classList.remove('open');
             });
         };
 
+        // Evento para colapsar/expandir a barra lateral inteira.
         toggleBtn.addEventListener('click', (e) => {
             e.preventDefault();
             const isCollapsing = !sidebar.classList.contains('collapsed');
+            // Se estiver colapsando, fecha todos os submenus para um estado limpo.
             if (isCollapsing) {
                 closeAllSubmenus();
             }
             sidebar.classList.toggle('collapsed');
+            // Salva o estado no localStorage para persistência.
             localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
         });
 
-        // Event listener para os botões que abrem/fecham os submenus
-        document.querySelectorAll('.submenu-toggle').forEach(toggle => {
+        // Evento para abrir/fechar os submenus (comportamento de acordeão).
+        submenuToggles.forEach(toggle => {
             toggle.addEventListener('click', e => {
-                e.preventDefault(); // Previne a navegação do link '#'
+                e.preventDefault();
                 const parentLi = toggle.parentElement;
                 const wasOpen = parentLi.classList.contains('open');
 
-                // Se a barra estiver colapsada, expande antes de abrir um submenu
+                // Se a barra lateral estiver colapsada, a primeira ação é expandi-la.
                 if (sidebar.classList.contains('collapsed')) {
                     sidebar.classList.remove('collapsed');
-                    localStorage.setItem('sidebarCollapsed', 'false');
+                    setTimeout(() => {
+                        closeAllSubmenus();
+                        parentLi.classList.add('open');
+                    }, 100);
+                    return;
                 }
+                
+                // Comportamento de Acordeão: Fecha todos os outros...
+                closeAllSubmenus();
 
-                // Fecha todos os outros submenus antes de abrir um novo
-                document.querySelectorAll('.menu-links > li.open').forEach(openLi => {
-                    if (openLi !== parentLi) {
-                        openLi.classList.remove('open');
-                    }
-                });
-
-                // Alterna o estado do submenu clicado
-                parentLi.classList.toggle('open');
-            });
-        });
-
-        // Event listener para os links que carregam conteúdo
-        document.querySelectorAll('.menu-links a:not(.submenu-toggle)').forEach(link => {
-            link.addEventListener('click', e => {
-                e.stopPropagation(); // Impede que o clique feche o menu pai
+                if (!wasOpen) { // ...e abre o atual se ele estava fechado.
+                    parentLi.classList.add('open');
+                }
             });
         });
     }
 
+    /**
+     * =================================================================
+     * MÓDULO DE NOTIFICAÇÕES (TOASTS)
+     * =================================================================
+     */
+    function showToast(message, type = 'info') {
+        const toastContainer = document.getElementById('toast-container');
+        if (!toastContainer) {
+            console.error('Toast container not found!');
+            return;
+        }
+
+        const toast = document.createElement('div');
+        toast.className = `toast toast-${type}`;
+        toast.textContent = message;
+
+        toastContainer.appendChild(toast);
+
+        // Anima a entrada
+        setTimeout(() => {
+            toast.classList.add('show');
+        }, 100);
+
+        // Define um tempo para remover o toast
+        setTimeout(() => {
+            toast.classList.remove('show');
+            // Remove o elemento do DOM após a animação de saída
+            toast.addEventListener('transitionend', () => {
+                if (toast.parentElement) {
+                    toastContainer.removeChild(toast);
+                }
+            });
+        }, 5000); // O toast fica visível por 5 segundos
+    }
+
     initializeThemeSwitcher();
     initializeSidebar();
+    
+    // Adiciona o container de toasts ao corpo do documento
+    const toastContainer = document.createElement('div');
+    toastContainer.id = 'toast-container';
+    document.body.appendChild(toastContainer);
 
-    // --- Lógica do Modal ---
+    /**
+     * =================================================================
+     * MÓDULO DE MODAL E FORMULÁRIOS
+     * =================================================================
+     */
     const modal = document.getElementById('form-modal');
     const modalTitle = document.getElementById('modal-title');
     const formFields = document.getElementById('form-fields');
@@ -123,19 +175,28 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeModalBtn = document.querySelector('.modal-close');
     const cancelModalBtn = document.querySelector('.modal-cancel');
 
-    const openModal = () => modal.style.display = 'flex';
-    const closeModal = () => modal.style.display = 'none';
+    if (modal) {
+        const openModal = () => modal.style.display = 'flex';
+        const closeModal = () => modal.style.display = 'none';
 
-    closeModalBtn.addEventListener('click', closeModal);
-    cancelModalBtn.addEventListener('click', closeModal);
-    window.addEventListener('click', (e) => {
-        if (e.target === modal) closeModal();
-    });
+        closeModalBtn.addEventListener('click', closeModal);
+        cancelModalBtn.addEventListener('click', closeModal);
+        window.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+    } else {
+        console.warn("Modal elements not found. CRUD operations will be affected.");
+    }
 
-    // --- Lógica de Carregamento Dinâmico e CRUD ---
+    /**
+     * =================================================================
+     * MÓDULO DE API E RENDERIZAÇÃO DE CONTEÚDO
+     * =================================================================
+     */
     const pageContent = document.getElementById('page-content');
     const mainTitle = document.getElementById('main-title');
 
+    // Wrapper de API centralizado com tratamento de erro aprimorado.
     const api = async (endpoint, method = 'GET', body = null) => {
         const options = { method, headers: { 'Content-Type': 'application/json' } };
         if (body) options.body = JSON.stringify(body);
@@ -144,15 +205,18 @@ document.addEventListener('DOMContentLoaded', () => {
         return response.json();
     };
 
+    // Funções de feedback visual para o usuário.
     const showLoading = () => {
-        pageContent.innerHTML = '<p>Carregando...</p>';
+        pageContent.innerHTML = '<div class="loader"></div>';
     };
 
     const renderError = (error) => {
-        pageContent.innerHTML = `<p style="color: red;">Erro ao carregar conteúdo: ${error.message}</p>`;
+        const errorMessage = error.message || 'Ocorreu um erro desconhecido.';
+        pageContent.innerHTML = `<div class="error-message">Erro ao carregar conteúdo: ${errorMessage}</div>`;
+        showToast(`Erro: ${errorMessage}`, 'error');
     };
 
-    // --- Funções de Geração de Formulário ---
+    // --- Funções de Geração de Formulário (ainda usam HTML string, mas poderiam ser refatoradas) ---
     const generateErpForm = (conn = {}) => {
         const creds = conn.credentials || {};
         const formHtml = `
@@ -235,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const { connections } = await api('/api/erp-connections');
 
             if (!connections || connections.length === 0) {
-                pageContent.innerHTML = '<p>Nenhuma conexão ERP encontrada. Adicione uma para começar.</p>';
+                pageContent.innerHTML = '<div class="empty-state"><p>Nenhuma conexão ERP encontrada.</p><button class="btn-primary" data-action="add-erp">Adicionar Conexão ERP</button></div>';
                 return;
             }
 
@@ -282,7 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const { connections } = await api('/api/supplier-connections');
 
             if (!connections || connections.length === 0) {
-                pageContent.innerHTML = '<p>Nenhuma conexão de fornecedor encontrada. Adicione uma para começar.</p>';
+                pageContent.innerHTML = '<div class="empty-state"><p>Nenhuma conexão de fornecedor encontrada.</p><button class="btn-primary" data-action="add-supplier">Adicionar Conexão de Fornecedor</button></div>';
                 return;
             }
 
@@ -327,7 +391,7 @@ document.addEventListener('DOMContentLoaded', () => {
         pageContent.innerHTML = `
             <div id="product-search-form"></div>
             <div id="product-results" class="results-container">
-                <p>Selecione uma conexão ERP e digite um termo de busca para começar.</p>
+                <div class="empty-state"><p>Selecione uma conexão ERP e digite um termo de busca para começar.</p></div>
             </div>
         `;
 
@@ -492,7 +556,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const renderWelcomePage = () => {
         mainTitle.textContent = 'Bem-vindo ao Integrador ERP';
-        pageContent.innerHTML = '<p>Selecione uma opção no menu ao lado para começar.</p>';
+        pageContent.innerHTML = '<div class="empty-state"><p>Selecione uma opção no menu ao lado para começar.</p></div>';
     };
 
     const validateJsonInModal = () => {
@@ -531,7 +595,11 @@ document.addEventListener('DOMContentLoaded', () => {
         validateJsonInModal(); // Executa a validação inicial ao abrir o modal
     };
 
-    // --- Manipulador de Eventos Principal ---
+    /**
+     * =================================================================
+     * MÓDULO DE EVENTOS E AÇÕES DO USUÁRIO
+     * =================================================================
+     */
     pageContent.addEventListener('click', async (e) => {
         const action = e.target.dataset.action;
         const id = e.target.dataset.id;
@@ -546,9 +614,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const endpointAction = action === 'test-supplier' ? 'validate-authentication' : 'authenticate';
             try {
                 const result = await api(`/api/supplier-connections/${id}/${endpointAction}`, 'POST');
-                alert(result.mensagem || 'Ação enviada com sucesso. O resultado aparecerá no console do servidor.');
+                showToast(result.mensagem || 'Ação concluída com sucesso!', 'success');
             } catch (error) {
-                alert(`Erro ao executar ação: ${error.message}`);
+                showToast(`Erro: ${error.message}`, 'error');
             } finally {
                 button.classList.remove('loading');
                 button.disabled = false;
@@ -564,7 +632,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (action.startsWith('add')) {
                 modalTitle.textContent = `Adicionar Conexão de ${type.toUpperCase()}`;
                 formFields.innerHTML = type === 'erp' ? generateErpForm() : generateSupplierForm();
-                openModal();
+                modal.style.display = 'flex';
                 setupJsonValidation();
 
                 modalForm.onsubmit = async (ev) => {
@@ -594,10 +662,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
 
                         await api(endpoint, 'POST', body);
-                        closeModal();
+                        showToast(`Conexão de ${type.toUpperCase()} adicionada com sucesso!`, 'success');
+                        modal.style.display = 'none';
                         await renderFn();
                     } catch (formError) {
-                        alert(`Erro ao salvar: ${formError.message}`);
+                        showToast(`Erro ao salvar: ${formError.message}`, 'error');
                     } finally {
                         saveButton.classList.remove('loading');
                         validateJsonInModal(); // Re-valida para resetar o estado do botão
@@ -607,7 +676,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const { connection } = await api(`${endpoint}/${id}`);
                 modalTitle.textContent = `Editar Conexão de ${type.toUpperCase()}`;
                 formFields.innerHTML = type === 'erp' ? generateErpForm(connection) : generateSupplierForm(connection);
-                openModal();
+                modal.style.display = 'flex';
                 setupJsonValidation();
 
                 modalForm.onsubmit = async (ev) => {
@@ -637,10 +706,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
 
                         await api(`${endpoint}/${id}`, 'PUT', body);
-                        closeModal();
+                        showToast(`Conexão de ${type.toUpperCase()} atualizada com sucesso!`, 'success');
+                        modal.style.display = 'none';
                         await renderFn();
                     } catch (formError) {
-                        alert(`Erro ao salvar: ${formError.message}`);
+                        showToast(`Erro ao salvar: ${formError.message}`, 'error');
                     } finally {
                         saveButton.classList.remove('loading');
                         validateJsonInModal(); // Re-valida para resetar o estado do botão
@@ -649,48 +719,40 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (action.startsWith('remove')) {
                 if (confirm('Tem certeza que deseja remover esta conexão?')) {
                     await api(`${endpoint}/${id}`, 'DELETE');
+                    showToast('Conexão removida com sucesso.', 'info');
                     await renderFn();
                 }
             }
         } catch (error) {
-            // Tenta analisar o erro para exibir uma mensagem mais amigável
-            try {
-                const errorJson = JSON.parse(error.message);
-                if (errorJson.erro) {
-                    alert(`Erro: ${errorJson.erro}`);
-                } else {
-                    alert(`Erro: ${error.message}`);
-                }
-            } catch (e) {
-                // Se o erro não for um JSON, exibe a mensagem de erro original
-                alert(`Erro: ${error.message}`);
-            }
-            // Se o erro foi ao abrir o modal (ex: buscar dados para editar), fecha o modal.
-            closeModal();
+            showToast(`Erro: ${error.message}`, 'error');
+            if (modal) modal.style.display = 'none';
         }
     });
 
-    // --- Roteador Simples para Navegação ---
+    /**
+     * =================================================================
+     * MÓDULO DE ROTEAMENTO E ESTADO DA APLICAÇÃO
+     * =================================================================
+     */
     const routes = {
         'nav-produtos': renderProductsPage,
         'nav-conexoes-erp': renderErpConnections,
         'nav-conexoes-fornecedores': renderSupplierConnections,
     };
 
-    // Adiciona o listener de navegação ao container dos links para delegar o evento
-    document.querySelector('.menu-links').addEventListener('click', e => {
+    // Listener de navegação principal, usando delegação de eventos.
+    document.querySelector('.menu-links').addEventListener('click', (e) => {
         const link = e.target.closest('a:not(.submenu-toggle)');
-        if (!link) return;
+        if (!link || !link.id) return;
 
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const routeHandler = routes[link.id];
-            if (routeHandler) {
-                routeHandler();
-            } else {
-                renderWelcomePage();
-            }
-        });
+        e.preventDefault();
+
+        // Remove a classe ativa de todos os links
+        document.querySelectorAll('.menu-links a').forEach(a => a.classList.remove('active'));
+        link.classList.add('active');
+
+        const routeHandler = routes[link.id];
+        routeHandler ? routeHandler() : renderWelcomePage();
     });
 
     // Carrega a página inicial padrão
