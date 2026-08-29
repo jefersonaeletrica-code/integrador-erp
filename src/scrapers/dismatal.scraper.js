@@ -320,22 +320,15 @@ export class DismatalScraper {
             produtoExtraido.estoque = dynamicStock;
         }
 
-        // Formata os campos 'estoque' e 'sku' para a exibição desejada no frontend.
-        // Isso sobrescreve os valores originais para que a interface os exiba diretamente.
+        // Retorna os dados brutos e estruturados. O frontend será responsável pela formatação.
         const produtoFinal = {
             ...produtoExtraido,
-            // Adiciona o "Código Fornecedor" ao nome do produto para exibição proeminente.
-            // Usamos quebras de linha HTML (<br>) e um estilo para destacar as informações.
-            nome: `
-                ${produtoExtraido.nome}
-                <br><small>Código Fornecedor: ${produtoExtraido.sku || 'N/A'}</small>
-                ${produtoExtraido.barcode ? `<br><small>Código de Barras: ${produtoExtraido.barcode}</small>` : ''}
-            `,
-            estoque: `Estoque: ${produtoExtraido.estoque ?? 0} Peças`,
-            preco: produtoExtraido.preco, // Passa o preço (que pode ser null) para o frontend
+            nome: produtoExtraido.nome,
+            sku: produtoExtraido.sku,
+            barcode: produtoExtraido.barcode,
+            estoque: produtoExtraido.estoque ?? 0, // Garante que o estoque seja um número
+            preco: produtoExtraido.preco,
         };
-        // Remove o campo 'sku' para que a linha "SKU: ..." não seja mais renderizada pela interface.
-        delete produtoFinal.sku;
 
         this.logger.info('[DismatalScraper] Extração do produto bem-sucedida.', { skuBuscado: searchTerm, skuNaPagina: produtoExtraido.sku });
         return [produtoFinal];
