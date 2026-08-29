@@ -1,5 +1,6 @@
 import axios from 'axios';
 import https from 'https';
+import { getLogger } from './logger.js';
 
 // Cria uma instância do axios com configurações reutilizáveis
 const axiosInstance = axios.create({
