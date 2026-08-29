@@ -1,8 +1,8 @@
 import express from 'express';
-import { DismatalScraper } from './dismatal.scraper.js';
-import { getLogger } from './logger.js';
-import { addToQueue } from './scraperQueue.js';
+import { DismatalScraper } from '../scrapers/dismatal.scraper.js';
+import { getLogger } from '../core/logger.js';
 import path from 'path';
+import { addToQueue } from '../core/scraperQueue.js';
 
 const router = express.Router();
 
@@ -32,6 +32,8 @@ export default (db, supplierConnections) => {
     router.get('/supplier-connections', async (req, res) => { // A rota agora é assíncrona
         // Lê os dados mais recentes do banco de dados a cada requisição
         const { supplierConnections } = await db.readDb();
+        // A variável 'supplierConnections' passada para a função pode estar desatualizada. Buscamos do DB.
+        const data = await db.readDb();
         const connectionsWithSafeCredentials = supplierConnections.map(conn => {
             const safeCreds = { ...conn.credentials };
             if (safeCreds.password) {
@@ -40,6 +42,7 @@ export default (db, supplierConnections) => {
             return { ...conn, credentials: safeCreds };
         });
         res.json({ sucesso: true, connections: connectionsWithSafeCredentials });
+        res.json({ sucesso: true, connections: data.supplierConnections.map(c => ({...c, credentials: { ...c.credentials, password: '***' }})) });
     });
 
     router.get('/supplier-connections/:id', async (req, res) => {
