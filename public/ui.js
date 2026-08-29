@@ -15,6 +15,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const self = e.currentTarget;
             const submenu = self.nextElementSibling;
 
+            // Se o menu lateral estiver colapsado, expande-o primeiro para mostrar os sub-itens.
+            if (sidebar.classList.contains('collapsed')) {
+                sidebar.classList.remove('collapsed');
+            }
+
             // Fecha outros submenus abertos
             document.querySelectorAll('.submenu.open').forEach(openSubmenu => {
                 if (openSubmenu !== submenu) {
@@ -217,6 +222,111 @@ document.addEventListener('DOMContentLoaded', () => {
         const searchFormContainer = document.getElementById('product-search-form');
         const resultsContainer = document.getElementById('product-results');
 
+        // Helper function to render pagination controls
+        const renderPagination = (pagination, onPageClick) => {
+            if (!pagination || pagination.totalPages <= 1) {
+                return null;
+            }
+
+            const { currentPage, totalPages } = pagination;
+            let pagesHtml = '';
+
+            // Previous button
+            pagesHtml += `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+                <a href="#" class="page-link" data-page="${currentPage - 1}">&laquo;</a>
+            </li>`;
+
+            // Page numbers logic
+            const pagesToShow = [];
+            pagesToShow.push(1);
+            if (currentPage > 3) pagesToShow.push('...');
+            for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
+                pagesToShow.push(i);
+            }
+            if (currentPage < totalPages - 2) pagesToShow.push('...');
+            if (totalPages > 1) pagesToShow.push(totalPages);
+            
+            const uniquePages = [...new Set(pagesToShow)];
+
+            uniquePages.forEach(page => {
+                if (page === '...') {
+                    pagesHtml += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+                } else {
+                    pagesHtml += `<li class="page-item ${page === currentPage ? 'active' : ''}">
+                        <a href="#" class="page-link" data-page="${page}">${page}</a>
+                    </li>`;
+                }
+            });
+
+            // Next button
+            pagesHtml += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+                <a href="#" class="page-link" data-page="${currentPage + 1}">&raquo;</a>
+            </li>`;
+
+            const paginationContainer = document.createElement('nav');
+            paginationContainer.innerHTML = `<ul class="pagination">${pagesHtml}</ul>`;
+
+            paginationContainer.querySelectorAll('a.page-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    if (link.parentElement.classList.contains('disabled')) return;
+                    const pageNum = parseInt(link.dataset.page, 10);
+                    onPageClick(pageNum);
+                });
+            });
+
+            return paginationContainer;
+        };
+
+        // Main search execution function
+        const executeProductSearch = async (page = 1) => {
+            const productSearchForm = document.getElementById('erp-product-search');
+            const button = productSearchForm.querySelector('button[type="submit"]');
+            button.classList.add('loading');
+            button.disabled = true;
+
+            const connectionId = document.getElementById('erp-connection-select').value;
+            const searchTerm = document.getElementById('product-search-term').value;
+
+            resultsContainer.innerHTML = '<p>Buscando produtos...</p>';
+
+            try {
+                const { products, pagination } = await api(`/api/erp-connections/${connectionId}/products`, 'POST', { searchTerm, page });
+
+                if (!products || products.length === 0) {
+                    resultsContainer.innerHTML = '<p>Nenhum produto encontrado com o termo informado.</p>';
+                    return;
+                }
+
+                const tableRows = products.map(p => `
+                    <tr>
+                        <td>${p.sku || 'N/A'}</td>
+                        <td>${p.name || 'N/A'}</td>
+                        <td>${p.stock ?? 'N/A'}</td>
+                        <td>${p.price ? `R$ ${p.price.toFixed(2)}` : 'N/A'}</td>
+                    </tr>
+                `).join('');
+
+                resultsContainer.innerHTML = `
+                    <table>
+                        <thead><tr><th>SKU</th><th>Nome</th><th>Estoque</th><th>Preço</th></tr></thead>
+                        <tbody>${tableRows}</tbody>
+                    </table>
+                `;
+
+                const paginationControls = renderPagination(pagination, executeProductSearch);
+                if (paginationControls) {
+                    resultsContainer.appendChild(paginationControls);
+                }
+
+            } catch (error) {
+                resultsContainer.innerHTML = `<p style="color: red;">Erro ao buscar produtos: ${error.message}</p>`;
+            } finally {
+                button.classList.remove('loading');
+                button.disabled = false;
+            }
+        };
+
         try {
             // 1. Fetch ERP connections to populate the selector
             const { connections } = await api('/api/erp-connections');
@@ -259,47 +369,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // 3. Add event listener for the form submission
             const productSearchForm = document.getElementById('erp-product-search');
-            productSearchForm.addEventListener('submit', async (e) => {
+            productSearchForm.addEventListener('submit', (e) => {
                 e.preventDefault();
-                const button = productSearchForm.querySelector('button[type="submit"]');
-                button.classList.add('loading');
-                button.disabled = true;
-
-                const connectionId = document.getElementById('erp-connection-select').value;
-                const searchTerm = document.getElementById('product-search-term').value;
-
-                resultsContainer.innerHTML = '<p>Buscando produtos...</p>';
-
-                try {
-                    // NOTE: This assumes a backend endpoint exists at this path.
-                    const { products } = await api(`/api/erp-connections/${connectionId}/products`, 'POST', { searchTerm });
-
-                    if (!products || products.length === 0) {
-                        resultsContainer.innerHTML = '<p>Nenhum produto encontrado com o termo informado.</p>';
-                        return;
-                    }
-
-                    const tableRows = products.map(p => `
-                        <tr>
-                            <td>${p.sku || 'N/A'}</td>
-                            <td>${p.name || 'N/A'}</td>
-                            <td>${p.stock ?? 'N/A'}</td>
-                            <td>${p.price ? `R$ ${p.price.toFixed(2)}` : 'N/A'}</td>
-                        </tr>
-                    `).join('');
-
-                    resultsContainer.innerHTML = `
-                        <table>
-                            <thead><tr><th>SKU</th><th>Nome</th><th>Estoque</th><th>Preço</th></tr></thead>
-                            <tbody>${tableRows}</tbody>
-                        </table>
-                    `;
-                } catch (error) {
-                    resultsContainer.innerHTML = `<p style="color: red;">Erro ao buscar produtos: ${error.message}</p>`;
-                } finally {
-                    button.classList.remove('loading');
-                    button.disabled = false;
-                }
+                executeProductSearch(1); // Always start from page 1 on a new search
             });
         } catch (error) {
             renderError(error);

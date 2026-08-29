@@ -202,7 +202,7 @@ export default (db, erpConnections) => {
             }));
 
             logger.info(`[ERPRoutes] Busca concluída. Encontrados ${products.length} produtos.`);
-            res.json({ sucesso: true, products });
+            res.json({ sucesso: true, products, pagination: paginationInfo });
         } catch (error) {
             const errorMessage = error.response?.data?.error_description || error.response?.data?.erro || error.message;
             logger.error(`[ERPRoutes] Erro ao buscar produtos para conexão ${id}: ${errorMessage}`, error);
