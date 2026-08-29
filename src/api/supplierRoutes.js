@@ -170,7 +170,15 @@ export default (db) => {
             if (!scraperResult.sucesso) {
                 return res.status(404).json({ sucesso: false, erro: scraperResult.erro, products: [] });
             }
-            res.status(200).json({ sucesso: true, products: scraperResult.produtos });
+
+            // Normaliza a saída do scraper para o formato padrão esperado pelo frontend.
+            const products = scraperResult.produtos.map(p => ({
+                name: p.nome,
+                stock: p.estoque,
+                sku: p.sku,
+                price: p.preco
+            }));
+            res.status(200).json({ sucesso: true, products });
         } catch (e) {
             res.status(500).json({ sucesso: false, erro: `Erro durante a busca de produtos: ${e.message}` });
         }

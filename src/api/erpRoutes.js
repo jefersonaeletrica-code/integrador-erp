@@ -28,11 +28,8 @@ export default (db) => {
             const connectionsWithStatus = await Promise.all(connections.map(async (conn) => {
                 const parsedConn = { ...conn, credentials: JSON.parse(conn.credentials) };
                 let status = 'not_applicable';
-                if (parsedConn.type === 'bling') {
-                    status = await erpService.getBlingConnectionStatus(parsedConn, db);
-                } else if (parsedConn.type === 'cisspoder') {
-                    status = await erpService.getCissPoderConnectionStatus(parsedConn, db);
-                }
+                // A lógica de status agora é abstraída pelo erpService
+                status = await erpService.getErpConnectionStatus(parsedConn, db);
 
                 const { password, client_secret, access_token, refresh_token, ...safeCredentials } = parsedConn.credentials;
                 const displayCredentials = { ...safeCredentials };
@@ -140,7 +137,7 @@ export default (db) => {
             const basicAuth = Buffer.from(`${client_id}:${client_secret}`).toString('base64');
             const response = await erpService.axiosInstance.post('https://www.bling.com.br/Api/v3/oauth/token',
                 new URLSearchParams({ grant_type: 'authorization_code', code }),
-                { headers: { 'Authorization': `Basic ${basicAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' } }
+                { headers: { 'Authorization': `Basic ${basicAuth}`, 'Content-Type': 'application/x-www-form-urlencoded' } } // Usa a instância exportada
             );
 
             connection.credentials.access_token = response.data.access_token;
@@ -182,31 +179,25 @@ export default (db) => {
             let apiProducts = [];
             let paginationInfo = { currentPage: parseInt(page, 10), totalPages: 1, totalItems: 0 };
 
+            // Garante que o token de acesso é válido antes de fazer a chamada
+            await erpService.ensureValidToken(connection, db);
+
+            const rawData = isSku(searchTerm)
+                ? await erpService.fetchProductsByCode(connection, searchTerm, page)
+                : await erpService.fetchProductsByName(connection, searchTerm, page);
+
+            apiProducts = rawData.data || [];
+
             if (connection.type === 'bling') {
-                await erpService.getBlingConnectionStatus(connection, db); // Garante token válido
-                const rawData = isSku(searchTerm)
-                    ? await erpService.fetchBlingProductsByCode(connection, searchTerm, page)
-                    : await erpService.fetchBlingProductsByName(connection, searchTerm, page);
-                apiProducts = rawData.data || [];
                 const totalItems = rawData.meta?.total ?? 0;
                 const limit = rawData.meta?.limit ?? 100;
                 paginationInfo.totalPages = totalItems > 0 ? Math.ceil(totalItems / limit) : 1;
                 paginationInfo.totalItems = totalItems;
-
             } else if (connection.type === 'cisspoder') {
-                await erpService.ensureCissPoderTokenIsValid(connection, db); // Garante token válido
-                const rawData = isSku(searchTerm)
-                    ? await erpService.fetchCissPoderProductsByCode(connection, searchTerm, page)
-                    : await erpService.fetchCissPoderProductsByName(connection, searchTerm, page);
-                apiProducts = rawData.data || [];
                 const totalItems = rawData.total ?? 0;
-                // A API CissPoder não retorna o limite por página, mas a documentação sugere que é 20.
                 const limit = 20;
                 paginationInfo.totalPages = totalItems > 0 ? Math.ceil(totalItems / limit) : 1;
                 paginationInfo.totalItems = totalItems;
-
-            } else {
-                return res.status(400).json({ sucesso: false, erro: `Tipo de conexão ERP '${connection.type}' não suportado.` });
             }
 
             // Normaliza a estrutura dos produtos para o formato esperado pelo frontend.
@@ -235,11 +226,7 @@ export default (db) => {
         }
 
         try {
-            if (connection.type === 'bling') {
-                await erpService.getBlingConnectionStatus(connection, db);
-            } else if (connection.type === 'cisspoder') {
-                await erpService.ensureCissPoderTokenIsValid(connection, db);
-            }
+            await erpService.ensureValidToken(connection, db);
 
             const requestedPage = parseInt(req.query.pagina || req.query.page || '1', 10);
             const page = Number.isNaN(requestedPage) || requestedPage < 1 ? 1 : requestedPage;
@@ -249,11 +236,11 @@ export default (db) => {
 
             if (connection.type === 'bling') {
                 if (typeof nome === 'string' && nome.trim()) {
-                    responseData = await erpService.fetchBlingProductsByName(connection, nome.trim(), page);
+                    responseData = await erpService.fetchProductsByName(connection, nome.trim(), page);
                 } else if (typeof codigo === 'string' && codigo.trim()) {
-                    responseData = await erpService.fetchBlingProductsByCode(connection, codigo.trim(), page);
+                    responseData = await erpService.fetchProductsByCode(connection, codigo.trim(), page);
                 } else {
-                    responseData = await erpService.fetchAllBlingProductsPaginated(connection, page);
+                    responseData = await erpService.getService(connection.type).fetchAllProducts(connection, page);
                 }
             } else if (connection.type === 'cisspoder') {
                 const uniqueProductsMap = new Map();
@@ -263,11 +250,11 @@ export default (db) => {
                 let fetchFunction;
 
                 if (typeof nome === 'string' && nome.trim()) {
-                    fetchFunction = (p) => erpService.fetchCissPoderProductsByName(connection, nome.trim(), p);
+                    fetchFunction = (p) => erpService.fetchProductsByName(connection, nome.trim(), p);
                 } else if (typeof codigo === 'string' && codigo.trim()) {
-                    fetchFunction = (p) => erpService.fetchCissPoderProductsByCode(connection, codigo.trim(), p);
+                    fetchFunction = (p) => erpService.fetchProductsByCode(connection, codigo.trim(), p);
                 } else {
-                    fetchFunction = (p) => erpService.fetchAllCissPoderProducts(connection, p);
+                    fetchFunction = (p) => erpService.getService(connection.type).fetchAllProducts(connection, p);
                 }
 
                 while (uniqueProductsMap.size < 100 && hasNext) {
@@ -288,14 +275,13 @@ export default (db) => {
                 return res.status(400).json({ sucesso: false, erro: 'Tipo de conexão não suportado para busca de produtos.' });
             }
 
-            let produtos = responseData?.data || [];
-            if (connection.type === 'bling') {
-                produtos = produtos.map(p => ({
-                    codigo: p.codigo,
-                    nome: p.nome,
-                    preco: p.preco || 0
-                }));
-            }
+            // Normaliza a resposta para o formato padrão esperado pelo frontend, garantindo consistência.
+            const produtos = (responseData?.data || []).map(p => ({
+                sku: p.codigo,
+                name: p.nome,
+                stock: p.saldoFisicoTotal ?? p.estoque ?? null,
+                price: p.preco ?? null
+            }));
 
             const total = responseData?.total ?? responseData?.meta?.total;
             res.json({ sucesso: true, produtos, pagina: page, total });
