@@ -72,8 +72,10 @@ export default (db, erpConnections) => {
             const connection = erpConnections[connectionIndex];
             // Mantém tokens existentes (ex: refresh_token do Bling) ao mesclar.
             const newCredentials = { ...(connection.credentials || {}), ...credentials };
+            // Cria o objeto de conexão atualizado completo.
             const updatedConnection = { ...connection, name, type, credentials: newCredentials };
 
+            // Passa o objeto completo para a função de atualização do banco de dados.
             await db.updateDb({ connection: updatedConnection });
             erpConnections[connectionIndex] = updatedConnection;
 

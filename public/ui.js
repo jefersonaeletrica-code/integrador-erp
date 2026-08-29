@@ -1,4 +1,30 @@
 document.addEventListener('DOMContentLoaded', () => {
+    // --- Lógica do Tema Escuro (Dark Mode) ---
+    const themeSwitch = document.getElementById('theme-switch-checkbox');
+    const currentTheme = localStorage.getItem('theme');
+
+    // Aplica o tema na carga inicial
+    if (currentTheme) {
+        document.body.classList.toggle('dark-mode', currentTheme === 'dark');
+        themeSwitch.checked = currentTheme === 'dark';
+    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        // Se não houver tema salvo, usa a preferência do sistema
+        document.body.classList.add('dark-mode');
+        themeSwitch.checked = true;
+        localStorage.setItem('theme', 'dark');
+    }
+
+    // Listener para o interruptor de tema
+    themeSwitch.addEventListener('change', function() {
+        if (this.checked) {
+            document.body.classList.add('dark-mode');
+            localStorage.setItem('theme', 'dark');
+        } else {
+            document.body.classList.remove('dark-mode');
+            localStorage.setItem('theme', 'light');
+        }
+    });
+
     // --- Lógica do Sidebar (Expandir/Recolher e Submenus) ---
     // Esta seção foi reescrita do zero para uma solução final e robusta.
     const sidebar = document.querySelector('.sidebar');
