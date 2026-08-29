@@ -368,41 +368,50 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const getLogoUrl = (type) => {
-                switch (type) {
-                    case 'bling':
-                        return 'https://www.bling.com.br/imagens/front/bling_2.svg'; // URL oficial e estável
-                    case 'cisspoder':
-                        return 'https://www.ciss.com.br/wp-content/uploads/2023/08/logo-ciss-white.svg'; // URL oficial e estável
-                    default:
-                        return ''; // Fallback
-                }
-            };
+            const getLogoUrl = (type) => ({
+                'bling': 'https://www.bling.com.br/imagens/front/bling_2.svg',
+                'cisspoder': 'https://www.ciss.com.br/wp-content/uploads/2023/08/logo-ciss-white.svg'
+            }[type] || '');
 
-            const connectionCards = connections.map(conn => `
-                <div class="connection-card">
-                    <div class="card-header">
-                        <img src="${getLogoUrl(conn.type)}" alt="Logo ${conn.type}" class="erp-logo ${conn.type === 'cisspoder' ? 'logo-cisspoder' : ''}">
-                    </div>
-                    <div class="card-body">
-                        <h3 class="card-title">${conn.name}</h3>
-                        <p class="card-status">Status: <span class="status status-${conn.status}">${conn.status.replace(/_/g, ' ')}</span></p>
-                    </div>
-                    <div class="card-footer">
-                        <button class="card-action-btn" data-action="edit-erp" data-id="${conn.id}" data-tooltip="Editar">
-                            <i class="fas fa-pencil-alt"></i>
-                        </button>
-                        <button class="card-action-btn danger" data-action="remove-erp" data-id="${conn.id}" data-tooltip="Remover">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                    </div>
-                </div>
-            `).join('');
+            const fragment = document.createDocumentFragment();
+            const pageHeader = createElement('div', { class: 'page-header' });
+            pageHeader.appendChild(createElement('button', { class: 'btn-primary', 'data-action': 'add-erp' }, 'Adicionar Conexão ERP'));
+            fragment.appendChild(pageHeader);
 
-            pageContent.innerHTML = `
-                <div class="page-header"><button class="btn-primary" data-action="add-erp">Adicionar Conexão ERP</button></div>
-                <div class="connections-grid">${connectionCards}</div>
-            `;
+            const grid = createElement('div', { class: 'connections-grid' });
+            connections.forEach(conn => {
+                const card = createElement('div', { class: 'connection-card' });
+
+                const cardHeader = createElement('div', { class: 'card-header' });
+                const logo = createElement('img', { 
+                    src: getLogoUrl(conn.type), 
+                    alt: `Logo ${conn.type}`, 
+                    class: `erp-logo ${conn.type === 'cisspoder' ? 'logo-cisspoder' : ''}`
+                });
+                cardHeader.appendChild(logo);
+
+                const cardBody = createElement('div', { class: 'card-body' });
+                cardBody.appendChild(createElement('h3', { class: 'card-title' }, conn.name));
+                const statusP = createElement('p', { class: 'card-status' }, 'Status: ');
+                statusP.appendChild(createElement('span', { class: `status status-${conn.status}` }, conn.status.replace(/_/g, ' ')));
+                cardBody.appendChild(statusP);
+
+                const cardFooter = createElement('div', { class: 'card-footer' });
+                const editBtn = createElement('button', { class: 'card-action-btn', 'data-action': 'edit-erp', 'data-id': conn.id, 'data-tooltip': 'Editar' });
+                editBtn.appendChild(createElement('i', { class: 'fas fa-pencil-alt' }));
+                const removeBtn = createElement('button', { class: 'card-action-btn danger', 'data-action': 'remove-erp', 'data-id': conn.id, 'data-tooltip': 'Remover' });
+                removeBtn.appendChild(createElement('i', { class: 'fas fa-trash-alt' }));
+                cardFooter.append(editBtn, removeBtn);
+
+                card.append(cardHeader, cardBody, cardFooter);
+                grid.appendChild(card);
+            });
+
+            fragment.appendChild(grid);
+
+            // Limpa o conteúdo e adiciona os novos elementos de forma segura
+            pageContent.innerHTML = '';
+            pageContent.appendChild(fragment);
         } catch (error) {
             renderError(error);
         }
@@ -420,32 +429,42 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const connectionCards = connections.map(conn => `
-                <div class="connection-card supplier-card">
-                    <div class="card-header">
-                        <i class="fas fa-truck card-icon"></i>
-                    </div>
-                    <div class="card-body">
-                        <h3 class="card-title">${conn.name}</h3>
-                        <p class="card-subtitle">${conn.type.replace(/_/g, ' ')}</p>
-                    </div>
-                    <div class="card-footer">
-                        <div class="action-group">
-                            <button class="btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Verificar se a sessão salva ainda é válida">Validar</button>
-                            <button class="btn-small btn-warning" data-action="auth-supplier" data-id="${conn.id}" title="Forçar um novo login para renovar a sessão">Renovar</button>
-                        </div>
-                        <div class="action-group">
-                            <button class="card-action-btn" data-action="edit-supplier" data-id="${conn.id}" data-tooltip="Editar"><i class="fas fa-pencil-alt"></i></button>
-                            <button class="card-action-btn danger" data-action="remove-supplier" data-id="${conn.id}" data-tooltip="Remover"><i class="fas fa-trash-alt"></i></button>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
+            const fragment = document.createDocumentFragment();
+            const pageHeader = createElement('div', { class: 'page-header' });
+            pageHeader.appendChild(createElement('button', { class: 'btn-primary', 'data-action': 'add-supplier' }, 'Adicionar Conexão de Fornecedor'));
+            fragment.appendChild(pageHeader);
 
-            pageContent.innerHTML = `
-                <div class="page-header"><button class="btn-primary" data-action="add-supplier">Adicionar Conexão de Fornecedor</button></div>
-                <div class="connections-grid">${connectionCards}</div>
-            `;
+            const grid = createElement('div', { class: 'connections-grid' });
+            connections.forEach(conn => {
+                const card = createElement('div', { class: 'connection-card supplier-card' });
+
+                const cardHeader = createElement('div', { class: 'card-header' });
+                cardHeader.appendChild(createElement('i', { class: 'fas fa-truck card-icon' }));
+
+                const cardBody = createElement('div', { class: 'card-body' });
+                cardBody.appendChild(createElement('h3', { class: 'card-title' }, conn.name));
+                cardBody.appendChild(createElement('p', { class: 'card-subtitle' }, conn.type.replace(/_/g, ' ')));
+
+                const cardFooter = createElement('div', { class: 'card-footer' });
+                const actionGroup1 = createElement('div', { class: 'action-group' });
+                actionGroup1.append(
+                    createElement('button', { class: 'btn-small btn-info', 'data-action': 'test-supplier', 'data-id': conn.id, title: 'Verificar se a sessão salva ainda é válida' }, 'Validar'),
+                    createElement('button', { class: 'btn-small btn-warning', 'data-action': 'auth-supplier', 'data-id': conn.id, title: 'Forçar um novo login para renovar a sessão' }, 'Renovar')
+                );
+                const actionGroup2 = createElement('div', { class: 'action-group' });
+                actionGroup2.append(
+                    createElement('button', { class: 'card-action-btn', 'data-action': 'edit-supplier', 'data-id': conn.id, 'data-tooltip': 'Editar' }, '<i class="fas fa-pencil-alt"></i>'),
+                    createElement('button', { class: 'card-action-btn danger', 'data-action': 'remove-supplier', 'data-id': conn.id, 'data-tooltip': 'Remover' }, '<i class="fas fa-trash-alt"></i>')
+                );
+                cardFooter.append(actionGroup1, actionGroup2);
+
+                card.append(cardHeader, cardBody, cardFooter);
+                grid.appendChild(card);
+            });
+            fragment.appendChild(grid);
+
+            pageContent.innerHTML = '';
+            pageContent.appendChild(fragment);
         } catch (error) {
             renderError(error);
         }
