@@ -2,7 +2,7 @@ import express from 'express';
 import { DismatalScraper } from '../scrapers/dismatal.scraper.js';
 import { getLogger } from '../core/logger.js';
 import path from 'path';
-import { addToQueue } from '../scrapers/scraperQueue.js';
+import { addToQueue } from '../core/scraperQueue.js';
 
 const router = express.Router();
 
