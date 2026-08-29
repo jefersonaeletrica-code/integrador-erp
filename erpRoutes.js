@@ -208,8 +208,8 @@ export default (db, erpConnections) => {
             const products = apiProducts.map(p => ({
                 sku: p.codigo,
                 name: p.nome,
-                stock: p.saldoFisicoTotal ?? 'N/A',
-                price: p.preco ?? null
+                stock: p.saldoFisicoTotal ?? p.estoque ?? 'N/A', // Usa saldoFisicoTotal (Bling) ou estoque (CissPoder)
+                price: p.preco ?? null // Ambas as APIs agora retornam 'preco'
             }));
 
             logger.info(`[ERPRoutes] Busca concluída. Encontrados ${products.length} produtos.`);
