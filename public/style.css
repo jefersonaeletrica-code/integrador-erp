@@ -513,15 +513,16 @@ td .btn {
 }
 
 .connection-card .erp-logo {
-    height: 30px;
+    height: 40px; /* Aumenta a altura para dar mais destaque */
     max-width: 120px;
     object-fit: contain;
+    border-radius: var(--border-radius); /* Arredonda os cantos de todos os logotipos */
 }
 
 .dark-mode .connection-card .logo-cisspoder {
-    /* O novo logo tem um fundo branco, então adicionamos um estilo para integrá-lo melhor no tema escuro. */
+    /* O logo da Ciss é branco, então adicionamos um fundo para que ele seja visível no tema escuro. */
     background-color: white;
-    border-radius: var(--border-radius);
+    padding: 0.5rem; /* Adiciona um preenchimento para o logo não ficar colado nas bordas */
 }
 
 .connection-card .card-body {
