@@ -204,6 +204,22 @@ button {
     background-color: #c0392b;
 }
 
+.btn-info {
+    background-color: #3498db;
+    color: white;
+}
+.btn-info:hover {
+    background-color: #2980b9;
+}
+
+.btn-warning {
+    background-color: #f39c12;
+    color: white;
+}
+.btn-warning:hover {
+    background-color: #e67e22;
+}
+
 /* Estilos para Status */
 .status {
     padding: 4px 10px;
@@ -220,3 +236,181 @@ button {
 .status-requires_auth { background-color: #f39c12; }
 .status-error { background-color: #c0392b; }
 .status-not_applicable { background-color: #95a5a6; }
+
+/* Estilos para o Modal */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 2000;
+    transition: opacity 0.3s ease;
+}
+
+.modal-content {
+    background: white;
+    padding: 25px 30px;
+    border-radius: 8px;
+    width: 90%;
+    max-width: 500px;
+    position: relative;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    transform: translateY(-20px);
+    transition: transform 0.3s ease;
+}
+
+.modal-overlay:not([style*="display: none"]) .modal-content {
+    transform: translateY(0);
+}
+
+.modal-close {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 24px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #888;
+    padding: 5px;
+}
+
+#modal-form .form-group {
+    margin-bottom: 15px;
+}
+
+#modal-form label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: #333;
+}
+
+#modal-form input,
+#modal-form select,
+#modal-form textarea {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+#modal-form textarea {
+    min-height: 120px;
+    resize: vertical;
+    font-family: monospace;
+}
+
+.form-actions {
+    margin-top: 20px;
+    text-align: right;
+}
+
+.btn-secondary {
+    background-color: #bdc3c7;
+    color: #2c3e50;
+}
+
+.btn-secondary:hover {
+    background-color: #95a5a6;
+}
+
+/* Estilos para validação de formulário */
+#modal-form textarea.valid {
+    border-color: #2ecc71; /* verde */
+    box-shadow: 0 0 0 2px rgba(46, 204, 113, 0.2);
+}
+
+#modal-form textarea.invalid {
+    border-color: #e74c3c; /* vermelho */
+    box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.2);
+}
+
+/* Estilo para botão de salvar desabilitado */
+.btn-primary:disabled {
+    background-color: #95a5a6;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+.btn-primary:disabled:hover {
+    background-color: #95a5a6;
+}
+
+/* Animação do Spinner */
+@keyframes spinner-border {
+  to { transform: rotate(360deg); }
+}
+
+/* Estilo do botão durante o carregamento */
+button.loading {
+    position: relative;
+    /* Esconde o texto original */
+    color: transparent !important;
+    cursor: wait;
+}
+
+button.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 1.2em;  /* Tamanho do spinner */
+    height: 1.2em; /* Tamanho do spinner */
+    margin-top: -0.6em;  /* Centraliza verticalmente */
+    margin-left: -0.6em; /* Centraliza horizontalmente */
+    border: 3px solid rgba(255, 255, 255, 0.4);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spinner-border 0.75s linear infinite;
+}
+
+/* --- ESTILOS PARA PÁGINA DE PRODUTOS --- */
+
+#erp-product-search .form-row {
+    display: flex;
+    align-items: flex-end; /* Alinha os itens na base */
+    gap: 15px; /* Espaço entre os elementos do formulário */
+    flex-wrap: wrap; /* Permite que os itens quebrem a linha em telas menores */
+}
+
+#erp-product-search .form-group {
+    flex-grow: 1; /* Permite que os campos cresçam */
+    margin-bottom: 0; /* Remove a margem padrão, já que estamos usando gap */
+}
+
+#erp-product-search .form-group:nth-child(2) {
+    flex-basis: 50%; /* O campo de busca ocupa mais espaço */
+}
+
+#erp-product-search label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: 600;
+    color: #333;
+}
+
+#erp-product-search input,
+#erp-product-search select {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-sizing: border-box;
+    height: 40px; /* Altura consistente */
+}
+
+#erp-product-search button {
+    height: 40px; /* Altura consistente com os inputs */
+    margin-right: 0; /* Remove a margem direita padrão */
+}
+
+.results-container {
+    margin-top: 25px;
+}

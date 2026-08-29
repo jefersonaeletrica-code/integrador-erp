@@ -42,6 +42,43 @@ export default (db, supplierConnections) => {
         res.json({ sucesso: true, connections: connectionsWithSafeCredentials });
     });
 
+    router.get('/supplier-connections/:id', async (req, res) => {
+        const { id } = req.params;
+        const connection = supplierConnections.find(c => c.id == id);
+        if (!connection) {
+            return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
+        }
+        // Retorna as credenciais completas para o formulário de edição
+        res.json({ sucesso: true, connection });
+    });
+
+    router.put('/supplier-connections/:id', async (req, res) => {
+        const { id } = req.params;
+        const { name, type, credentials } = req.body;
+
+        if (!name || !type || !credentials) {
+            return res.status(400).json({ sucesso: false, erro: 'Nome, tipo e credenciais são obrigatórios.' });
+        }
+
+        const connectionIndex = supplierConnections.findIndex(c => c.id == id);
+        if (connectionIndex === -1) {
+            return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
+        }
+
+        try {
+            const pool = db.getPool();
+            await pool.execute(
+                'UPDATE supplier_connections SET name = ?, type = ?, credentials = ? WHERE id = ?',
+                [name, type, JSON.stringify(credentials), id]
+            );
+            const updatedConnection = { ...supplierConnections[connectionIndex], name, type, credentials };
+            supplierConnections[connectionIndex] = updatedConnection;
+            res.json({ sucesso: true, connection: updatedConnection });
+        } catch (e) {
+            res.status(500).json({ sucesso: false, erro: e.message });
+        }
+    });
+
     router.delete('/supplier-connections/:id', async (req, res) => {
         const { id } = req.params;
 

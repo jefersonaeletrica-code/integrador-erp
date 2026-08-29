@@ -1,9 +1,16 @@
 import express from 'express';
 import * as erpService from './erpService.js';
+import { getLogger } from './logger.js';
 
 const router = express.Router();
 
+// Heurística para determinar se o termo de busca é um SKU.
+// Aceita letras, números e hífens, com no mínimo 5 caracteres.
+const isSku = (term) => /^[a-zA-Z0-9-]{5,}$/.test(term);
+
 export default (db, erpConnections) => {
+    const logger = getLogger();
+
     // --- ROTAS DE GERENCIAMENTO DE CONEXÕES ERP ---
 
     router.get('/erp-connections', async (req, res) => {
@@ -49,23 +56,24 @@ export default (db, erpConnections) => {
 
     router.put('/erp-connections/:id', async (req, res) => {
         const { id } = req.params;
-        const { name, credentials } = req.body;
+        const { name, type, credentials } = req.body;
 
-        if (!name || !credentials) {
-            return res.status(400).json({ sucesso: false, erro: 'Nome e credenciais são obrigatórios.' });
+        if (!name || !type || !credentials) {
+            return res.status(400).json({ sucesso: false, erro: 'Nome, tipo e credenciais são obrigatórios.' });
         }
 
         const connectionIndex = erpConnections.findIndex(c => c.id == id);
         if (connectionIndex === -1) {
-            return res.status(404).json({ sucesso: false, erro: 'Conexão não encontrada.' });
+            return res.status(404).json({ sucesso: false, erro: 'Conexão ERP não encontrada.' });
         }
 
         try {
             const connection = erpConnections[connectionIndex];
+            // Mescla as credenciais novas com as existentes para não perder tokens.
             const newCredentials = { ...connection.credentials, ...credentials };
-            const updatedConnection = { ...connection, name, credentials: newCredentials };
+            const updatedConnection = { ...connection, name, type, credentials: newCredentials };
 
-            await db.updateDb({ connection: { id, name, credentials: newCredentials } });
+            await db.updateDb({ connection: { id, name, type, credentials: newCredentials } });
             erpConnections[connectionIndex] = updatedConnection;
 
             res.json({ sucesso: true, connection: updatedConnection });
@@ -140,6 +148,65 @@ export default (db, erpConnections) => {
                 console.error('Detalhes do erro:', JSON.stringify(e.response.data));
             }
             res.status(500).send('Erro na autorização: ' + (e.response?.data ? JSON.stringify(e.response.data) : e.message));
+        }
+    });
+
+    /**
+     * Rota para buscar produtos em uma conexão ERP específica.
+     * Esta rota é utilizada pela nova interface.
+     * POST /api/erp-connections/:id/products
+     * Body: { "searchTerm": "..." }
+     */
+    router.post('/erp-connections/:id/products', async (req, res) => {
+        const { id } = req.params;
+        const { searchTerm } = req.body;
+
+        if (!searchTerm || searchTerm.trim() === '') {
+            return res.status(400).json({ sucesso: false, erro: 'O termo de busca é obrigatório.' });
+        }
+
+        const connection = erpConnections.find(c => c.id == id);
+        if (!connection) {
+            return res.status(404).json({ sucesso: false, erro: 'Conexão ERP não encontrada.' });
+        }
+
+        logger.info(`[ERPRoutes] Iniciando busca de produtos para conexão ${connection.id} (${connection.type}) com o termo: "${searchTerm}"`);
+
+        try {
+            let apiProducts = [];
+
+            if (connection.type === 'bling') {
+                await erpService.getBlingConnectionStatus(connection, db); // Garante token válido
+                const rawData = isSku(searchTerm)
+                    ? await erpService.fetchBlingProductsByCode(connection, searchTerm)
+                    : await erpService.fetchBlingProductsByName(connection, searchTerm);
+                apiProducts = rawData.data || [];
+
+            } else if (connection.type === 'cisspoder') {
+                await erpService.ensureCissPoderTokenIsValid(connection, db); // Garante token válido
+                const rawData = isSku(searchTerm)
+                    ? await erpService.fetchCissPoderProductsByCode(connection, searchTerm)
+                    : await erpService.fetchCissPoderProductsByName(connection, searchTerm);
+                apiProducts = rawData.data || [];
+
+            } else {
+                return res.status(400).json({ sucesso: false, erro: `Tipo de conexão ERP '${connection.type}' não suportado.` });
+            }
+
+            // Normaliza a estrutura dos produtos para o formato esperado pelo frontend.
+            const products = apiProducts.map(p => ({
+                sku: p.codigo,
+                name: p.nome,
+                stock: p.saldoFisicoTotal ?? 'N/A',
+                price: p.preco ?? null
+            }));
+
+            logger.info(`[ERPRoutes] Busca concluída. Encontrados ${products.length} produtos.`);
+            res.json({ sucesso: true, products });
+        } catch (error) {
+            const errorMessage = error.response?.data?.error_description || error.response?.data?.erro || error.message;
+            logger.error(`[ERPRoutes] Erro ao buscar produtos para conexão ${id}: ${errorMessage}`, error);
+            res.status(500).json({ sucesso: false, erro: `Falha ao buscar produtos: ${errorMessage}` });
         }
     });
 

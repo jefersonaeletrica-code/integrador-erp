@@ -30,9 +30,34 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // --- Lógica de Carregamento Dinâmico de Conteúdo ---
+    // --- Lógica do Modal ---
+    const modal = document.getElementById('form-modal');
+    const modalTitle = document.getElementById('modal-title');
+    const formFields = document.getElementById('form-fields');
+    const modalForm = document.getElementById('modal-form');
+    const closeModalBtn = document.querySelector('.modal-close');
+    const cancelModalBtn = document.querySelector('.modal-cancel');
+
+    const openModal = () => modal.style.display = 'flex';
+    const closeModal = () => modal.style.display = 'none';
+
+    closeModalBtn.addEventListener('click', closeModal);
+    cancelModalBtn.addEventListener('click', closeModal);
+    window.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+
+    // --- Lógica de Carregamento Dinâmico e CRUD ---
     const pageContent = document.getElementById('page-content');
     const mainTitle = document.getElementById('main-title');
+
+    const api = async (endpoint, method = 'GET', body = null) => {
+        const options = { method, headers: { 'Content-Type': 'application/json' } };
+        if (body) options.body = JSON.stringify(body);
+        const response = await fetch(endpoint, options);
+        if (!response.ok) throw new Error((await response.json()).erro || `Erro de HTTP: ${response.status}`);
+        return response.json();
+    };
 
     const showLoading = () => {
         pageContent.innerHTML = '<p>Carregando...</p>';
@@ -42,15 +67,55 @@ document.addEventListener('DOMContentLoaded', () => {
         pageContent.innerHTML = `<p style="color: red;">Erro ao carregar conteúdo: ${error.message}</p>`;
     };
 
-    // --- Funções para Renderizar cada Página ---
+    // --- Funções de Geração de Formulário ---
+    const generateErpForm = (conn = {}) => {
+        const creds = conn.credentials ? JSON.stringify(conn.credentials, null, 2) : '';
+        return `
+            <input type="hidden" name="id" value="${conn.id || ''}">
+            <div class="form-group">
+                <label for="name">Nome</label>
+                <input type="text" id="name" name="name" value="${conn.name || ''}" required>
+            </div>
+            <div class="form-group">
+                <label for="type">Tipo</label>
+                <select id="type" name="type" required>
+                    <option value="bling" ${conn.type === 'bling' ? 'selected' : ''}>Bling</option>
+                    <option value="cisspoder" ${conn.type === 'cisspoder' ? 'selected' : ''}>CissPoder</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="credentials">Credenciais (JSON)</label>
+                <textarea id="credentials" name="credentials" rows="6" required>${creds}</textarea>
+            </div>
+        `;
+    };
+
+    const generateSupplierForm = (conn = {}) => {
+        const creds = conn.credentials ? JSON.stringify(conn.credentials, null, 2) : '';
+        return `
+            <input type="hidden" name="id" value="${conn.id || ''}">
+            <div class="form-group">
+                <label for="name">Nome</label>
+                <input type="text" id="name" name="name" value="${conn.name || ''}" required>
+            </div>
+            <div class="form-group">
+                <label for="type">Tipo</label>
+                <select id="type" name="type" required>
+                    <option value="dismatal_webscraper" ${conn.type === 'dismatal_webscraper' ? 'selected' : ''}>Dismatal Web Scraper</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="credentials">Credenciais (JSON)</label>
+                <textarea id="credentials" name="credentials" rows="6" required>${creds}</textarea>
+            </div>
+        `;
+    };
 
     const renderErpConnections = async () => {
         mainTitle.textContent = 'Conexões ERP';
         showLoading();
         try {
-            const response = await fetch('/api/erp-connections');
-            if (!response.ok) throw new Error(`Erro de HTTP: ${response.status}`);
-            const { connections } = await response.json();
+            const { connections } = await api('/api/erp-connections');
 
             if (!connections || connections.length === 0) {
                 pageContent.innerHTML = '<p>Nenhuma conexão ERP encontrada. Adicione uma para começar.</p>';
@@ -64,15 +129,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${conn.type}</td>
                     <td><span class="status status-${conn.status}">${conn.status.replace('_', ' ')}</span></td>
                     <td>
-                        <button class="btn-small">Editar</button>
-                        <button class="btn-small btn-danger">Remover</button>
+                        <button class="btn-small" data-action="edit-erp" data-id="${conn.id}">Editar</button>
+                        <button class="btn-small btn-danger" data-action="remove-erp" data-id="${conn.id}">Remover</button>
                     </td>
                 </tr>
             `).join('');
 
             pageContent.innerHTML = `
-                <button class="btn-primary">Adicionar Conexão ERP</button>
-                <br><br>
+                <button class="btn-primary" data-action="add-erp">Adicionar Conexão ERP</button>
+                <br>
                 <table>
                     <thead>
                         <tr>
@@ -97,9 +162,7 @@ document.addEventListener('DOMContentLoaded', () => {
         mainTitle.textContent = 'Conexões Fornecedores';
         showLoading();
         try {
-            const response = await fetch('/api/supplier-connections');
-            if (!response.ok) throw new Error(`Erro de HTTP: ${response.status}`);
-            const { connections } = await response.json();
+            const { connections } = await api('/api/supplier-connections');
 
             if (!connections || connections.length === 0) {
                 pageContent.innerHTML = '<p>Nenhuma conexão de fornecedor encontrada. Adicione uma para começar.</p>';
@@ -112,16 +175,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td>${conn.name}</td>
                     <td>${conn.type.replace('_', ' ')}</td>
                     <td>
-                        <button class="btn-small">Testar</button>
-                        <button class="btn-small">Autenticar</button>
-                        <button class="btn-small btn-danger">Remover</button>
+                        <button class="btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Testar Conexão">Testar</button>
+                        <button class="btn-small btn-warning" data-action="auth-supplier" data-id="${conn.id}" title="Forçar nova autenticação">Autenticar</button>
+                        <button class="btn-small" data-action="edit-supplier" data-id="${conn.id}">Editar</button>
+                        <button class="btn-small btn-danger" data-action="remove-supplier" data-id="${conn.id}">Remover</button>
                     </td>
                 </tr>
             `).join('');
 
             pageContent.innerHTML = `
-                <button class="btn-primary">Adicionar Conexão de Fornecedor</button>
-                <br><br>
+                <button class="btn-primary" data-action="add-supplier">Adicionar Conexão de Fornecedor</button>
+                <br>
                 <table>
                     <thead>
                         <tr>
@@ -141,19 +205,260 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const renderProductsPage = () => {
+    const renderProductsPage = async () => {
         mainTitle.textContent = 'Produtos';
         pageContent.innerHTML = `
-            <h2>Visualizador de Produtos do ERP</h2>
-            <p>Esta área permitirá a busca e visualização de produtos cadastrados no seu ERP.</p>
-            <p>Funcionalidade em desenvolvimento.</p>
+            <div id="product-search-form"></div>
+            <div id="product-results" class="results-container">
+                <p>Selecione uma conexão ERP e digite um termo de busca para começar.</p>
+            </div>
         `;
+
+        const searchFormContainer = document.getElementById('product-search-form');
+        const resultsContainer = document.getElementById('product-results');
+
+        try {
+            // 1. Fetch ERP connections to populate the selector
+            const { connections } = await api('/api/erp-connections');
+
+            if (!connections || connections.length === 0) {
+                searchFormContainer.innerHTML = '<p>Nenhuma conexão ERP ativa encontrada. Adicione uma em "Integrações" para buscar produtos.</p>';
+                return;
+            }
+
+            // 2. Build the form
+            const options = connections
+                .filter(c => c.status === 'connected') // Only show connected ERPs
+                .map(c => `<option value="${c.id}">${c.name} (${c.type})</option>`)
+                .join('');
+
+            if (options.length === 0) {
+                searchFormContainer.innerHTML = '<p>Nenhuma conexão ERP com status "Conectado" foi encontrada. Verifique o status das suas conexões.</p>';
+                return;
+            }
+
+            searchFormContainer.innerHTML = `
+                <form id="erp-product-search">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="erp-connection-select">Conexão ERP</label>
+                            <select id="erp-connection-select" name="erp-connection" required>
+                                ${options}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="product-search-term">Buscar Produto (Nome ou SKU)</label>
+                            <input type="search" id="product-search-term" name="searchTerm" placeholder="Ex: Parafuso Allen" required>
+                        </div>
+                        <div class="form-group">
+                            <button type="submit" class="btn-primary">Buscar</button>
+                        </div>
+                    </div>
+                </form>
+            `;
+
+            // 3. Add event listener for the form submission
+            const productSearchForm = document.getElementById('erp-product-search');
+            productSearchForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const button = productSearchForm.querySelector('button[type="submit"]');
+                button.classList.add('loading');
+                button.disabled = true;
+
+                const connectionId = document.getElementById('erp-connection-select').value;
+                const searchTerm = document.getElementById('product-search-term').value;
+
+                resultsContainer.innerHTML = '<p>Buscando produtos...</p>';
+
+                try {
+                    // NOTE: This assumes a backend endpoint exists at this path.
+                    const { products } = await api(`/api/erp-connections/${connectionId}/products`, 'POST', { searchTerm });
+
+                    if (!products || products.length === 0) {
+                        resultsContainer.innerHTML = '<p>Nenhum produto encontrado com o termo informado.</p>';
+                        return;
+                    }
+
+                    const tableRows = products.map(p => `
+                        <tr>
+                            <td>${p.sku || 'N/A'}</td>
+                            <td>${p.name || 'N/A'}</td>
+                            <td>${p.stock ?? 'N/A'}</td>
+                            <td>${p.price ? `R$ ${p.price.toFixed(2)}` : 'N/A'}</td>
+                        </tr>
+                    `).join('');
+
+                    resultsContainer.innerHTML = `
+                        <table>
+                            <thead><tr><th>SKU</th><th>Nome</th><th>Estoque</th><th>Preço</th></tr></thead>
+                            <tbody>${tableRows}</tbody>
+                        </table>
+                    `;
+                } catch (error) {
+                    resultsContainer.innerHTML = `<p style="color: red;">Erro ao buscar produtos: ${error.message}</p>`;
+                } finally {
+                    button.classList.remove('loading');
+                    button.disabled = false;
+                }
+            });
+        } catch (error) {
+            renderError(error);
+        }
     };
 
     const renderWelcomePage = () => {
         mainTitle.textContent = 'Bem-vindo ao Integrador ERP';
         pageContent.innerHTML = '<p>Selecione uma opção no menu ao lado para começar.</p>';
     };
+
+    const validateJsonInModal = () => {
+        const credentialsTextarea = document.getElementById('credentials');
+        if (!credentialsTextarea) return;
+
+        const saveButton = modalForm.querySelector('button[type="submit"]');
+
+        // Não altera o estado do botão se ele já estiver em modo "loading"
+        if (saveButton.classList.contains('loading')) return;
+
+        const value = credentialsTextarea.value;
+        if (value.trim() === '') {
+            credentialsTextarea.classList.remove('valid', 'invalid');
+            saveButton.disabled = true;
+            return;
+        }
+        try {
+            JSON.parse(value);
+            credentialsTextarea.classList.add('valid');
+            credentialsTextarea.classList.remove('invalid');
+            saveButton.disabled = false;
+        } catch (e) {
+            credentialsTextarea.classList.add('invalid');
+            credentialsTextarea.classList.remove('valid');
+            saveButton.disabled = true;
+        }
+    };
+
+    const setupJsonValidation = () => {
+        const credentialsTextarea = document.getElementById('credentials');
+        if (!credentialsTextarea) return;
+
+        // A validação é anexada ao evento de input do campo de texto
+        credentialsTextarea.addEventListener('input', validateJsonInModal);
+        validateJsonInModal(); // Executa a validação inicial ao abrir o modal
+    };
+
+    // --- Manipulador de Eventos Principal ---
+    pageContent.addEventListener('click', async (e) => {
+        const action = e.target.dataset.action;
+        const id = e.target.dataset.id;
+        if (!action) return;
+
+        // Ações que não abrem o modal (Testar, Autenticar)
+        if (action === 'test-supplier' || action === 'auth-supplier') {
+            const button = e.target;
+            button.classList.add('loading');
+            button.disabled = true;
+
+            const endpointAction = action === 'test-supplier' ? 'validate-authentication' : 'authenticate';
+            try {
+                const result = await api(`/api/supplier-connections/${id}/${endpointAction}`, 'POST');
+                alert(result.mensagem || 'Ação enviada com sucesso. O resultado aparecerá no console do servidor.');
+            } catch (error) {
+                alert(`Erro ao executar ação: ${error.message}`);
+            } finally {
+                button.classList.remove('loading');
+                button.disabled = false;
+            }
+            return; // Finaliza o evento aqui
+        }
+
+        const type = action.includes('erp') ? 'erp' : 'supplier';
+        const endpoint = type === 'erp' ? '/api/erp-connections' : '/api/supplier-connections';
+        const renderFn = type === 'erp' ? renderErpConnections : renderSupplierConnections;
+
+        try {
+            if (action.startsWith('add')) {
+                modalTitle.textContent = `Adicionar Conexão de ${type.toUpperCase()}`;
+                formFields.innerHTML = type === 'erp' ? generateErpForm() : generateSupplierForm();
+                openModal();
+                setupJsonValidation();
+
+                modalForm.onsubmit = async (ev) => {
+                    ev.preventDefault();
+                    const saveButton = modalForm.querySelector('button[type="submit"]');
+                    saveButton.classList.add('loading');
+                    saveButton.disabled = true;
+
+                    try {
+                        const formData = new FormData(modalForm);
+                        const body = {
+                            name: formData.get('name'),
+                            type: formData.get('type'),
+                            credentials: JSON.parse(formData.get('credentials'))
+                        };
+                        await api(endpoint, 'POST', body);
+                        closeModal();
+                        await renderFn();
+                    } catch (formError) {
+                        alert(`Erro ao salvar: ${formError.message}`);
+                    } finally {
+                        saveButton.classList.remove('loading');
+                        validateJsonInModal(); // Re-valida para resetar o estado do botão
+                    }
+                };
+            } else if (action.startsWith('edit')) {
+                const { connection } = await api(`${endpoint}/${id}`);
+                modalTitle.textContent = `Editar Conexão de ${type.toUpperCase()}`;
+                formFields.innerHTML = type === 'erp' ? generateErpForm(connection) : generateSupplierForm(connection);
+                openModal();
+                setupJsonValidation();
+
+                modalForm.onsubmit = async (ev) => {
+                    ev.preventDefault();
+                    const saveButton = modalForm.querySelector('button[type="submit"]');
+                    saveButton.classList.add('loading');
+                    saveButton.disabled = true;
+
+                    try {
+                        const formData = new FormData(modalForm);
+                        const body = {
+                            name: formData.get('name'),
+                            type: formData.get('type'),
+                            credentials: JSON.parse(formData.get('credentials'))
+                        };
+                        await api(`${endpoint}/${id}`, 'PUT', body);
+                        closeModal();
+                        await renderFn();
+                    } catch (formError) {
+                        alert(`Erro ao salvar: ${formError.message}`);
+                    } finally {
+                        saveButton.classList.remove('loading');
+                        validateJsonInModal(); // Re-valida para resetar o estado do botão
+                    }
+                };
+            } else if (action.startsWith('remove')) {
+                if (confirm('Tem certeza que deseja remover esta conexão?')) {
+                    await api(`${endpoint}/${id}`, 'DELETE');
+                    await renderFn();
+                }
+            }
+        } catch (error) {
+            // Tenta analisar o erro para exibir uma mensagem mais amigável
+            try {
+                const errorJson = JSON.parse(error.message);
+                if (errorJson.erro) {
+                    alert(`Erro: ${errorJson.erro}`);
+                } else {
+                    alert(`Erro: ${error.message}`);
+                }
+            } catch (e) {
+                // Se o erro não for um JSON, exibe a mensagem de erro original
+                alert(`Erro: ${error.message}`);
+            }
+            // Se o erro foi ao abrir o modal (ex: buscar dados para editar), fecha o modal.
+            closeModal();
+        }
+    });
 
     // --- Roteador Simples para Navegação ---
     const routes = {
