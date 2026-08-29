@@ -174,7 +174,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * =================================================================
      */
     const modal = document.getElementById('form-modal');
-    const modalTitle = modal.querySelector('.modal-title');
+    const modalTitle = document.getElementById('modal-title');
     const formFields = document.getElementById('form-fields');
     const modalForm = document.getElementById('modal-form');
     const closeModalBtn = document.querySelector('.modal-close');
@@ -232,128 +232,80 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast(`Erro: ${errorMessage}`, 'error');
     };
 
-    /**
-     * =================================================================
-     * MÓDULO DE GERAÇÃO DE FORMULÁRIOS DINÂMICOS (SEGURO)
-     * =================================================================
-     */
-
-    // Função auxiliar para criar um elemento com atributos e texto
-    function createElement(tag, attributes = {}, textContent = '') {
-        const el = document.createElement(tag);
-        Object.entries(attributes).forEach(([key, value]) => {
-            if (value !== null && value !== undefined) el.setAttribute(key, value);
-        });
-        if (textContent) el.textContent = textContent;
-        return el;
-    }
-
-    // Função auxiliar para criar um campo de formulário completo (label + input)
-    function createFormGroup(label, input) {
-        const group = createElement('div', { class: 'form-group' });
-        group.appendChild(label);
-        group.appendChild(input);
-        return group;
-    }
-
+    // --- Funções de Geração de Formulário (ainda usam HTML string, mas poderiam ser refatoradas) ---
     const generateErpForm = (conn = {}) => {
         const creds = conn.credentials || {};
-        const fragment = document.createDocumentFragment();
+        const formHtml = `
+            <input type="hidden" name="id" value="${conn.id || ''}">
+            <div class="form-group">
+                <label for="name">Nome</label>
+                <input type="text" id="name" name="name" value="${conn.name || ''}" required>
+            </div>
+            <div class="form-group">
+                <label for="type">Tipo</label>
+                <select id="type" name="type" required>
+                    <option value="" ${!conn.type ? 'selected' : ''}>Selecione um tipo...</option>
+                    <option value="bling" ${conn.type === 'bling' ? 'selected' : ''}>Bling</option>
+                    <option value="cisspoder" ${conn.type === 'cisspoder' ? 'selected' : ''}>CissPoder</option>
+                </select>
+            </div>
+            <div id="erp-credentials-fields"></div>
+        `;
 
-        // Campo oculto de ID
-        fragment.appendChild(createElement('input', { type: 'hidden', name: 'id', value: conn.id || '' }));
+        // Adiciona um listener para o select de tipo
+        setTimeout(() => {
+            const typeSelect = document.getElementById('type');
+            const credsContainer = document.getElementById('erp-credentials-fields');
 
-        // Campo Nome
-        const nameLabel = createElement('label', { for: 'name' }, 'Nome');
-        const nameInput = createElement('input', { type: 'text', id: 'name', name: 'name', value: conn.name || '', required: true });
-        fragment.appendChild(createFormGroup(nameLabel, nameInput));
+            const renderCredentialFields = (type) => {
+                let fieldsHtml = '';
+                if (type === 'bling') {
+                    fieldsHtml = `
+                        <div class="form-group"><label for="client_id">ID do Cliente (Client ID)</label><input type="text" id="client_id" name="client_id" value="${creds.client_id || ''}" required></div>
+                        <div class="form-group"><label for="client_secret">Segredo do Cliente (Client Secret)</label><input type="password" id="client_secret" name="client_secret" value="${creds.client_secret || ''}" required></div>
+                        <div class="form-group"><label for="redirect_uri">URI de Redirecionamento</label><input type="text" id="redirect_uri" name="redirect_uri" value="${creds.redirect_uri || ''}" placeholder="Ex: https://seu-dominio.com/api/callback" required></div>
+                    `;
+                } else if (type === 'cisspoder') {
+                    fieldsHtml = `
+                        <div class="form-group"><label for="auth_url">URL de Autenticação</label><input type="text" id="auth_url" name="auth_url" value="${creds.auth_url || ''}" placeholder="Ex: https://api.servidor.com.br" required></div>
+                        <div class="form-group"><label for="username">Usuário</label><input type="text" id="username" name="username" value="${creds.username || ''}" required></div>
+                        <div class="form-group"><label for="password">Senha</label><input type="password" id="password" name="password" value="${creds.password || ''}" required></div>
+                    `;
+                }
+                credsContainer.innerHTML = fieldsHtml;
+            };
 
-        // Campo Tipo (Select)
-        const typeLabel = createElement('label', { for: 'type' }, 'Tipo');
-        const typeSelect = createElement('select', { id: 'type', name: 'type', required: true });
-        const options = [
-            { value: '', text: 'Selecione um tipo...' },
-            { value: 'bling', text: 'Bling' },
-            { value: 'cisspoder', text: 'CissPoder' }
-        ];
-        options.forEach(opt => {
-            const optionEl = createElement('option', { value: opt.value }, opt.text);
-            if (conn.type === opt.value) optionEl.selected = true;
-            if (!conn.type && opt.value === '') optionEl.selected = true;
-            typeSelect.appendChild(optionEl);
-        });
-        fragment.appendChild(createFormGroup(typeLabel, typeSelect));
-
-        // Container para os campos de credenciais
-        const credsContainer = createElement('div', { id: 'erp-credentials-fields' });
-        fragment.appendChild(credsContainer);
-
-        // Função para renderizar os campos de credenciais específicos do tipo
-        const renderCredentialFields = (type) => {
-            credsContainer.innerHTML = ''; // Limpa os campos antigos
-            const credsFragment = document.createDocumentFragment();
-
-            if (type === 'bling') {
-                credsFragment.appendChild(createFormGroup(
-                    createElement('label', { for: 'client_id' }, 'ID do Cliente (Client ID)'),
-                    createElement('input', { type: 'text', id: 'client_id', name: 'client_id', value: creds.client_id || '', required: true })
-                ));
-                credsFragment.appendChild(createFormGroup(
-                    createElement('label', { for: 'client_secret' }, 'Segredo do Cliente (Client Secret)'),
-                    createElement('input', { type: 'password', id: 'client_secret', name: 'client_secret', value: creds.client_secret || '', required: true })
-                ));
-                credsFragment.appendChild(createFormGroup(
-                    createElement('label', { for: 'redirect_uri' }, 'URI de Redirecionamento'),
-                    createElement('input', { type: 'text', id: 'redirect_uri', name: 'redirect_uri', value: creds.redirect_uri || '', placeholder: 'Ex: https://seu-dominio.com/api/callback', required: true })
-                ));
-            } else if (type === 'cisspoder') {
-                credsFragment.appendChild(createFormGroup(
-                    createElement('label', { for: 'auth_url' }, 'URL de Autenticação'),
-                    createElement('input', { type: 'text', id: 'auth_url', name: 'auth_url', value: creds.auth_url || '', placeholder: 'Ex: https://api.servidor.com.br', required: true })
-                ));
-                credsFragment.appendChild(createFormGroup(
-                    createElement('label', { for: 'username' }, 'Usuário'),
-                    createElement('input', { type: 'text', id: 'username', name: 'username', value: creds.username || '', required: true })
-                ));
-                credsFragment.appendChild(createFormGroup(
-                    createElement('label', { for: 'password' }, 'Senha'),
-                    createElement('input', { type: 'password', id: 'password', name: 'password', value: creds.password || '', required: true })
-                ));
+            if (typeSelect) {
+                typeSelect.addEventListener('change', () => renderCredentialFields(typeSelect.value));
+                // Renderiza os campos iniciais se uma conexão já estiver sendo editada
+                if (conn.type) {
+                    renderCredentialFields(conn.type);
+                }
             }
-            credsContainer.appendChild(credsFragment);
-        };
+        }, 0);
 
-        // Adiciona o listener e renderiza os campos iniciais
-        typeSelect.addEventListener('change', () => renderCredentialFields(typeSelect.value));
-        if (conn.type) {
-            renderCredentialFields(conn.type);
-        }
-
-        return fragment;
+        return formHtml;
     };
 
     const generateSupplierForm = (conn = {}) => {
         const creds = conn.credentials ? JSON.stringify(conn.credentials, null, 2) : '';
-        const fragment = document.createDocumentFragment();
-
-        fragment.appendChild(createElement('input', { type: 'hidden', name: 'id', value: conn.id || '' }));
-
-        const nameLabel = createElement('label', { for: 'name' }, 'Nome');
-        const nameInput = createElement('input', { type: 'text', id: 'name', name: 'name', value: conn.name || '', required: true });
-        fragment.appendChild(createFormGroup(nameLabel, nameInput));
-
-        const typeLabel = createElement('label', { for: 'type' }, 'Tipo');
-        const typeSelect = createElement('select', { id: 'type', name: 'type', required: true });
-        const typeOption = createElement('option', { value: 'dismatal_webscraper' }, 'Dismatal Web Scraper');
-        typeOption.selected = true; // Única opção
-        typeSelect.appendChild(typeOption);
-        fragment.appendChild(createFormGroup(typeLabel, typeSelect));
-
-        const credsLabel = createElement('label', { for: 'credentials' }, 'Credenciais (JSON)');
-        const credsTextarea = createElement('textarea', { id: 'credentials', name: 'credentials', rows: '6', required: true }, creds);
-        fragment.appendChild(createFormGroup(credsLabel, credsTextarea));
-
-        return fragment;
+        return `
+            <input type="hidden" name="id" value="${conn.id || ''}">
+            <div class="form-group">
+                <label for="name">Nome</label>
+                <input type="text" id="name" name="name" value="${conn.name || ''}" required>
+            </div>
+            <div class="form-group">
+                <label for="type">Tipo</label>
+                <select id="type" name="type" required>
+                    <option value="dismatal_webscraper" ${conn.type === 'dismatal_webscraper' ? 'selected' : ''}>Dismatal Web Scraper</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="credentials">Credenciais (JSON)</label>
+                <textarea id="credentials" name="credentials" rows="6" required>${creds}</textarea>
+            </div>
+        `;
     };
 
     const renderErpConnections = async () => {
@@ -420,31 +372,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const connectionCards = connections.map(conn => `
-                <div class="connection-card supplier-card">
-                    <div class="card-header">
-                        <i class="fas fa-truck card-icon"></i>
-                    </div>
-                    <div class="card-body">
-                        <h3 class="card-title">${conn.name}</h3>
-                        <p class="card-subtitle">${conn.type.replace(/_/g, ' ')}</p>
-                    </div>
-                    <div class="card-footer">
-                        <div class="action-group">
-                            <button class="btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Verificar se a sessão salva ainda é válida">Validar</button>
-                            <button class="btn-small btn-warning" data-action="auth-supplier" data-id="${conn.id}" title="Forçar um novo login para renovar a sessão">Renovar</button>
-                        </div>
-                        <div class="action-group">
-                            <button class="btn-small" data-action="edit-supplier" data-id="${conn.id}">Editar</button>
-                            <button class="btn-small btn-danger" data-action="remove-supplier" data-id="${conn.id}">Remover</button>
-                        </div>
-                    </div>
-                </div>
+            const tableRows = connections.map(conn => `
+                <tr>
+                    <td>${conn.id}</td>
+                    <td>${conn.name}</td>
+                    <td>${conn.type.replace('_', ' ')}</td>
+                    <td>
+                        <button class="btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Verificar se a sessão salva ainda é válida">Validar Sessão</button>
+                        <button class="btn-small btn-warning" data-action="auth-supplier" data-id="${conn.id}" title="Forçar um novo login para renovar a sessão">Renovar Sessão</button>
+                        <button class="btn-small" data-action="edit-supplier" data-id="${conn.id}">Editar</button>
+                        <button class="btn-small btn-danger" data-action="remove-supplier" data-id="${conn.id}">Remover</button>
+                    </td>
+                </tr>
             `).join('');
 
             pageContent.innerHTML = `
-                <div class="page-header"><button class="btn-primary" data-action="add-supplier">Adicionar Conexão de Fornecedor</button></div>
-                <div class="connections-grid">${connectionCards}</div>
+                <button class="btn-primary" data-action="add-supplier">Adicionar Conexão de Fornecedor</button>
+                <br>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Tipo</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tableRows}
+                    </tbody>
+                </table>
             `;
         } catch (error) {
             renderError(error);
@@ -698,8 +655,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             if (action.startsWith('add')) {
                 modalTitle.textContent = `Adicionar Conexão de ${type.toUpperCase()}`;
-                formFields.innerHTML = ''; // Limpa o conteúdo anterior
-                formFields.appendChild(type === 'erp' ? generateErpForm() : generateSupplierForm());
+                formFields.innerHTML = type === 'erp' ? generateErpForm() : generateSupplierForm();
                 modal.style.display = 'flex';
                 setupJsonValidation();
 
@@ -743,8 +699,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else if (action.startsWith('edit')) {
                 const { connection } = await api(`${endpoint}/${id}`);
                 modalTitle.textContent = `Editar Conexão de ${type.toUpperCase()}`;
-                formFields.innerHTML = ''; // Limpa o conteúdo anterior
-                formFields.appendChild(type === 'erp' ? generateErpForm(connection) : generateSupplierForm(connection));
+                formFields.innerHTML = type === 'erp' ? generateErpForm(connection) : generateSupplierForm(connection);
                 modal.style.display = 'flex';
                 setupJsonValidation();
 
