@@ -97,6 +97,12 @@ body {
     margin-left: 0;
 }
 
+/* Garante que os submenus permaneçam fechados e invisíveis se a barra lateral estiver colapsada */
+.sidebar.collapsed .submenu {
+    max-height: 0 !important;
+    padding: 0 !important;
+}
+
 .submenu {
     list-style: none;
     padding-left: 20px;
