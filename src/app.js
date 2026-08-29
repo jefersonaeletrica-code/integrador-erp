@@ -10,6 +10,14 @@ export async function createApp(db) {
     const app = express();
     const logger = getLogger();
 
+    // Middleware de Log de Requisições:
+    // Este é o primeiro middleware a ser executado. Ele registrará todas as requisições
+    // recebidas pelo servidor, o que é essencial para depurar erros como "Failed to fetch".
+    app.use((req, res, next) => {
+        logger.info(`[HTTP Request] ${req.method} ${req.originalUrl}`);
+        next(); // Passa a requisição para o próximo middleware na cadeia.
+    });
+
     // Middlewares
     app.use(express.json());
 
