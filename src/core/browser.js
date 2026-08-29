@@ -15,6 +15,16 @@ let isBrowserInUse = false;
  */
 export async function initBrowser(config) {
     const logger = getLogger();
+
+    if (isBrowserInUse) {
+        logger.warn('Tentativa de inicializar o navegador enquanto já está em andamento.');
+        throw new Error('A inicialização do navegador já está em processo.');
+    }
+
+    if (browserInstance && browserInstance.browser.isConnected()) {
+        logger.info('Reutilizando instância do navegador existente.');
+        return browserInstance;
+    }
     logger.info('Inicializando instância do navegador...');
 
     if (!BROWSERLESS_API_KEY) {
@@ -26,12 +36,13 @@ export async function initBrowser(config) {
 
     try {
         isBrowserInUse = true; // Bloqueia a criação de novas instâncias
+        const launchConfig = { ...BROWSER_CONFIG, ...config };
         const browser = await puppeteer.launch({
             browserURL: browserWSEndpoint,
-            ...BROWSER_CONFIG,
+            ...launchConfig,
         });
         const page = await browser.newPage();
-        await page.setViewport(BROWSER_CONFIG.defaultViewport);
+        await page.setViewport(launchConfig.defaultViewport);
 
         browserInstance = { browser, page };
         logger.info('Navegador conectado e página criada com sucesso.');
