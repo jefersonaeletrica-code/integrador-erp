@@ -3,6 +3,9 @@ FROM node:20-alpine
 WORKDIR /app
 
 COPY package*.json ./
+
+# Evita que o Puppeteer baixe o Chromium, pois usaremos um serviço remoto
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 RUN npm install --omit=dev
 
 COPY . .
