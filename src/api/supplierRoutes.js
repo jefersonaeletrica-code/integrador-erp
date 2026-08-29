@@ -29,20 +29,17 @@ export default (db, supplierConnections) => {
         }
     });
 
-    router.get('/supplier-connections', async (req, res) => { // A rota agora é assíncrona
-        // Lê os dados mais recentes do banco de dados a cada requisição
+    router.get('/supplier-connections', async (req, res) => {
+        // Lê os dados mais recentes do banco de dados a cada requisição.
         const { supplierConnections } = await db.readDb();
-        // A variável 'supplierConnections' passada para a função pode estar desatualizada. Buscamos do DB.
-        const data = await db.readDb();
+
+        // Remove senhas e outros dados sensíveis antes de enviar para o cliente.
         const connectionsWithSafeCredentials = supplierConnections.map(conn => {
-            const safeCreds = { ...conn.credentials };
-            if (safeCreds.password) {
-                safeCreds.password = '******';
-            }
-            return { ...conn, credentials: safeCreds };
+            // Cria uma cópia segura das credenciais, omitindo a senha.
+            const { password, ...safeCredentials } = conn.credentials;
+            return { ...conn, credentials: { ...safeCredentials, password: password ? '******' : undefined } };
         });
         res.json({ sucesso: true, connections: connectionsWithSafeCredentials });
-        res.json({ sucesso: true, connections: data.supplierConnections.map(c => ({...c, credentials: { ...c.credentials, password: '***' }})) });
     });
 
     router.get('/supplier-connections/:id', async (req, res) => {
