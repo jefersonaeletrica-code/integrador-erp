@@ -183,17 +183,18 @@ export const updateDb = async (partial) => {
         await connection.query('INSERT INTO produtos_importados (codigo, nome, preco) VALUES ?', [productValues]);
       }
     } else if (partial.connection) {
-      // Lógica para atualizar uma conexão específica
-      const { id, ...dataToUpdate } = partial.connection;
-      if (dataToUpdate.credentials) {
-        dataToUpdate.credentials = JSON.stringify(dataToUpdate.credentials);
-      }
-      const fields = Object.keys(dataToUpdate);
-      const setClause = fields.map(field => `${field} = ?`).join(', ');
-      const values = fields.map(field => dataToUpdate[field]);
-
-      if (fields.length > 0) {
-        await connection.execute(`UPDATE erp_connections SET ${setClause} WHERE id = ?`, [...values, id]);
+      // Lógica para atualizar uma conexão ERP específica
+      const { id, name, type, credentials } = partial.connection;
+      if (id && name && type && credentials) {
+        await connection.execute(
+          'UPDATE erp_connections SET name = ?, type = ?, credentials = ? WHERE id = ?',
+          [
+            name,
+            type,
+            JSON.stringify(credentials),
+            id
+          ]
+        );
       }
     }
 

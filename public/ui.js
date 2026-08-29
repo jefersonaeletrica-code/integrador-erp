@@ -108,8 +108,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Funções de Geração de Formulário ---
     const generateErpForm = (conn = {}) => {
-        const creds = conn.credentials ? JSON.stringify(conn.credentials, null, 2) : '';
-        return `
+        const creds = conn.credentials || {};
+        const formHtml = `
             <input type="hidden" name="id" value="${conn.id || ''}">
             <div class="form-group">
                 <label for="name">Nome</label>
@@ -118,15 +118,47 @@ document.addEventListener('DOMContentLoaded', () => {
             <div class="form-group">
                 <label for="type">Tipo</label>
                 <select id="type" name="type" required>
+                    <option value="" ${!conn.type ? 'selected' : ''}>Selecione um tipo...</option>
                     <option value="bling" ${conn.type === 'bling' ? 'selected' : ''}>Bling</option>
                     <option value="cisspoder" ${conn.type === 'cisspoder' ? 'selected' : ''}>CissPoder</option>
                 </select>
             </div>
-            <div class="form-group">
-                <label for="credentials">Credenciais (JSON)</label>
-                <textarea id="credentials" name="credentials" rows="6" required>${creds}</textarea>
-            </div>
+            <div id="erp-credentials-fields"></div>
         `;
+
+        // Adiciona um listener para o select de tipo
+        setTimeout(() => {
+            const typeSelect = document.getElementById('type');
+            const credsContainer = document.getElementById('erp-credentials-fields');
+
+            const renderCredentialFields = (type) => {
+                let fieldsHtml = '';
+                if (type === 'bling') {
+                    fieldsHtml = `
+                        <div class="form-group"><label for="client_id">Client ID</label><input type="text" id="client_id" name="client_id" value="${creds.client_id || ''}" required></div>
+                        <div class="form-group"><label for="client_secret">Client Secret</label><input type="password" id="client_secret" name="client_secret" value="${creds.client_secret || ''}" required></div>
+                        <div class="form-group"><label for="redirect_uri">Redirect URI</label><input type="text" id="redirect_uri" name="redirect_uri" value="${creds.redirect_uri || ''}" placeholder="Ex: https://seu-dominio.com/api/callback" required></div>
+                    `;
+                } else if (type === 'cisspoder') {
+                    fieldsHtml = `
+                        <div class="form-group"><label for="auth_url">URL de Autenticação</label><input type="text" id="auth_url" name="auth_url" value="${creds.auth_url || ''}" placeholder="Ex: https://servidor.dataciss.com.br" required></div>
+                        <div class="form-group"><label for="username">Usuário</label><input type="text" id="username" name="username" value="${creds.username || ''}" required></div>
+                        <div class="form-group"><label for="password">Senha</label><input type="password" id="password" name="password" value="${creds.password || ''}" required></div>
+                    `;
+                }
+                credsContainer.innerHTML = fieldsHtml;
+            };
+
+            if (typeSelect) {
+                typeSelect.addEventListener('change', () => renderCredentialFields(typeSelect.value));
+                // Renderiza os campos iniciais se uma conexão já estiver sendo editada
+                if (conn.type) {
+                    renderCredentialFields(conn.type);
+                }
+            }
+        }, 0);
+
+        return formHtml;
     };
 
     const generateSupplierForm = (conn = {}) => {
@@ -497,11 +529,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     try {
                         const formData = new FormData(modalForm);
-                        const body = {
-                            name: formData.get('name'),
-                            type: formData.get('type'),
-                            credentials: JSON.parse(formData.get('credentials'))
-                        };
+                        const type = formData.get('type');
+                        const body = { name: formData.get('name'), type, credentials: {} };
+
+                        if (type === 'erp') {
+                            const erpType = formData.get('type');
+                            if (erpType === 'bling') {
+                                body.credentials.client_id = formData.get('client_id');
+                                body.credentials.client_secret = formData.get('client_secret');
+                                body.credentials.redirect_uri = formData.get('redirect_uri');
+                            } else if (erpType === 'cisspoder') {
+                                body.credentials.auth_url = formData.get('auth_url');
+                                body.credentials.username = formData.get('username');
+                                body.credentials.password = formData.get('password');
+                            }
+                        } else { // Fornecedor
+                            body.credentials = JSON.parse(formData.get('credentials'));
+                        }
+
                         await api(endpoint, 'POST', body);
                         closeModal();
                         await renderFn();
@@ -527,11 +572,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     try {
                         const formData = new FormData(modalForm);
-                        const body = {
-                            name: formData.get('name'),
-                            type: formData.get('type'),
-                            credentials: JSON.parse(formData.get('credentials'))
-                        };
+                        const type = formData.get('type');
+                        const body = { name: formData.get('name'), type, credentials: {} };
+
+                        if (type === 'erp') {
+                            const erpType = formData.get('type');
+                            if (erpType === 'bling') {
+                                body.credentials.client_id = formData.get('client_id');
+                                body.credentials.client_secret = formData.get('client_secret');
+                                body.credentials.redirect_uri = formData.get('redirect_uri');
+                            } else if (erpType === 'cisspoder') {
+                                body.credentials.auth_url = formData.get('auth_url');
+                                body.credentials.username = formData.get('username');
+                                body.credentials.password = formData.get('password');
+                            }
+                        } else { // Fornecedor
+                            body.credentials = JSON.parse(formData.get('credentials'));
+                        }
+
                         await api(`${endpoint}/${id}`, 'PUT', body);
                         closeModal();
                         await renderFn();
