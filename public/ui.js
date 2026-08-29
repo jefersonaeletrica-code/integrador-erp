@@ -1,63 +1,59 @@
 document.addEventListener('DOMContentLoaded', () => {
     // --- Lógica do Sidebar (Expandir/Recolher e Submenus) ---
-    // Esta seção foi totalmente blindada e reescrita do zero para uma solução definitiva.
+    // Esta seção foi reescrita do zero para uma solução final e robusta.
     const sidebar = document.querySelector('.sidebar');
     const toggleBtn = document.querySelector('.toggle-btn');
     const submenuToggles = document.querySelectorAll('.submenu-toggle');
 
     /**
      * Função auxiliar para fechar TODOS os submenus abertos.
-     * Isso garante um estado limpo antes de qualquer ação.
+     * Remove a classe 'open' dos links e dos contêineres de submenu.
      */
     function closeAllSubmenus() {
-        document.querySelectorAll('.submenu-toggle').forEach(t => t.classList.remove('open'));
-        document.querySelectorAll('.submenu').forEach(s => s.classList.remove('open'));
-    }
-
-    /**
-     * Evento seguro para o botão principal de expandir/recolher.
-     */
-    if (toggleBtn && sidebar) {
-        toggleBtn.addEventListener('click', (e) => {
-            e.preventDefault();
-            // Primeiro, alterna o estado da barra lateral.
-            sidebar.classList.toggle('collapsed');
-            // REGRA 1: Se o menu AGORA está recolhido, garante que todos os submenus sejam fechados.
-            if (sidebar.classList.contains('collapsed')) {
-                closeAllSubmenus();
+        submenuToggles.forEach(toggle => {
+            toggle.classList.remove('open');
+            if (toggle.nextElementSibling) {
+                toggle.nextElementSibling.classList.remove('open');
             }
         });
     }
 
     /**
-     * Evento seguro para cada item que tem um submenu (ex: "Integrações").
+     * Manipulador para o botão principal que recolhe/expande a barra lateral.
+     */
+    if (toggleBtn && sidebar) {
+        toggleBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            // REGRA 1: Se o menu está expandido e vai ser recolhido, fecha os submenus primeiro.
+            if (!sidebar.classList.contains('collapsed')) {
+                closeAllSubmenus();
+            }
+            sidebar.classList.toggle('collapsed');
+        });
+    }
+
+    /**
+     * Manipulador para os itens de menu que possuem um submenu (ex: "Integrações").
      */
     if (submenuToggles && sidebar) {
         submenuToggles.forEach(toggle => {
             toggle.addEventListener('click', (e) => {
                 e.preventDefault();
-                e.stopPropagation(); // Evita que o evento borbulhe indesejadamente
 
-                const submenu = toggle.nextElementSibling;
-                if (!submenu || !submenu.classList.contains('submenu')) return;
-
-                // CASO A: A barra lateral está colapsada (recolhida).
+                // CASO A: A barra lateral está recolhida.
                 if (sidebar.classList.contains('collapsed')) {
-                    // REGRA 2: Um clique expande a barra e abre o submenu correspondente de imediato.
+                    // REGRA 2: Um clique expande a barra e abre o submenu.
                     sidebar.classList.remove('collapsed');
-                    closeAllSubmenus(); // Garante o fechamento de outros que pudessem estar abertos internamente.
                     toggle.classList.add('open');
-                    submenu.classList.add('open');
-                } 
-                // CASO B: A barra lateral já está expandida.
-                else {
-                    const wasOpen = toggle.classList.contains('open');
-                    // REGRA 3: Comportamento de "acordeão". Fecha tudo...
+                    toggle.nextElementSibling.classList.add('open');
+                } else { // CASO B: A barra lateral está expandida.
+                    const wasThisOpen = toggle.classList.contains('open');
+                    // REGRA 3: Funciona como um "acordeão". Fecha tudo...
                     closeAllSubmenus();
-                    // ...e se o clicado não estava aberto antes, abre-o agora.
-                    if (!wasOpen) {
+                    // ...e se o clicado não estava aberto, abre-o.
+                    if (!wasThisOpen) {
                         toggle.classList.add('open');
-                        submenu.classList.add('open');
+                        toggle.nextElementSibling.classList.add('open');
                     }
                 }
             });
