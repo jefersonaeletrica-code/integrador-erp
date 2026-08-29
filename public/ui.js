@@ -9,6 +9,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const currentTheme = localStorage.getItem('theme');
 
+        // Desativa temporariamente as transições para evitar o "flash" de tema no carregamento.
+        document.body.style.transition = 'none';
+
         // Aplica o tema na carga inicial
         if (currentTheme) {
             document.body.classList.toggle('dark-mode', currentTheme === 'dark');
@@ -19,6 +22,11 @@ document.addEventListener('DOMContentLoaded', () => {
             themeSwitch.checked = true;
             localStorage.setItem('theme', 'dark');
         }
+
+        // Reativa as transições após a renderização inicial do tema.
+        setTimeout(() => {
+            document.body.style.transition = '';
+        }, 10);
 
         // Listener para o interruptor de tema
         themeSwitch.addEventListener('change', function() {
@@ -71,21 +79,35 @@ document.addEventListener('DOMContentLoaded', () => {
             localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
         });
 
-        submenuToggles.forEach(toggle => {
-            toggle.addEventListener('click', (e) => {
-                e.preventDefault();
-                const wasOpen = toggle.classList.contains('open');
+        // Event listener para os botões que abrem/fecham os submenus
+        document.querySelectorAll('.submenu-toggle').forEach(toggle => {
+            toggle.addEventListener('click', e => {
+                e.preventDefault(); // Previne a navegação do link '#'
+                const parentLi = toggle.parentElement;
+                const wasOpen = parentLi.classList.contains('open');
 
+                // Se a barra estiver colapsada, expande antes de abrir um submenu
                 if (sidebar.classList.contains('collapsed')) {
                     sidebar.classList.remove('collapsed');
                     localStorage.setItem('sidebarCollapsed', 'false');
                 }
 
-                closeAllSubmenus();
-                if (!wasOpen) {
-                    toggle.classList.add('open');
-                    toggle.nextElementSibling.classList.add('open');
-                }
+                // Fecha todos os outros submenus antes de abrir um novo
+                document.querySelectorAll('.menu-links > li.open').forEach(openLi => {
+                    if (openLi !== parentLi) {
+                        openLi.classList.remove('open');
+                    }
+                });
+
+                // Alterna o estado do submenu clicado
+                parentLi.classList.toggle('open');
+            });
+        });
+
+        // Event listener para os links que carregam conteúdo
+        document.querySelectorAll('.menu-links a:not(.submenu-toggle)').forEach(link => {
+            link.addEventListener('click', e => {
+                e.stopPropagation(); // Impede que o clique feche o menu pai
             });
         });
     }
@@ -655,7 +677,11 @@ document.addEventListener('DOMContentLoaded', () => {
         'nav-conexoes-fornecedores': renderSupplierConnections,
     };
 
-    document.querySelectorAll('.menu-links a:not(.submenu-toggle)').forEach(link => {
+    // Adiciona o listener de navegação ao container dos links para delegar o evento
+    document.querySelector('.menu-links').addEventListener('click', e => {
+        const link = e.target.closest('a:not(.submenu-toggle)');
+        if (!link) return;
+
         link.addEventListener('click', (e) => {
             e.preventDefault();
             const routeHandler = routes[link.id];

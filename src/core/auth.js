@@ -1,6 +1,8 @@
 import { getLogger, createRequestId } from './logger.js';
 import { findSelector } from '../scrapers/parsers.js';
 import { initBrowser } from './browser.js'; // Importa a função de inicialização
+import ora from 'ora';
+import chalk from 'chalk';
 import fs from 'fs';
 import path from 'path';
 
@@ -181,9 +183,10 @@ async function performLogin(page, credentials, selectors) {
  * @returns {Promise<{page: import('puppeteer').Page, sessionData: object}>}
  */
 export async function tryCookieAuth(page, url, sessionData, selectors) {
+    const spinner = ora(chalk.cyan('[Auth] Validando sessão com cookies...')).start();
     const logger = getLogger();
-    logger.info('[Auth] Tentando validar sessão com dados salvos...');
 
+    // O requestHandler deve ser definido fora do try/finally para que o page.off funcione
     const requestHandler = (req) => {
         if (req.isInterceptResolutionHandled()) return;
         const resourceType = req.resourceType();
@@ -196,6 +199,7 @@ export async function tryCookieAuth(page, url, sessionData, selectors) {
 
     try {
         if (!sessionData || !sessionData.cookies || sessionData.cookies.length === 0) {
+            spinner.warn(chalk.yellow('[Auth] Nenhum dado de sessão encontrado.'));
             throw new Error("Nenhum dado de sessão fornecido para validação.");
         }
 
@@ -239,9 +243,12 @@ export async function tryCookieAuth(page, url, sessionData, selectors) {
     // (como "Olá, [Nome]") deve estar visível.
     logger.debug('[Auth] Verificando se o indicador de usuário logado está visível...');
     await page.waitForSelector(selectors.loginButton.join(','), { visible: true, timeout: 15000 });
-
-    logger.info('[Auth] Sessão com cookies validada com sucesso.');
+    
+    spinner.succeed(chalk.green('[Auth] Sessão com cookies validada com sucesso.'));
     return { page, sessionData }; // Retorna a página e os dados de sessão originais, pois são válidos
+    } catch (error) {
+        spinner.fail(chalk.yellow(`[Auth] Validação de sessão com cookies falhou: ${error.message}`));
+        throw error; // Re-lança o erro para que o fluxo de login completo seja acionado
     } finally {
         // Desativa a interceptação após a conclusão, seja sucesso ou falha.
         page.off('request', requestHandler);
@@ -257,14 +264,15 @@ export async function tryCookieAuth(page, url, sessionData, selectors) {
  * @returns {Promise<{page: import('puppeteer').Page, sessionData: object}>}
  */
 export async function tryPasswordLogin(page, options, selectors) {
+    const spinner = ora(chalk.cyan('[Auth] Iniciando login com usuário e senha...')).start();
     const logger = getLogger();
     const { url, credentials, retryAttempts, retryDelayMs, browserConfig, requestId } = options;
 
-    logger.info('[Auth] Executando fluxo de login completo com usuário e senha.');
     const authResult = await withRetry(
         async (attempt) => {
+            spinner.text = chalk.cyan(`[Auth] Tentativa de login ${attempt}/${retryAttempts}...`);
             logger.info(`[Auth] Tentativa de login completo ${attempt}: navegando para a URL.`);
-            
+
             // **LÓGICA DE RECUPERAÇÃO COMPLETA**
             // Se a página foi fechada (por erro ou desconexão), reinicia tudo.
             if (attempt > 1 && page.isClosed()) {
@@ -296,12 +304,12 @@ export async function tryPasswordLogin(page, options, selectors) {
         {
             maxAttempts: retryAttempts,
             delayMs: retryDelayMs,
-            onRetry: (attempt, error) => logger.warn(`[Auth] Tentativa ${attempt} de login completo falhou. Causa: ${error.message}.`, { requestId, attempt }),
+            onRetry: (attempt, error) => spinner.text = chalk.yellow(`[Auth] Tentativa ${attempt} falhou. Retentando... Causa: ${error.message}`),
         }
     );
     
     page = authResult.page; // Garante que a variável `page` externa seja a final
-    logger.info('[Auth] Autenticação completa bem-sucedida.', { action: 'auth_success', requestId });
+    spinner.succeed(chalk.green('[Auth] Autenticação com senha bem-sucedida!'));
     return authResult;
 }
 
@@ -329,7 +337,7 @@ export async function authenticate(page, options, selectors = DEFAULT_LOGIN_SELE
             try {
                 return await tryCookieAuth(page, url, sessionData, selectors);
             } catch (e) {
-                logger.warn(`[Auth] Sessão com cookies falhou ou expirou. Causa: ${e.message}. Prosseguindo para login completo.`);
+                logger.warn(`[Auth] Sessão com cookies inválida. Prosseguindo para login completo.`);
                 try {
                     const client = await page.target().createCDPSession();
                     await client.send('Network.clearBrowserCookies');
