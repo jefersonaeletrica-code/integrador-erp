@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs/promises';
 import erpRoutes from './api/erpRoutes.js';
 import supplierRoutes from './api/supplierRoutes.js'; // Caminho já estava correto, apenas confirmando
 import productRoutes from './api/productRoutes.js';
@@ -8,6 +9,9 @@ import { loadInitialData } from './services/productService.js'; // productServic
 
 export async function createApp(db) {
     const app = express();
+    // Gera um identificador único na inicialização do servidor.
+    // Isso garante que, a cada nova implantação, os arquivos de cache sejam invalidados.
+    const cacheBuster = Date.now().toString();
     const logger = getLogger();
 
     // Middleware de Log de Requisições:
@@ -47,8 +51,18 @@ export async function createApp(db) {
     // Rota "Catch-All": Para qualquer outra requisição que não seja de API,
     // serve o index.html. Isso é crucial para o funcionamento do roteamento
     // no lado do cliente (Single-Page Application).
-    app.get('*', (req, res) => {
-        res.sendFile(path.join(process.cwd(), 'public', 'index.html'));
+    app.get('*', async (req, res, next) => {
+        try {
+            const indexPath = path.join(process.cwd(), 'public', 'index.html');
+            let html = await fs.readFile(indexPath, 'utf-8');
+            
+            // Substitui o placeholder pela versão única gerada na inicialização.
+            html = html.replace(/__CACHE_BUSTER__/g, cacheBuster);
+
+            res.setHeader('Content-Type', 'text/html').send(html);
+        } catch (error) {
+            next(error); // Passa o erro para o próximo manipulador de erros do Express.
+        }
     });
 
     return { app };
