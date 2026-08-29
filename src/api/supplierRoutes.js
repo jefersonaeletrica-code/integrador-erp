@@ -44,14 +44,18 @@ export default (db) => {
     router.get('/supplier-connections/:id', async (req, res) => {
         const { id } = req.params;
         const pool = db.getPool();
-        const [rows] = await pool.execute('SELECT * FROM supplier_connections WHERE id = ?', [id]);
-        const connection = rows[0];
-
-        if (!connection) {
-            return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
+        try {
+            const [rows] = await pool.execute('SELECT * FROM supplier_connections WHERE id = ?', [id]);
+            if (rows.length === 0) {
+                return res.status(404).json({ sucesso: false, erro: 'Conexão de fornecedor não encontrada.' });
+            }
+            const connection = rows[0];
+            // Garante que as credenciais sejam enviadas como um objeto JSON, não uma string.
+            connection.credentials = typeof connection.credentials === 'string' ? JSON.parse(connection.credentials) : connection.credentials;
+            res.json({ sucesso: true, connection });
+        } catch (e) {
+            res.status(500).json({ sucesso: false, erro: `Erro ao buscar conexão: ${e.message}` });
         }
-        // Retorna as credenciais completas para o formulário de edição
-        res.json({ sucesso: true, connection });
     });
 
     router.put('/supplier-connections/:id', async (req, res) => {
