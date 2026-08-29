@@ -495,58 +495,63 @@ td .btn {
     border: 1px solid var(--color-border);
     display: flex;
     flex-direction: column;
-    transition: transform var(--transition-speed) ease, box-shadow var(--transition-speed) ease;
+    transition: transform var(--transition-speed) ease, box-shadow var(--transition-speed) ease, border-color var(--transition-speed) ease;
 }
 
 .connection-card:hover {
-    transform: translateY(-4px);
+    transform: translateY(-5px) scale(1.02);
     box-shadow: var(--shadow-md);
+    border-color: var(--color-primary);
 }
 
 .connection-card .card-header {
-    padding: 1.5rem 1.5rem 1rem;
+    padding: 1.5rem;
     border-bottom: 1px solid var(--color-border);
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 80px;
+    min-height: 100px; /* Increased height */
 }
 
 .connection-card .erp-logo {
-    height: 40px; /* Aumenta a altura para dar mais destaque */
-    max-width: 120px;
+    height: 50px; /* Increased logo size */
+    max-width: 140px;
     object-fit: contain;
-    border-radius: var(--border-radius); /* Arredonda os cantos de todos os logotipos */
 }
 
 .dark-mode .connection-card .logo-cisspoder {
-    /* O logo da Ciss é branco, então adicionamos um fundo para que ele seja visível no tema escuro. */
-    background-color: white;
-    padding: 0.5rem; /* Adiciona um preenchimento para o logo não ficar colado nas bordas */
+    background-color: #fff;
+    padding: 0.5rem;
+    border-radius: var(--border-radius);
 }
 
 .connection-card .card-body {
-    padding: 1rem 1.5rem;
+    padding: 1.5rem;
     flex-grow: 1;
+    text-align: center; /* Center align text */
 }
 
 .connection-card .card-title {
-    font-size: 1.1rem;
+    font-size: 1.2rem; /* Larger title */
     font-weight: 600;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.75rem;
 }
 
 .connection-card .card-status {
     font-size: 0.9rem;
     color: var(--color-text-offset);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
 }
 
 .connection-card .card-footer {
     padding: 1rem 1.5rem;
     border-top: 1px solid var(--color-border);
     display: flex;
-    justify-content: flex-end;
-    gap: 0.5rem;
+    justify-content: center; /* Center buttons */
+    gap: 1rem; /* Increased gap */
 }
 
 .supplier-card .card-icon {

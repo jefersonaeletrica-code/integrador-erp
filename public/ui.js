@@ -368,10 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const getLogoUrl = (type) => ({
-                'bling': 'https://www.bling.com.br/imagens/front/bling_2.svg',
-                'cisspoder': 'https://www.ciss.com.br/wp-content/uploads/2023/08/logo-ciss-white.svg'
-            }[type] || '');
+            const getLogoUrl = (type) => `/assets/logos/${type.toLowerCase()}.png`;
 
             const fragment = document.createDocumentFragment();
             const pageHeader = createElement('div', { class: 'page-header' });
@@ -383,10 +380,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const card = createElement('div', { class: 'connection-card' });
 
                 const cardHeader = createElement('div', { class: 'card-header' });
-                const logo = createElement('img', { 
-                    src: getLogoUrl(conn.type), 
-                    alt: `Logo ${conn.type}`, 
-                    class: `erp-logo ${conn.type === 'cisspoder' ? 'logo-cisspoder' : ''}`
+                const logo = createElement('img', {
+                    src: getLogoUrl(conn.type),
+                    alt: `Logo ${conn.type}`,
+                    class: `erp-logo logo-${conn.type}`
                 });
                 cardHeader.appendChild(logo);
 
