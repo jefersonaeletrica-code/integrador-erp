@@ -2,7 +2,6 @@ import { initBrowser, closeBrowser } from './browser.js'; // browser.js também 
 import { authenticate } from './auth.js'; // auth.js já está em src/core
 import puppeteer from 'puppeteer';
 import { getLogger } from './logger.js'; // logger.js também vai para src/core
-import { getLogger } from './logger.js';
 import * as db from '../database/db.mysql.js'; // CORREÇÃO: Aponta para o DB correto
 
 const logger = getLogger();

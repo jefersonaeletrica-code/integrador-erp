@@ -1,5 +1,5 @@
-import db from './db.js';
-import { getLogger } from './logger.js';
+import * as db from '../database/db.mysql.js';
+import { getLogger } from '../core/logger.js';
 
 export let produtosImportados = []; // Estado local para produtos importados
 
