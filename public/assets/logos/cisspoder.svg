@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 70" width="100%" height="100%">
+  <defs>
+    <linearGradient id="cissOrange" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF6B00"/>
+      <stop offset="100%" stop-color="#E54E00"/>
+    </linearGradient>
+    <linearGradient id="cissBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0066B3"/>
+      <stop offset="100%" stop-color="#004380"/>
+    </linearGradient>
+  </defs>
+  <!-- Icon Symbol -->
+  <g transform="translate(10, 10)">
+    <rect width="50" height="50" rx="14" fill="url(#cissOrange)"/>
+    <!-- CISS Symbol: stylized C and lightning bolt -->
+    <path d="M 36 18 C 33 15 28 15 24 18 C 19 22 19 29 24 33 C 28 36 33 36 36 33" fill="none" stroke="#ffffff" stroke-width="4.5" stroke-linecap="round"/>
+    <path d="M 27 26 L 22 34 L 27 34 L 25 41 L 32 32 L 27 32 Z" fill="#ffffff"/>
+  </g>
+  <!-- Text: CissPoder -->
+  <text x="72" y="44" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="28" font-weight="900" fill="#004B87" letter-spacing="-0.5">CISS</text>
+  <text x="142" y="44" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="28" font-weight="800" fill="#FF6B00" letter-spacing="-0.5">Poder</text>
+  <text x="73" y="58" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="10" font-weight="700" fill="#8898AA" letter-spacing="1.5">SISTEMA ERP</text>
+</svg>
+

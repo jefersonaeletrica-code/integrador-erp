@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 70" width="100%" height="100%">
+  <defs>
+    <linearGradient id="blingGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00A868"/>
+      <stop offset="100%" stop-color="#007C4D"/>
+    </linearGradient>
+  </defs>
+  <!-- Icon Symbol -->
+  <rect x="10" y="10" width="50" height="50" rx="14" fill="url(#blingGrad)"/>
+  <path d="M 28 20 L 28 50 L 40 50 C 46 50 50 46 50 41 C 50 37.5 48 35 44.5 34 C 47.5 33 49 30.5 49 27.5 C 49 23 45.5 20 40 20 Z M 34 25.5 L 39.5 25.5 C 42 25.5 43.5 26.5 43.5 28.5 C 43.5 30.5 42 31.5 39.5 31.5 L 34 31.5 Z M 34 37 L 40 37 C 43 37 44.5 38.2 44.5 40.5 C 44.5 42.8 43 44 40 44 L 34 44 Z" fill="#ffffff"/>
+  <!-- Text: bling -->
+  <text x="75" y="47" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="34" font-weight="800" fill="#1C2833" letter-spacing="-1">bling</text>
+  <circle cx="162" cy="24" r="4.5" fill="#00A868"/>
+  <text x="175" y="46" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="16" font-weight="700" fill="#00A868">ERP</text>
+</svg>
+

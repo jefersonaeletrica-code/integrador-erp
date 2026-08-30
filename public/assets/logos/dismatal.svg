@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 70" width="100%" height="100%">
+  <defs>
+    <linearGradient id="dismatalBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0E4D92"/>
+      <stop offset="100%" stop-color="#082A52"/>
+    </linearGradient>
+    <linearGradient id="dismatalGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFB800"/>
+      <stop offset="100%" stop-color="#E59400"/>
+    </linearGradient>
+  </defs>
+  <!-- Icon Symbol: Truck / Gear / Shield -->
+  <g transform="translate(10, 10)">
+    <rect width="50" height="50" rx="14" fill="url(#dismatalBlue)"/>
+    <!-- Gear & Truck front silhouette -->
+    <path d="M 17 34 L 17 26 C 17 24 19 22 21 22 L 31 22 C 33 22 34 23 35 25 L 38 29 L 38 34 Z" fill="none" stroke="#FFB800" stroke-width="2.5" stroke-linejoin="round"/>
+    <line x1="17" y1="29" x2="38" y2="29" stroke="#FFB800" stroke-width="2"/>
+    <circle cx="21" cy="35" r="3.5" fill="#FFB800"/>
+    <circle cx="34" cy="35" r="3.5" fill="#FFB800"/>
+    <path d="M 23 16 L 27 16 L 27 19 L 23 19 Z" fill="#ffffff"/>
+  </g>
+  <!-- Text: DISMATAL -->
+  <text x="72" y="42" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="26" font-weight="900" fill="#0E4D92" letter-spacing="1">DISMATAL</text>
+  <text x="73" y="56" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="9" font-weight="700" fill="#E59400" letter-spacing="1.5">DISTRIBUIDORA DE AUTOPEÇAS</text>
+</svg>
+

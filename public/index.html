@@ -3,71 +3,114 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Integrador ERP</title>
+    <title>Integrador ERP & Fornecedores</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- O placeholder __CACHE_BUSTER__ será substituído dinamicamente pelo servidor -->
     <link rel="stylesheet" href="style.css?v=__CACHE_BUSTER__">
-    <!-- Adicionando Font Awesome para ícones -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
 </head>
 <body>
     <div class="sidebar">
         <div class="sidebar-header">
-            <h3 class="link-text">Integrador</h3>
-            <button class="toggle-btn"><i class="fas fa-bars"></i></button>
+            <a href="#" id="brand-link" class="brand-link" title="Ir para o Dashboard">
+                <div class="brand-icon"><i class="fas fa-network-wired"></i></div>
+                <h3 class="link-text brand-title">Integrador</h3>
+            </a>
+            <button class="toggle-btn" aria-label="Alternar Menu Lateral" title="Recolher/Expandir Menu">
+                <i class="fas fa-bars"></i>
+            </button>
         </div>
         <div class="sidebar-content">
             <ul class="menu-links">
                 <li>
-                    <a href="#" id="nav-produtos">
-                        <i class="fas fa-box-open"></i>
-                        <span class="link-text">Produtos</span>
+                    <a href="#" id="nav-dashboard" class="active">
+                        <i class="fas fa-chart-pie"></i>
+                        <span class="link-text">Dashboard</span>
                     </a>
                 </li>
                 <li>
+                    <a href="#" id="nav-produtos">
+                        <i class="fas fa-boxes-stacked"></i>
+                        <span class="link-text">Produtos</span>
+                    </a>
+                </li>
+                <li class="open">
                     <a href="#" class="submenu-toggle">
-                        <i class="fas fa-cogs"></i>
+                        <i class="fas fa-plug-circle-bolt"></i>
                         <span class="link-text">Integrações</span>
                         <i class="fas fa-chevron-down arrow"></i>
                     </a>
                     <ul class="submenu">
-                        <li><a href="#" id="nav-conexoes-erp"><span class="link-text">Conexões ERP</span></a></li>
-                        <li><a href="#" id="nav-conexoes-fornecedores"><span class="link-text">Conexões Fornecedores</span></a></li>
+                        <li>
+                            <a href="#" id="nav-conexoes-erp">
+                                <i class="fas fa-server"></i>
+                                <span class="link-text">Conexões ERP</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#" id="nav-conexoes-fornecedores">
+                                <i class="fas fa-truck-fast"></i>
+                                <span class="link-text">Conexões Fornecedores</span>
+                            </a>
+                        </li>
                     </ul>
                 </li>
             </ul>
         </div>
         <div class="sidebar-footer">
-            <button id="theme-toggle-btn" class="theme-toggle-btn" title="Alternar tema">
+            <button id="theme-toggle-btn" class="theme-toggle-btn" title="Alternar tema Claro / Escuro">
                 <i class="fas fa-moon moon-icon"></i>
                 <i class="fas fa-sun sun-icon"></i>
-                <span class="link-text">Tema</span>
+                <span class="link-text">Alternar Tema</span>
             </button>
         </div>
     </div>
 
     <main class="content">
         <header class="main-header">
-            <h1 id="main-title">Bem-vindo ao Integrador ERP</h1>
+            <div class="header-titles">
+                <h1 id="main-title">Visão Geral do Integrador</h1>
+                <p id="main-subtitle" class="header-subtitle">Monitore e gerencie suas conexões de ERP e fornecedores</p>
+            </div>
+            <div id="header-actions" class="header-actions">
+                <!-- Botões de ação dinâmicos do cabeçalho da página -->
+            </div>
         </header>
-        <div id="page-content">
+        <div id="page-content" class="page-content-area">
             <!-- Conteúdo das páginas será carregado aqui -->
-            <!-- O container de toasts será criado e inserido aqui pelo ui.js -->
         </div>
     </main>
 
     <!-- Modal para Adicionar/Editar Conexões -->
     <div id="form-modal" class="modal" style="display: none;">
+        <div class="modal-backdrop"></div>
         <div class="modal-content">
             <div class="modal-header">
-                <h2 class="modal-title"></h2>
-                <button class="modal-close">&times;</button>
+                <div class="modal-title-wrapper">
+                    <div class="modal-icon-badge" id="modal-icon-badge">
+                        <i class="fas fa-sliders"></i>
+                    </div>
+                    <div>
+                        <h2 class="modal-title" id="modal-title">Configurar Conexão</h2>
+                        <p class="modal-subtitle" id="modal-subtitle">Preencha as credenciais e detalhes da integração</p>
+                    </div>
+                </div>
+                <button class="modal-close" title="Fechar">&times;</button>
             </div>
             <div class="modal-body">
                 <form id="modal-form"><div id="form-fields"></div></form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary modal-cancel">Cancelar</button>
-                <button type="submit" form="modal-form" class="btn btn-primary">Salvar</button>
+                <button type="button" class="btn btn-secondary modal-cancel">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="submit" form="modal-form" class="btn btn-primary" id="modal-save-btn">
+                    <i class="fas fa-check"></i> Salvar Conexão
+                </button>
             </div>
         </div>
     </div>
