@@ -243,8 +243,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!type) return isSupplier ? '/assets/logos/default-supplier.svg' : '/assets/logos/default-erp.svg';
         const cleanType = type.toLowerCase().trim();
         if (cleanType === 'bling') return '/assets/logos/bling.svg';
-        if (cleanType === 'cisspoder' || cleanType === 'ciss') return '/assets/logos/cisspoder.svg';
-        if (cleanType.includes('dismatal')) return '/assets/logos/dismatal.svg';
+        if (cleanType === 'cisspoder' || cleanType === 'ciss') return '/assets/logos/cisspoder.jpg';
+        if (cleanType.includes('dismatal')) return '/assets/logos/dismatal.jpg';
         return isSupplier ? '/assets/logos/default-supplier.svg' : '/assets/logos/default-erp.svg';
     }
 
@@ -417,58 +417,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return fragment;
     };
 
-    const generateSupplierForm = (conn = {}) => {
-        let credsText = '';
-        if (conn.credentials) {
-            credsText = typeof conn.credentials === 'string' ? conn.credentials : JSON.stringify(conn.credentials, null, 2);
-        } else {
-            credsText = JSON.stringify({
-                url: "https://www.dismatal.com.br",
-                username: "",
-                password: ""
-            }, null, 2);
-        }
-
-        const fragment = document.createDocumentFragment();
-
-        const idInput = document.createElement('input');
-        idInput.type = 'hidden';
-        idInput.name = 'id';
-        idInput.value = conn.id || '';
-        fragment.appendChild(idInput);
-
-        const nameInput = document.createElement('input');
-        nameInput.type = 'text';
-        nameInput.id = 'name';
-        nameInput.name = 'name';
-        nameInput.className = 'form-control';
-        nameInput.placeholder = 'Ex: Dismatal Distribuidora';
-        nameInput.value = conn.name || 'Dismatal';
-        nameInput.required = true;
-        fragment.appendChild(createFormGroup('Nome do Fornecedor', nameInput));
-
-        const typeSelect = document.createElement('select');
-        typeSelect.id = 'type';
-        typeSelect.name = 'type';
-        typeSelect.className = 'form-control';
-        typeSelect.required = true;
-        typeSelect.innerHTML = `
-            <option value="dismatal_webscraper" selected>Dismatal (Web Scraper Automatizado)</option>
-        `;
-        fragment.appendChild(createFormGroup('Tipo de Integração', typeSelect));
-
-        const credsTextarea = document.createElement('textarea');
-        credsTextarea.id = 'credentials';
-        credsTextarea.name = 'credentials';
-        credsTextarea.className = 'form-control';
-        credsTextarea.rows = 8;
-        credsTextarea.value = credsText;
-        credsTextarea.required = true;
-        fragment.appendChild(createFormGroup('Credenciais e Parâmetros (Formato JSON)', credsTextarea, 'Insira o JSON com as credenciais necessárias para autenticação e raspagem.'));
-
-        return fragment;
-    };
-
     const setupJsonValidation = () => {
         const credentialsTextarea = document.getElementById('credentials');
         if (!credentialsTextarea) return;
@@ -494,6 +442,73 @@ document.addEventListener('DOMContentLoaded', () => {
 
         credentialsTextarea.addEventListener('input', validate);
         validate();
+    };
+
+    const generateSupplierForm = (conn = {}) => {
+        const creds = conn.credentials || {};
+        const fragment = document.createDocumentFragment();
+
+        // ID Oculto
+        const idInput = document.createElement('input');
+        idInput.type = 'hidden';
+        idInput.name = 'id';
+        idInput.value = conn.id || '';
+        fragment.appendChild(idInput);
+
+        // Campo Nome
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.id = 'name';
+        nameInput.name = 'name';
+        nameInput.className = 'form-control';
+        nameInput.placeholder = 'Ex: Dismatal Distribuidora';
+        nameInput.value = conn.name || 'Dismatal';
+        nameInput.required = true;
+        fragment.appendChild(createFormGroup('Nome do Fornecedor', nameInput));
+
+        // Campo Tipo
+        const typeSelect = document.createElement('select');
+        typeSelect.id = 'type';
+        typeSelect.name = 'type';
+        typeSelect.className = 'form-control';
+        typeSelect.required = true;
+        typeSelect.innerHTML = `
+            <option value="dismatal_webscraper" selected>Dismatal (Web Scraper Automatizado)</option>
+        `;
+        fragment.appendChild(createFormGroup('Tipo de Integração', typeSelect));
+
+        // Campos de Credenciais
+        const urlInput = document.createElement('input');
+        urlInput.type = 'text';
+        urlInput.id = 'supplier_url';
+        urlInput.name = 'supplier_url';
+        urlInput.className = 'form-control';
+        urlInput.placeholder = 'https://www.dismatal.com.br';
+        urlInput.value = creds.url || 'https://www.dismatal.com.br';
+        urlInput.required = true;
+        fragment.appendChild(createFormGroup('URL do Portal', urlInput));
+
+        const userInput = document.createElement('input');
+        userInput.type = 'text';
+        userInput.id = 'supplier_username';
+        userInput.name = 'supplier_username';
+        userInput.className = 'form-control';
+        userInput.placeholder = 'Seu CNPJ ou usuário de acesso';
+        userInput.value = creds.username || '';
+        userInput.required = true;
+        fragment.appendChild(createFormGroup('Usuário (CNPJ)', userInput));
+
+        const passInput = document.createElement('input');
+        passInput.type = 'password';
+        passInput.id = 'supplier_password';
+        passInput.name = 'supplier_password';
+        passInput.className = 'form-control';
+        passInput.placeholder = 'Sua senha de acesso';
+        passInput.value = creds.password || '';
+        passInput.required = true;
+        fragment.appendChild(createFormGroup('Senha', passInput));
+
+        return fragment;
     };
 
     /**
@@ -534,7 +549,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="hero-badge"><i class="fas fa-circle-nodes"></i> Hub Central de Integrações</span>
                         <h2 class="hero-title">Bem-vindo ao Integrador ERP</h2>
                         <p class="hero-description">
-                            Conecte e sincronize dados entre sistemas ERP (Bling, CissPoder) e distribuidores de autopeças como a Dismatal em tempo real.
+                            Conecte e sincronize dados entre sistemas ERP e distribuidores em tempo real.
                         </p>
                         <div class="hero-actions">
                             <button class="btn btn-primary" data-action="nav-goto-products">
@@ -912,12 +927,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <div class="card-footer">
                             <div class="card-footer-actions-left">
-                                <button class="btn btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Verificar se a sessão salva ainda é válida">
+                                <!-- <button class="btn btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Verificar se a sessão salva ainda é válida">
                                     <i class="fas fa-shield-halved"></i> Validar
                                 </button>
                                 <button class="btn btn-small btn-warning" data-action="auth-supplier" data-id="${conn.id}" title="Forçar novo login para renovar os cookies de sessão">
                                     <i class="fas fa-rotate"></i> Renovar
-                                </button>
+                                </button> -->
                                 <button class="btn btn-small btn-secondary" data-action="test-scraper-link" data-id="${conn.id}" title="Abrir interface de teste do raspador">
                                     <i class="fas fa-vial"></i> Testar
                                 </button>
@@ -1276,7 +1291,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 formFields.innerHTML = '';
                 formFields.appendChild(isErp ? generateErpForm() : generateSupplierForm());
                 openModal();
-                if (!isErp) setupJsonValidation();
 
                 modalForm.onsubmit = async (ev) => {
                     ev.preventDefault();
@@ -1301,7 +1315,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                 body.credentials.password = formData.get('password');
                             }
                         } else {
-                            body.credentials = JSON.parse(formData.get('credentials'));
+                            // Monta o objeto de credenciais a partir dos campos individuais
+                            body.credentials.url = formData.get('supplier_url');
+                            body.credentials.username = formData.get('supplier_username');
+                            body.credentials.password = formData.get('supplier_password');
                         }
 
                         await api(endpoint, 'POST', body);
@@ -1331,7 +1348,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 formFields.innerHTML = '';
                 formFields.appendChild(isErp ? generateErpForm(connection) : generateSupplierForm(connection));
                 openModal();
-                if (!isErp) setupJsonValidation();
 
                 modalForm.onsubmit = async (ev) => {
                     ev.preventDefault();
@@ -1356,7 +1372,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                 body.credentials.password = formData.get('password');
                             }
                         } else {
-                            body.credentials = JSON.parse(formData.get('credentials'));
+                            // Monta o objeto de credenciais a partir dos campos individuais
+                            body.credentials.url = formData.get('supplier_url');
+                            body.credentials.username = formData.get('supplier_username');
+                            body.credentials.password = formData.get('supplier_password');
                         }
 
                         await api(`${endpoint}/${id}`, 'PUT', body);
