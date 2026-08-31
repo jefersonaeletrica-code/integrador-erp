@@ -268,49 +268,50 @@ export async function tryPasswordLogin(page, options, selectors) {
     const logger = getLogger();
     const { url, credentials, retryAttempts, retryDelayMs, browserConfig, requestId } = options;
 
-    const authResult = await withRetry(
-        async (attempt) => {
-            spinner.text = chalk.cyan(`[Auth] Tentativa de login ${attempt}/${retryAttempts}...`);
-            logger.info(`[Auth] Tentativa de login completo ${attempt}: navegando para a URL.`);
-
-            // **LÓGICA DE RECUPERAÇÃO COMPLETA**
-            // Se a página foi fechada (por erro ou desconexão), reinicia tudo.
-            if (attempt > 1 && page.isClosed()) {
-                logger.warn(`[Auth] A página está fechada. Reiniciando a conexão do navegador para a tentativa ${attempt}...`);
-                const newInstance = await initBrowser(browserConfig);
-                page = newInstance.page; // Usa a nova página e o novo browser
-            }
-
-            // Otimização de Performance: Bloqueia recursos desnecessários durante o login
-            await page.setRequestInterception(true);
-            page.on('request', (req) => {
-                if (req.isInterceptResolutionHandled()) return;
-                const resourceType = req.resourceType();
-                if (['image', 'font', 'media'].includes(resourceType)) {
-                    req.abort();
-                } else {
-                    req.continue();
-                }
-            });
-            // Desativa o cache para garantir que o fluxo de login não use dados antigos
-            await page.setCacheEnabled(false);
-
-            await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120000 });
-            // A função performLogin retorna { page, sessionData }
-            const result = await performLogin(page, credentials, selectors);
-            // Retorna o resultado completo, incluindo a instância da página usada.
-            return { ...result, page };
-        },
-        {
-            maxAttempts: retryAttempts,
-            delayMs: retryDelayMs,
-            onRetry: (attempt, error) => spinner.text = chalk.yellow(`[Auth] Tentativa ${attempt} falhou. Retentando... Causa: ${error.message}`),
+    const requestHandler = (req) => {
+        if (req.isInterceptResolutionHandled()) return;
+        const resourceType = req.resourceType();
+        if (['image', 'font', 'media'].includes(resourceType)) {
+            req.abort().catch(() => {}); // Adicionado catch para suprimir erros
+        } else {
+            req.continue().catch(() => {}); // Adicionado catch para suprimir erros
         }
-    );
-    
-    page = authResult.page; // Garante que a variável `page` externa seja a final
-    spinner.succeed(chalk.green('[Auth] Autenticação com senha bem-sucedida!'));
-    return authResult;
+    };
+
+    try {
+        const authResult = await withRetry(
+            async (attempt) => {
+                spinner.text = chalk.cyan(`[Auth] Tentativa de login ${attempt}/${retryAttempts}...`);
+                logger.info(`[Auth] Tentativa de login completo ${attempt}: navegando para a URL.`);
+
+                if (attempt > 1 && page.isClosed()) {
+                    logger.warn(`[Auth] A página está fechada. Reiniciando a conexão do navegador para a tentativa ${attempt}...`);
+                    const newInstance = await initBrowser(browserConfig);
+                    page = newInstance.page;
+                }
+
+                await page.setRequestInterception(true);
+                page.on('request', requestHandler);
+                await page.setCacheEnabled(false);
+
+                await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 120000 });
+                const result = await performLogin(page, credentials, selectors);
+                return { ...result, page };
+            },
+            {
+                maxAttempts: retryAttempts,
+                delayMs: retryDelayMs,
+                onRetry: (attempt, error) => spinner.text = chalk.yellow(`[Auth] Tentativa ${attempt} falhou. Retentando... Causa: ${error.message}`),
+            }
+        );
+
+        page = authResult.page;
+        spinner.succeed(chalk.green('[Auth] Autenticação com senha bem-sucedida!'));
+        return authResult;
+    } finally {
+        page.off('request', requestHandler);
+        if (!page.isClosed()) await page.setRequestInterception(false);
+    }
 }
 
 /**

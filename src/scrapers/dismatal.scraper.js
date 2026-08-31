@@ -87,56 +87,57 @@ export class DismatalScraper {
      */
     async _tryDirectNavigation(page, url, searchTerm) {
         const productUrl = `${url}/produtos/${searchTerm}`;
-
-        // OTIMIZAÇÃO: Bloqueia recursos desnecessários para acelerar o carregamento.
-        await page.setRequestInterception(true);
         const requestHandler = (req) => {
             if (req.isInterceptResolutionHandled()) return;
             if (['image', 'stylesheet', 'font', 'media'].includes(req.resourceType())) {
-                req.abort();
+                req.abort().catch(() => {});
             } else {
-                req.continue();
+                req.continue().catch(() => {});
             }
         };
-        page.on('request', requestHandler);
 
-        this.logger.info(`[DismatalScraper] Navegando para a URL do produto: ${productUrl}`);
-        await page.goto(productUrl, { waitUntil: 'domcontentloaded', timeout: 120000 }); // Timeout de 2 minutos
-
-        // Tenta fechar qualquer modal de boas-vindas que possa ter aparecido.
-        await this._closeWelcomeModal(page);
-
-        // Adiciona o screenshot solicitado APÓS fechar o modal.
         try {
-            const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
-            fs.mkdirSync(screenshotDir, { recursive: true });
-            const screenshotPath = path.join(screenshotDir, `dismatal-after-product-nav-${Date.now()}.png`);
-            await page.screenshot({ path: screenshotPath, fullPage: true });
-            this.logger.info(`[DismatalScraper] Screenshot após navegação para produto salvo em: ${screenshotPath}`);
-        } catch (screenshotError) {
-            this.logger.error('[DismatalScraper] Falha ao capturar screenshot após fechar o modal.', screenshotError);
+            // OTIMIZAÇÃO: Bloqueia recursos desnecessários para acelerar o carregamento.
+            await page.setRequestInterception(true);
+            page.on('request', requestHandler);
+
+            this.logger.info(`[DismatalScraper] Navegando para a URL do produto: ${productUrl}`);
+            await page.goto(productUrl, { waitUntil: 'domcontentloaded', timeout: 120000 }); // Timeout de 2 minutos
+
+            // Tenta fechar qualquer modal de boas-vindas que possa ter aparecido.
+            await this._closeWelcomeModal(page);
+
+            // Adiciona o screenshot solicitado APÓS fechar o modal.
+            try {
+                const screenshotDir = path.join(process.cwd(), 'debug_screenshots');
+                fs.mkdirSync(screenshotDir, { recursive: true });
+                const screenshotPath = path.join(screenshotDir, `dismatal-after-product-nav-${Date.now()}.png`);
+                await page.screenshot({ path: screenshotPath, fullPage: true });
+                this.logger.info(`[DismatalScraper] Screenshot após navegação para produto salvo em: ${screenshotPath}`);
+            } catch (screenshotError) {
+                this.logger.error('[DismatalScraper] Falha ao capturar screenshot após fechar o modal.', screenshotError);
+            }
+
+            // LOG DE DEPURAÇÃO: Salva o conteúdo HTML da página para análise.
+            try {
+                const pageContent = await page.content();
+                const debugDir = path.join(process.cwd(), 'debug_screenshots');
+                fs.mkdirSync(debugDir, { recursive: true });
+                const htmlLogPath = path.join(debugDir, `dismatal-page-content-${Date.now()}.html`);
+                fs.writeFileSync(htmlLogPath, pageContent, 'utf8');
+                this.logger.info(`[DismatalScraper] Conteúdo HTML da página salvo para depuração em: ${htmlLogPath}`);
+            } catch (logError) {
+                this.logger.error('[DismatalScraper] Falha ao salvar o log de conteúdo HTML.', logError);
+            }
+
+            // Extrair os dados da página.
+            this.logger.info(`[DismatalScraper] URL final: ${page.url()}`);
+            return await this.extractProductData(page, searchTerm, this.selectors.productDetailContainer);
+        } finally {
+            // Desativa a interceptação para não afetar outras operações.
+            page.off('request', requestHandler);
+            if (!page.isClosed()) await page.setRequestInterception(false);
         }
-
-        // LOG DE DEPURAÇÃO: Salva o conteúdo HTML da página para análise.
-        try {
-            const pageContent = await page.content();
-            const debugDir = path.join(process.cwd(), 'debug_screenshots');
-            fs.mkdirSync(debugDir, { recursive: true });
-            const htmlLogPath = path.join(debugDir, `dismatal-page-content-${Date.now()}.html`);
-            fs.writeFileSync(htmlLogPath, pageContent, 'utf8');
-            this.logger.info(`[DismatalScraper] Conteúdo HTML da página salvo para depuração em: ${htmlLogPath}`);
-        } catch (logError) {
-            this.logger.error('[DismatalScraper] Falha ao salvar o log de conteúdo HTML.', logError);
-        }
-
-        // Desativa a interceptação para não afetar outras operações.
-        page.off('request', requestHandler);
-        await page.setRequestInterception(false);
-
-        // Extrair os dados da página.
-        this.logger.info(`[DismatalScraper] URL final: ${page.url()}`);
-        const extractedProducts = await this.extractProductData(page, searchTerm, this.selectors.productDetailContainer);
-        return extractedProducts;
     }
 
     /**
