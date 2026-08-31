@@ -49,7 +49,7 @@ export async function fetchProductsByCode(connection, code, page) {
     return service.fetchProductsByCode(connection, code, page);
 }
 
-export async function fetchProductsByName(connection, name, page) {
+export async function fetchProductsByName(connection, name, page, limit) {
     const service = getService(connection.type);
-    return service.fetchProductsByName(connection, name, page);
+    return service.fetchProductsByName(connection, name, page, limit);
 }
