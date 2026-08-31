@@ -217,18 +217,35 @@ export default (db) => {
 
             let rawData;
             if (connection.type === 'bling') {
-                // LÓGICA CORRIGIDA: Faz uma chamada inicial para obter o total de itens.
-                logger.info(`[ERPRoutes] Bling: Buscando contagem total de itens para o termo "${searchTerm}"...`);
-                const countData = await erpService.fetchProductsByName(connection, searchTerm, 1, 1); // page=1, limit=1
-                const totalItems = countData.meta?.total || 0;
-                logger.info(`[ERPRoutes] Bling: Contagem total de itens retornada pela API: ${totalItems}`);
+                // LÓGICA CORRIGIDA: Busca por nome e código em paralelo e combina os resultados.
+                logger.info(`[ERPRoutes] Bling: Iniciando busca combinada por nome e código para o termo "${searchTerm}"...`);
+
+                // 1. Executa as buscas por nome e código em paralelo para obter os totais.
+                const [nameResults, codeResults] = await Promise.all([
+                    erpService.fetchProductsByName(connection, searchTerm, 1, 100), // Busca a primeira página completa
+                    erpService.fetchProductsByCode(connection, searchTerm, 1, 100)  // Busca a primeira página completa
+                ]);
+
+                // 2. Combina os resultados e remove duplicatas usando um Map pelo ID do produto.
+                const combinedProductsMap = new Map();
+                (nameResults.data || []).forEach(p => combinedProductsMap.set(p.id, p));
+                (codeResults.data || []).forEach(p => combinedProductsMap.set(p.id, p));
+
+                const allProducts = Array.from(combinedProductsMap.values());
+                const totalItems = allProducts.length; // O total de itens é o tamanho da lista combinada e única.
+
+                logger.info(`[ERPRoutes] Bling: Busca combinada resultou em ${totalItems} produtos únicos.`);
+
+                // 3. Calcula a paginação com base no total de itens únicos.
                 const limit = 100; // Limite padrão do Bling
                 paginationInfo.totalPages = totalItems > 0 ? Math.ceil(totalItems / limit) : 1;
                 paginationInfo.totalItems = totalItems;
+                paginationInfo.currentPage = parseInt(page, 10);
 
-                // Agora, busca a página de produtos solicitada.
-                logger.info(`[ERPRoutes] Bling: Buscando produtos da página ${page} de ${paginationInfo.totalPages}...`);
-                rawData = await erpService.fetchProductsByName(connection, searchTerm, page, limit);
+                // 4. "Fatia" o array combinado para retornar apenas os produtos da página solicitada.
+                const startIndex = (page - 1) * limit;
+                const paginatedProducts = allProducts.slice(startIndex, startIndex + limit);
+                rawData = { data: paginatedProducts }; // Formata para corresponder à estrutura esperada.
             } else {
                 // Lógica para outros ERPs (CissPoder)
                 rawData = isSku(searchTerm)
