@@ -213,24 +213,29 @@ export default (db) => {
             let apiProducts = [];
             let paginationInfo = { currentPage: parseInt(page, 10), totalPages: 1, totalItems: 0 };
 
-            // Garante que o token de acesso seja válido antes de fazer a chamada
             await erpService.ensureValidToken(connection, db);
 
-            // Determina se a busca é por SKU ou por nome e chama o serviço apropriado
-            const rawData = isSku(searchTerm)
-                ? await erpService.fetchProductsByCode(connection, searchTerm, page)
-                : await erpService.fetchProductsByName(connection, searchTerm, page);
-
-            // Extrai os produtos do campo 'data' da resposta
-            apiProducts = rawData.data || [];
-
+            let rawData;
             if (connection.type === 'bling') {
-                // CORREÇÃO: Acessa o total de itens diretamente do objeto meta.
-                const totalItems = rawData.meta?.total || 0;
-                const limit = rawData.meta?.limit || 100;
+                // LÓGICA CORRIGIDA: Faz uma chamada inicial para obter o total de itens.
+                logger.info(`[ERPRoutes] Bling: Buscando contagem total de itens para o termo "${searchTerm}"...`);
+                const countData = await erpService.fetchProductsByName(connection, searchTerm, 1, 1); // page=1, limit=1
+                const totalItems = countData.meta?.total || 0;
+                const limit = 100; // Limite padrão do Bling
                 paginationInfo.totalPages = totalItems > 0 ? Math.ceil(totalItems / limit) : 1;
                 paginationInfo.totalItems = totalItems;
-            } else if (connection.type === 'cisspoder') {
+
+                // Agora, busca a página de produtos solicitada.
+                logger.info(`[ERPRoutes] Bling: Buscando produtos da página ${page} de ${paginationInfo.totalPages}...`);
+                rawData = await erpService.fetchProductsByName(connection, searchTerm, page, limit);
+            } else {
+                // Lógica para outros ERPs (CissPoder)
+                rawData = isSku(searchTerm) ? await erpService.fetchProductsByCode(connection, searchTerm, page) : await erpService.fetchProductsByName(connection, searchTerm, page);
+            }
+
+            apiProducts = rawData.data || [];
+
+            if (connection.type === 'cisspoder') {
                 const totalItems = rawData.total || 0;
                 const limit = 20;
                 paginationInfo.totalPages = totalItems > 0 ? Math.ceil(totalItems / limit) : 1;

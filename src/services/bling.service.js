@@ -42,12 +42,11 @@ export async function getBlingConnectionStatus(connection, db) {
  * @param {number} page - O número da página a ser buscada.
  * @returns {Promise<object>} A resposta da API do Bling.
  */
-export async function fetchProductsByCode(connection, code, page = 1) {
+export async function fetchProductsByCode(connection, code, page = 1, limit = 100) {
     const { access_token } = connection.credentials;
-    // Lógica ajustada para usar criterio=2 (nome e código) e tipo=T (todos),
-    // passando o código como o termo de busca principal no nome.
-    // Isso unifica a busca e permite encontrar itens mesmo que o código esteja no nome.
-    const response = await axiosInstance.get(`https://www.bling.com.br/Api/v3/produtos?pagina=${page}&limite=100&criterio=2&tipo=T&nome=${encodeURIComponent(code)}`, {
+    // Lógica ajustada para usar criterio=2 (apenas produtos ativos) e tipo=T (todos),
+    // passando o código como o termo de busca principal.
+    const response = await axiosInstance.get(`https://www.bling.com.br/Api/v3/produtos?pagina=${page}&limite=${limit}&criterio=2&tipo=T&nome=${encodeURIComponent(code)}`, {
         headers: { 'Authorization': `Bearer ${access_token}` }
     });
     return response.data;
@@ -60,10 +59,10 @@ export async function fetchProductsByCode(connection, code, page = 1) {
  * @param {number} page - O número da página a ser buscada.
  * @returns {Promise<object>} A resposta da API do Bling.
  */
-export async function fetchProductsByName(connection, name, page = 1) {
+export async function fetchProductsByName(connection, name, page = 1, limit = 100) {
     const { access_token } = connection.credentials;
-    // Lógica ajustada para usar criterio=2 (nome e código) e tipo=T (todos os tipos de produto).
-    const response = await axiosInstance.get(`https://www.bling.com.br/Api/v3/produtos?pagina=${page}&limite=100&criterio=2&tipo=T&nome=${encodeURIComponent(name)}`, {
+    // Lógica ajustada para usar criterio=2 (apenas produtos ativos) e tipo=T (todos os tipos de produto).
+    const response = await axiosInstance.get(`https://www.bling.com.br/Api/v3/produtos?pagina=${page}&limite=${limit}&criterio=2&tipo=T&nome=${encodeURIComponent(name)}`, {
         headers: { 'Authorization': `Bearer ${access_token}` }
     });
     return response.data;
