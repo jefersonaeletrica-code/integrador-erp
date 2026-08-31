@@ -1060,12 +1060,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <div class="card-footer">
                             <div class="card-footer-actions-left">
-                                <button class="btn btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Verificar se a sessão salva ainda é válida">
+                                <!-- <button class="btn btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Verificar se a sessão salva ainda é válida">
                                     <i class="fas fa-shield-halved"></i> Validar
                                 </button>
                                 <button class="btn btn-small btn-warning" data-action="auth-supplier" data-id="${conn.id}" title="Forçar novo login para renovar os cookies de sessão">
                                     <i class="fas fa-rotate"></i> Renovar
-                                </button>
+                                </button> -->
                                 <button class="btn btn-small btn-secondary" data-action="test-scraper-link" data-id="${conn.id}" data-name="${conn.name}" title="Abrir pop-up para buscar e testar produto no Scraper">
                                     <i class="fas fa-vial"></i> Testar
                                 </button>
