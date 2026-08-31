@@ -32,6 +32,51 @@ document.addEventListener('DOMContentLoaded', () => {
     const supplierTestSubmitBtn = document.getElementById('supplier-test-submit-btn');
     const supplierTestModalCloseBtns = document.querySelectorAll('.supplier-test-modal-close');
 
+    // Modais do Mercado Livre
+    const meliCreateModal = document.getElementById('meli-create-modal');
+    const meliCreateForm = document.getElementById('meli-create-form');
+    const meliCreateTitle = document.getElementById('meli-create-title');
+    const meliTitleCounter = document.getElementById('meli-title-counter');
+    const meliPredictBtn = document.getElementById('meli-predict-btn');
+    const meliCategorySuggestions = document.getElementById('meli-category-suggestions');
+    const meliCreateCategoryId = document.getElementById('meli-create-category-id');
+    const meliCreateCategoryName = document.getElementById('meli-create-category-name');
+    const meliCreateCostPrice = document.getElementById('meli-create-cost-price');
+    const meliCreateMarkup = document.getElementById('meli-create-markup');
+    const meliCreatePrice = document.getElementById('meli-create-price');
+    const meliCreateStock = document.getElementById('meli-create-stock');
+    const meliCreateSku = document.getElementById('meli-create-sku');
+    const meliCreateCondition = document.getElementById('meli-create-condition');
+    const meliCreateListingType = document.getElementById('meli-create-listing-type');
+    const meliCreateAccount = document.getElementById('meli-create-account');
+    const meliCreateDescription = document.getElementById('meli-create-description');
+    const meliImagesPreviewList = document.getElementById('meli-images-preview-list');
+    const meliCreateNewImage = document.getElementById('meli-create-new-image');
+    const meliAddImageBtn = document.getElementById('meli-add-image-btn');
+    const meliCreateSyncStock = document.getElementById('meli-create-sync-stock');
+    const meliCreateSyncPrice = document.getElementById('meli-create-sync-price');
+    const meliCreateSourceType = document.getElementById('meli-create-source-type');
+    const meliCreateSourceId = document.getElementById('meli-create-source-id');
+    const meliCreateSourceData = document.getElementById('meli-create-source-data');
+    const meliCreateSourceBadge = document.getElementById('meli-create-source-badge');
+    const meliCreateSourceText = document.getElementById('meli-create-source-text');
+    const meliSubmitPublishBtn = document.getElementById('meli-submit-publish-btn');
+    const meliCreateModalCloseBtns = document.querySelectorAll('.meli-create-modal-close');
+
+    // Modal de Edição do Mercado Livre
+    const meliEditModal = document.getElementById('meli-edit-modal');
+    const meliEditForm = document.getElementById('meli-edit-form');
+    const meliEditItemId = document.getElementById('meli-edit-item-id');
+    const meliEditConnectionId = document.getElementById('meli-edit-connection-id');
+    const meliEditTitle = document.getElementById('meli-edit-title');
+    const meliEditPrice = document.getElementById('meli-edit-price');
+    const meliEditStock = document.getElementById('meli-edit-stock');
+    const meliEditStatus = document.getElementById('meli-edit-status');
+    const meliEditSaveBtn = document.getElementById('meli-edit-save-btn');
+    const meliEditModalCloseBtns = document.querySelectorAll('.meli-edit-modal-close');
+
+    let meliImagesList = [];
+
     /**
      * Inicializa a lógica do seletor de tema (Dark Mode).
      */
@@ -211,6 +256,149 @@ document.addEventListener('DOMContentLoaded', () => {
         if (supplierTestModal) supplierTestModal.style.display = 'none';
     };
 
+    /**
+     * Controle do Modal de Criação no Mercado Livre
+     */
+    const renderMeliImagesPreview = () => {
+        if (!meliImagesPreviewList) return;
+        if (meliImagesList.length === 0) {
+            meliImagesPreviewList.innerHTML = `
+                <div style="grid-column: 1/-1; text-align: center; color: var(--color-text-offset); font-size: 0.82rem; padding: 1.2rem;">
+                    <i class="fas fa-image" style="font-size: 1.5rem; margin-bottom: 0.35rem; display: block;"></i>
+                    Nenhuma foto adicionada. Cole a URL pública da foto acima e clique em "Adicionar Foto".
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+        meliImagesList.forEach((url, idx) => {
+            html += `
+                <div class="meli-image-card" data-idx="${idx}">
+                    <img src="${url}" alt="Foto ${idx + 1}" onerror="this.src='/assets/logos/default-erp.svg'">
+                    ${idx === 0 ? '<span class="meli-image-cover-badge">Capa</span>' : ''}
+                    <button type="button" class="meli-image-remove" data-action="remove-meli-image" data-idx="${idx}" title="Remover imagem">&times;</button>
+                </div>
+            `;
+        });
+        meliImagesPreviewList.innerHTML = html;
+    };
+
+    const openMeliCreateModal = async (initialData = {}) => {
+        if (!meliCreateModal) return;
+        meliCreateForm.reset();
+        meliImagesList = [];
+
+        // Carrega contas do Mercado Livre
+        if (meliCreateAccount) {
+            meliCreateAccount.innerHTML = '<option value="">Carregando contas cadastradas...</option>';
+            try {
+                const { connections } = await api('/api/marketplace-connections');
+                const meliAccounts = (connections || []).filter(c => c.type === 'mercadolivre');
+                if (meliAccounts.length === 0) {
+                    meliCreateAccount.innerHTML = '<option value="">Nenhuma conta do Mercado Livre conectada</option>';
+                    showToast('Você precisa conectar uma conta do Mercado Livre antes de publicar.', 'warning');
+                } else {
+                    meliCreateAccount.innerHTML = meliAccounts.map(acc => `
+                        <option value="${acc.id}">${acc.name} (${acc.credentials?.nickname ? '@' + acc.credentials.nickname : 'ID #' + acc.id}) - ${acc.status === 'connected' ? '🟢 Conectado' : '🟠 Requer Login'}</option>
+                    `).join('');
+                }
+            } catch (err) {
+                meliCreateAccount.innerHTML = '<option value="">Erro ao carregar contas</option>';
+            }
+        }
+
+        // Preenche dados iniciais
+        const {
+            source_type = 'manual',
+            source_id = '',
+            source_name = '',
+            sku = '',
+            name = '',
+            price = 0,
+            stock = 1,
+            images = []
+        } = initialData;
+
+        if (meliCreateSourceType) meliCreateSourceType.value = source_type;
+        if (meliCreateSourceId) meliCreateSourceId.value = source_id;
+        if (meliCreateSourceData) meliCreateSourceData.value = JSON.stringify(initialData);
+
+        if (meliCreateSourceBadge && meliCreateSourceText) {
+            if (source_type !== 'manual') {
+                meliCreateSourceBadge.style.display = 'flex';
+                const label = source_type === 'erp' ? 'ERP' : 'Fornecedor';
+                meliCreateSourceText.innerHTML = `Importado do ${label} <strong>${source_name || ''}</strong> (SKU: <code>${sku || 'N/D'}</code>)`;
+            } else {
+                meliCreateSourceBadge.style.display = 'none';
+            }
+        }
+
+        if (meliCreateTitle) {
+            meliCreateTitle.value = (name || '').substring(0, 60);
+            if (meliTitleCounter) meliTitleCounter.textContent = `${meliCreateTitle.value.length}/60 caracteres`;
+        }
+
+        if (meliCreateSku) meliCreateSku.value = sku || '';
+        if (meliCreateStock) meliCreateStock.value = stock !== undefined && stock !== null ? Math.max(1, parseInt(stock, 10) || 1) : 1;
+
+        const numPrice = typeof price === 'number' ? price : parseFloat(String(price).replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+        if (meliCreateCostPrice) meliCreateCostPrice.value = numPrice > 0 ? numPrice.toFixed(2) : '';
+
+        const defaultMarkup = 30.0;
+        if (meliCreateMarkup) meliCreateMarkup.value = defaultMarkup;
+
+        if (numPrice > 0) {
+            const finalPrice = numPrice * (1 + defaultMarkup / 100);
+            if (meliCreatePrice) meliCreatePrice.value = finalPrice.toFixed(2);
+        } else {
+            if (meliCreatePrice) meliCreatePrice.value = '';
+        }
+
+        if (meliCreateCategoryId) meliCreateCategoryId.value = '';
+        if (meliCreateCategoryName) meliCreateCategoryName.value = '';
+        if (meliCategorySuggestions) meliCategorySuggestions.style.display = 'none';
+
+        // Preenche imagens
+        if (Array.isArray(images)) {
+            images.forEach(img => {
+                const url = typeof img === 'string' ? img : (img.source || img.url || '');
+                if (url && url.startsWith('http')) meliImagesList.push(url);
+            });
+        }
+        renderMeliImagesPreview();
+
+        // Se tem título, sugere categoria automaticamente
+        if (name) {
+            executeCategoryPrediction(name);
+        }
+
+        meliCreateModal.style.display = 'flex';
+    };
+
+    const closeMeliCreateModal = () => {
+        if (meliCreateModal) meliCreateModal.style.display = 'none';
+    };
+
+    const openMeliEditModal = (item) => {
+        if (!meliEditModal) return;
+        if (meliEditItemId) meliEditItemId.value = item.item_id || item.id;
+        if (meliEditConnectionId) meliEditConnectionId.value = item.connection_id;
+        if (meliEditTitle) meliEditTitle.value = item.title || '';
+        if (meliEditPrice) meliEditPrice.value = (typeof item.price === 'number' ? item.price : parseFloat(item.price)).toFixed(2);
+        if (meliEditStock) meliEditStock.value = item.available_quantity || 0;
+        if (meliEditStatus) meliEditStatus.value = item.status || 'active';
+
+        const subTitle = document.getElementById('meli-edit-modal-subtitle');
+        if (subTitle) subTitle.textContent = `Anúncio: ${item.item_id || item.id} | SKU: ${item.sku || 'N/D'}`;
+
+        meliEditModal.style.display = 'flex';
+    };
+
+    const closeMeliEditModal = () => {
+        if (meliEditModal) meliEditModal.style.display = 'none';
+    };
+
     if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
     if (cancelModalBtn) cancelModalBtn.addEventListener('click', closeModal);
     
@@ -220,7 +408,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Fechar ao clicar no backdrop ou pressionar ESC
+    if (meliCreateModalCloseBtns) {
+        meliCreateModalCloseBtns.forEach(btn => btn.addEventListener('click', closeMeliCreateModal));
+    }
+    if (meliEditModalCloseBtns) {
+        meliEditModalCloseBtns.forEach(btn => btn.addEventListener('click', closeMeliEditModal));
+    }
+
+    // Fechar modais ao clicar no backdrop ou pressionar ESC
     window.addEventListener('click', (e) => {
         if (e.target === modal || (e.target.classList && e.target.classList.contains('modal-backdrop') && e.target.closest('#form-modal'))) {
             closeModal();
@@ -228,14 +423,278 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target === supplierTestModal || (e.target.classList && e.target.classList.contains('modal-backdrop') && e.target.closest('#supplier-test-modal'))) {
             closeSupplierTestModal();
         }
+        if (e.target === meliCreateModal || (e.target.classList && e.target.classList.contains('modal-backdrop') && e.target.closest('#meli-create-modal'))) {
+            closeMeliCreateModal();
+        }
+        if (e.target === meliEditModal || (e.target.classList && e.target.classList.contains('modal-backdrop') && e.target.closest('#meli-edit-modal'))) {
+            closeMeliEditModal();
+        }
     });
 
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             if (modal && modal.style.display === 'flex') closeModal();
             if (supplierTestModal && supplierTestModal.style.display === 'flex') closeSupplierTestModal();
+            if (meliCreateModal && meliCreateModal.style.display === 'flex') closeMeliCreateModal();
+            if (meliEditModal && meliEditModal.style.display === 'flex') closeMeliEditModal();
         }
     });
+
+    /**
+     * Lógica de Categorias, Imagens e Markup no Formulário do Mercado Livre
+     */
+    if (meliCreateTitle) {
+        meliCreateTitle.addEventListener('input', () => {
+            if (meliTitleCounter) {
+                meliTitleCounter.textContent = `${meliCreateTitle.value.length}/60 caracteres`;
+            }
+        });
+    }
+
+    const executeCategoryPrediction = async (title) => {
+        if (!title || !title.trim()) return;
+        if (meliPredictBtn) {
+            meliPredictBtn.classList.add('loading');
+            meliPredictBtn.disabled = true;
+        }
+
+        try {
+            const res = await api('/api/marketplace/mercadolivre/predict-category', 'POST', { title: title.trim() });
+            const categories = res.categories || [];
+            if (categories.length > 0) {
+                // Auto seleciona a primeira categoria mais provável
+                const topCat = categories[0];
+                if (meliCreateCategoryId) meliCreateCategoryId.value = topCat.category_id;
+                if (meliCreateCategoryName) meliCreateCategoryName.value = `${topCat.category_name} (${topCat.category_id})`;
+
+                // Renderiza sugestões alternativas caso o usuário queira trocar
+                if (meliCategorySuggestions && categories.length > 1) {
+                    meliCategorySuggestions.innerHTML = categories.map(cat => `
+                        <div class="meli-suggestion-item" data-cat-id="${cat.category_id}" data-cat-name="${cat.category_name}">
+                            <span><strong>${cat.category_name}</strong> <small style="color: var(--color-text-offset); font-size: 0.78rem;">(${cat.domain_name || ''})</small></span>
+                            <span class="sku-badge">${cat.category_id}</span>
+                        </div>
+                    `).join('');
+                    meliCategorySuggestions.style.display = 'block';
+                }
+            } else {
+                showToast('Nenhuma categoria específica sugerida para este título. Tente ajustar o nome.', 'info');
+            }
+        } catch (err) {
+            console.error('Erro na predição de categoria:', err);
+        } finally {
+            if (meliPredictBtn) {
+                meliPredictBtn.classList.remove('loading');
+                meliPredictBtn.disabled = false;
+            }
+        }
+    };
+
+    if (meliPredictBtn) {
+        meliPredictBtn.addEventListener('click', () => {
+            const title = meliCreateTitle ? meliCreateTitle.value : '';
+            if (!title) {
+                showToast('Preencha o título do anúncio antes de sugerir a categoria.', 'warning');
+                return;
+            }
+            executeCategoryPrediction(title);
+        });
+    }
+
+    if (meliCategorySuggestions) {
+        meliCategorySuggestions.addEventListener('click', (e) => {
+            const item = e.target.closest('.meli-suggestion-item');
+            if (!item) return;
+            const catId = item.dataset.catId;
+            const catName = item.dataset.catName;
+            if (meliCreateCategoryId) meliCreateCategoryId.value = catId;
+            if (meliCreateCategoryName) meliCreateCategoryName.value = `${catName} (${catId})`;
+            meliCategorySuggestions.style.display = 'none';
+            showToast(`Categoria selecionada: ${catName}`, 'success');
+        });
+    }
+
+    // Calculadora de Markup / Preço de Venda
+    const updateSellingPriceFromMarkup = () => {
+        const cost = parseFloat(meliCreateCostPrice?.value || 0);
+        const markup = parseFloat(meliCreateMarkup?.value || 0);
+        if (cost > 0 && meliCreatePrice) {
+            const finalPrice = cost * (1 + markup / 100);
+            meliCreatePrice.value = finalPrice.toFixed(2);
+        }
+    };
+
+    if (meliCreateCostPrice) meliCreateCostPrice.addEventListener('input', updateSellingPriceFromMarkup);
+    if (meliCreateMarkup) meliCreateMarkup.addEventListener('input', updateSellingPriceFromMarkup);
+
+    if (meliCreatePrice) {
+        meliCreatePrice.addEventListener('input', () => {
+            const cost = parseFloat(meliCreateCostPrice?.value || 0);
+            const price = parseFloat(meliCreatePrice.value || 0);
+            if (cost > 0 && price > cost && meliCreateMarkup) {
+                const markup = ((price - cost) / cost) * 100;
+                meliCreateMarkup.value = markup.toFixed(1);
+            }
+        });
+    }
+
+    // Gerenciador de Imagens
+    if (meliAddImageBtn) {
+        meliAddImageBtn.addEventListener('click', () => {
+            const url = meliCreateNewImage ? meliCreateNewImage.value.trim() : '';
+            if (!url || !url.startsWith('http')) {
+                showToast('Informe uma URL de imagem válida (iniciando com http:// ou https://).', 'warning');
+                return;
+            }
+            meliImagesList.push(url);
+            if (meliCreateNewImage) meliCreateNewImage.value = '';
+            renderMeliImagesPreview();
+            showToast('Imagem adicionada ao anúncio!', 'info');
+        });
+    }
+
+    if (meliImagesPreviewList) {
+        meliImagesPreviewList.addEventListener('click', (e) => {
+            const removeBtn = e.target.closest('[data-action="remove-meli-image"]');
+            if (!removeBtn) return;
+            const idx = parseInt(removeBtn.dataset.idx, 10);
+            if (!isNaN(idx)) {
+                meliImagesList.splice(idx, 1);
+                renderMeliImagesPreview();
+            }
+        });
+    }
+
+    // Submissão do Formulário de Criação no Mercado Livre
+    if (meliCreateForm) {
+        meliCreateForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const connectionId = meliCreateAccount ? meliCreateAccount.value : '';
+            const title = meliCreateTitle ? meliCreateTitle.value.trim() : '';
+            const categoryId = meliCreateCategoryId ? meliCreateCategoryId.value : '';
+            const categoryName = meliCreateCategoryName ? meliCreateCategoryName.value : '';
+            const price = meliCreatePrice ? parseFloat(meliCreatePrice.value) : 0;
+            const stock = meliCreateStock ? parseInt(meliCreateStock.value, 10) : 1;
+            const listingTypeId = meliCreateListingType ? meliCreateListingType.value : 'gold_special';
+            const condition = meliCreateCondition ? meliCreateCondition.value : 'new';
+            const sku = meliCreateSku ? meliCreateSku.value.trim() : '';
+            const description = meliCreateDescription ? meliCreateDescription.value.trim() : '';
+            const sourceType = meliCreateSourceType ? meliCreateSourceType.value : 'manual';
+            const sourceId = meliCreateSourceId ? meliCreateSourceId.value : null;
+            const markupPercent = meliCreateMarkup ? parseFloat(meliCreateMarkup.value) : 0;
+            const syncAutoStock = meliCreateSyncStock ? meliCreateSyncStock.checked : false;
+            const syncAutoPrice = meliCreateSyncPrice ? meliCreateSyncPrice.checked : false;
+
+            if (!connectionId) {
+                showToast('Selecione a conta do Mercado Livre para publicar.', 'warning');
+                return;
+            }
+            if (!title) {
+                showToast('Informe o título do anúncio.', 'warning');
+                return;
+            }
+            if (!categoryId) {
+                showToast('Selecione ou sugira a categoria do anúncio.', 'warning');
+                return;
+            }
+            if (!price || price <= 0) {
+                showToast('Informe um preço de venda válido.', 'warning');
+                return;
+            }
+            if (meliImagesList.length === 0) {
+                showToast('Adicione pelo menos uma URL de imagem para o anúncio.', 'warning');
+                return;
+            }
+
+            if (meliSubmitPublishBtn) {
+                meliSubmitPublishBtn.classList.add('loading');
+                meliSubmitPublishBtn.disabled = true;
+            }
+
+            try {
+                const payload = {
+                    connectionId,
+                    title,
+                    category_id: categoryId,
+                    category_name: categoryName,
+                    price,
+                    available_quantity: stock,
+                    listing_type_id: listingTypeId,
+                    condition,
+                    sku,
+                    description,
+                    pictures: meliImagesList.map(u => ({ source: u })),
+                    source_type: sourceType,
+                    source_id: sourceId,
+                    markup_percent: markupPercent,
+                    sync_auto_stock: syncAutoStock,
+                    sync_auto_price: syncAutoPrice
+                };
+
+                const res = await api('/api/marketplace/mercadolivre/items/create', 'POST', payload);
+                showToast(`Anúncio publicado com sucesso no Mercado Livre! (ID: ${res.item?.id || ''})`, 'success');
+                closeMeliCreateModal();
+
+                // Se estiver na tela de anúncios, recarrega
+                const activeNav = document.querySelector('.menu-links a.active');
+                if (activeNav && activeNav.id === 'nav-meli-anuncios') {
+                    renderMercadoLivreListings();
+                }
+            } catch (publishErr) {
+                showToast(`Falha ao publicar anúncio: ${publishErr.message}`, 'error');
+            } finally {
+                if (meliSubmitPublishBtn) {
+                    meliSubmitPublishBtn.classList.remove('loading');
+                    meliSubmitPublishBtn.disabled = false;
+                }
+            }
+        });
+    }
+
+    // Submissão do Formulário de Edição Rápida
+    if (meliEditForm) {
+        meliEditForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const itemId = meliEditItemId ? meliEditItemId.value : '';
+            const connectionId = meliEditConnectionId ? meliEditConnectionId.value : '';
+            const title = meliEditTitle ? meliEditTitle.value.trim() : '';
+            const price = meliEditPrice ? parseFloat(meliEditPrice.value) : 0;
+            const stock = meliEditStock ? parseInt(meliEditStock.value, 10) : 0;
+            const status = meliEditStatus ? meliEditStatus.value : 'active';
+
+            if (!itemId) return;
+
+            if (meliEditSaveBtn) {
+                meliEditSaveBtn.classList.add('loading');
+                meliEditSaveBtn.disabled = true;
+            }
+
+            try {
+                await api(`/api/marketplace/mercadolivre/items/${itemId}/update`, 'PUT', {
+                    connectionId,
+                    title,
+                    price,
+                    available_quantity: stock,
+                    status
+                });
+                showToast('Anúncio atualizado com sucesso no Mercado Livre!', 'success');
+                closeMeliEditModal();
+
+                const activeNav = document.querySelector('.menu-links a.active');
+                if (activeNav && activeNav.id === 'nav-meli-anuncios') {
+                    renderMercadoLivreListings();
+                }
+            } catch (editErr) {
+                showToast(`Erro ao atualizar: ${editErr.message}`, 'error');
+            } finally {
+                if (meliEditSaveBtn) {
+                    meliEditSaveBtn.classList.remove('loading');
+                    meliEditSaveBtn.disabled = false;
+                }
+            }
+        });
+    }
 
     /**
      * Listener para o formulário de teste de fornecedor (Pop-up Dismatal)
@@ -288,12 +747,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     const priceFormatted = (typeof p.price === 'number') 
                         ? `R$ ${p.price.toFixed(2)}` 
                         : (p.price ? `R$ ${p.price}` : 'Preço indisponível');
+                    const rawPrice = typeof p.price === 'number' ? p.price : (p.preco || 0);
                     const stockVal = p.stock !== null && p.stock !== undefined ? p.stock : (p.estoque !== null && p.estoque !== undefined ? p.estoque : null);
                     const stockLabel = stockVal !== null ? `${stockVal} em estoque` : 'Estoque indisponível';
                     const hasStock = stockVal !== null ? Number(stockVal) > 0 : true;
 
                     const images = p.images || p.imagens || [];
                     const imgUrl = (Array.isArray(images) && images.length > 0) ? images[0] : (typeof images === 'string' ? images : null);
+
+                    const encodedImages = encodeURIComponent(JSON.stringify(images));
+                    const safeName = (p.name || '').replace(/"/g, '&quot;');
+                    const skuVal = p.sku || searchTerm;
 
                     productsHtml += `
                         <div class="supplier-test-product-card">
@@ -305,13 +769,18 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="supplier-test-details">
                                 <h4 class="supplier-test-name">${p.name || 'Produto Sem Descrição'}</h4>
                                 <div class="supplier-test-meta-row">
-                                    <span class="sku-badge"><i class="fas fa-hashtag"></i> SKU: ${p.sku || searchTerm}</span>
+                                    <span class="sku-badge"><i class="fas fa-hashtag"></i> SKU: ${skuVal}</span>
                                     ${p.barcode ? `<span class="sku-badge"><i class="fas fa-barcode"></i> EAN: ${p.barcode}</span>` : ''}
                                     <span class="stock-badge ${hasStock ? 'in-stock' : 'out-of-stock'}">
                                         <i class="fas ${hasStock ? 'fa-check' : 'fa-xmark'}"></i> ${stockLabel}
                                     </span>
                                 </div>
-                                <div class="supplier-test-price">${priceFormatted}</div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.65rem;">
+                                    <div class="supplier-test-price">${priceFormatted}</div>
+                                    <button type="button" class="btn btn-small btn-meli" data-action="create-ad-from-supplier" data-sku="${skuVal}" data-name="${safeName}" data-price="${rawPrice}" data-stock="${stockVal !== null ? stockVal : 1}" data-images="${encodedImages}" data-conn-id="${connId}" title="Publicar este produto no Mercado Livre">
+                                        <i class="fas fa-store"></i> Publicar no Mercado Livre
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     `;
@@ -393,6 +862,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function getLogoPath(type, isSupplier = false) {
         if (!type) return isSupplier ? '/assets/logos/default-supplier.svg' : '/assets/logos/default-erp.svg';
         const cleanType = type.toLowerCase().trim();
+        if (cleanType === 'mercadolivre' || cleanType === 'meli') return '/assets/logos/mercadolivre.svg';
         if (cleanType === 'bling') return '/assets/logos/bling.svg';
         if (cleanType === 'cisspoder' || cleanType === 'ciss') return '/assets/logos/cisspoder.jpg';
         if (cleanType.includes('dismatal')) return '/assets/logos/dismatal.jpg';
@@ -634,8 +1104,69 @@ document.addEventListener('DOMContentLoaded', () => {
         passwordInput.required = true;
         fragment.appendChild(createFormGroup('Senha', passwordInput));
 
-        // Remove a necessidade de validação JSON, pois os campos são separados.
-        // setupJsonValidation(); // Não é mais necessário
+        return fragment;
+    };
+
+    const generateMarketplaceForm = (conn = {}) => {
+        const creds = conn.credentials || {};
+        const fragment = document.createDocumentFragment();
+
+        const idInput = document.createElement('input');
+        idInput.type = 'hidden';
+        idInput.name = 'id';
+        idInput.value = conn.id || '';
+        fragment.appendChild(idInput);
+
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.id = 'name';
+        nameInput.name = 'name';
+        nameInput.className = 'form-control';
+        nameInput.placeholder = 'Ex: Minha Loja Mercado Livre';
+        nameInput.value = conn.name || 'Mercado Livre';
+        nameInput.required = true;
+        fragment.appendChild(createFormGroup('Nome da Conta / Identificação', nameInput));
+
+        const typeSelect = document.createElement('select');
+        typeSelect.id = 'type';
+        typeSelect.name = 'type';
+        typeSelect.className = 'form-control';
+        typeSelect.required = true;
+        typeSelect.innerHTML = `
+            <option value="mercadolivre" selected>Mercado Livre (OAuth 2.0 Oficial)</option>
+        `;
+        fragment.appendChild(createFormGroup('Marketplace', typeSelect));
+
+        const clientIdInput = document.createElement('input');
+        clientIdInput.type = 'text';
+        clientIdInput.id = 'client_id';
+        clientIdInput.name = 'client_id';
+        clientIdInput.className = 'form-control';
+        clientIdInput.placeholder = 'App ID / Client ID (Ex: 1234567890123456)';
+        clientIdInput.value = creds.client_id || '';
+        clientIdInput.required = true;
+        fragment.appendChild(createFormGroup('App ID / Client ID', clientIdInput, 'Obtido no portal Mercado Livre Developers (developers.mercadolivre.com.br)'));
+
+        const clientSecretInput = document.createElement('input');
+        clientSecretInput.type = 'password';
+        clientSecretInput.id = 'client_secret';
+        clientSecretInput.name = 'client_secret';
+        clientSecretInput.className = 'form-control';
+        clientSecretInput.placeholder = 'Client Secret Key';
+        clientSecretInput.value = creds.client_secret || '';
+        clientSecretInput.required = true;
+        fragment.appendChild(createFormGroup('Client Secret', clientSecretInput, 'Chave secreta da aplicação no Mercado Livre Developers'));
+
+        const redirectUriInput = document.createElement('input');
+        redirectUriInput.type = 'text';
+        redirectUriInput.id = 'redirect_uri';
+        redirectUriInput.name = 'redirect_uri';
+        redirectUriInput.className = 'form-control';
+        redirectUriInput.placeholder = 'Ex: http://localhost:3000/api/marketplace/callback';
+        redirectUriInput.value = creds.redirect_uri || (window.location.origin + '/api/marketplace/callback');
+        redirectUriInput.required = true;
+        fragment.appendChild(createFormGroup('URI de Redirecionamento Callback', redirectUriInput, 'URL cadastrada em Redirect URI no painel do Mercado Livre'));
+
         return fragment;
     };
 
@@ -649,7 +1180,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 credentialsTextarea.classList.remove('valid', 'invalid');
                 if (modalSaveBtn) modalSaveBtn.disabled = true;
                 return;
-            } // Removido o restante da função, pois não é mais necessário.
+            }
             try {
                 JSON.parse(val);
                 credentialsTextarea.classList.add('valid');
@@ -673,44 +1204,50 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     const renderWelcomePage = async () => {
         mainTitle.textContent = 'Dashboard Integrador';
-        if (mainSubtitle) mainSubtitle.textContent = 'Visão geral das integrações ativas, catálogo de produtos e atalhos rápidos';
+        if (mainSubtitle) mainSubtitle.textContent = 'Visão geral das integrações ativas, catálogo de produtos e marketplace Mercado Livre';
         headerActions.innerHTML = `
-            <button class="btn btn-primary" data-action="add-erp">
-                <i class="fas fa-plus"></i> Novo ERP
+            <button class="btn btn-primary" data-action="open-create-ad-modal">
+                <i class="fas fa-store"></i> Criar Anúncio ML
             </button>
-            <button class="btn btn-secondary" data-action="add-supplier">
-                <i class="fas fa-truck-ramp-box"></i> Novo Fornecedor
+            <button class="btn btn-secondary" data-action="add-erp">
+                <i class="fas fa-plus"></i> Novo ERP
             </button>
         `;
 
         showLoading('Carregando métricas e conexões...');
 
         try {
-            const [erpRes, supRes] = await Promise.all([
+            const [erpRes, supRes, meliConnRes, meliItemsRes] = await Promise.all([
                 api('/api/erp-connections').catch(() => ({ connections: [] })),
-                api('/api/supplier-connections').catch(() => ({ connections: [] }))
+                api('/api/supplier-connections').catch(() => ({ connections: [] })),
+                api('/api/marketplace-connections').catch(() => ({ connections: [] })),
+                api('/api/marketplace/mercadolivre/items').catch(() => ({ items: [] }))
             ]);
 
             const erpConnections = erpRes.connections || [];
             const supplierConnections = supRes.connections || [];
+            const meliConnections = meliConnRes.connections || [];
+            const meliItems = meliItemsRes.items || [];
 
             const connectedErps = erpConnections.filter(c => c.status === 'connected').length;
+            const connectedMelis = meliConnections.filter(c => c.status === 'connected').length;
+            const activeMeliAds = meliItems.filter(i => i.status === 'active').length;
 
             let html = `
                 <!-- Hero Banner -->
                 <div class="dashboard-hero">
                     <div class="hero-content">
-                        <span class="hero-badge"><i class="fas fa-circle-nodes"></i> Hub Central de Integrações</span>
-                        <h2 class="hero-title">Bem-vindo ao Integrador ERP</h2>
+                        <span class="hero-badge"><i class="fas fa-circle-nodes"></i> Hub Central de Integrações & Marketplace</span>
+                        <h2 class="hero-title">Bem-vindo ao Integrador ERP & Mercado Livre</h2>
                         <p class="hero-description">
-                            Conecte e sincronize dados entre sistemas ERP e distribuidores em tempo real.
+                            Importe produtos de ERPs e fornecedores, publique anúncios no Mercado Livre e sincronize estoque e preços em tempo real.
                         </p>
                         <div class="hero-actions">
-                            <button class="btn btn-primary" data-action="nav-goto-products">
-                                <i class="fas fa-boxes-stacked"></i> Consultar Catálogo
+                            <button class="btn btn-meli" data-action="nav-goto-meli-ads">
+                                <i class="fas fa-store"></i> Gerenciar Anúncios ML (${meliItems.length})
                             </button>
-                            <button class="btn btn-secondary" data-action="nav-goto-erp">
-                                <i class="fas fa-server"></i> Gerenciar ERPs
+                            <button class="btn btn-primary" data-action="nav-goto-products">
+                                <i class="fas fa-boxes-stacked"></i> Consultar Catálogo ERP
                             </button>
                         </div>
                     </div>
@@ -727,16 +1264,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <div class="stat-info">
                             <span class="stat-value">${erpConnections.length}</span>
-                            <span class="stat-label">Conexões ERP Cadastradas</span>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon-wrapper stat-icon-green">
-                            <i class="fas fa-circle-check"></i>
-                        </div>
-                        <div class="stat-info">
-                            <span class="stat-value">${connectedErps}</span>
-                            <span class="stat-label">ERPs Conectados e Ativos</span>
+                            <span class="stat-label">Conexões ERP (${connectedErps} ativas)</span>
                         </div>
                     </div>
                     <div class="stat-card">
@@ -749,14 +1277,117 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                     </div>
                     <div class="stat-card">
-                        <div class="stat-icon-wrapper stat-icon-purple">
-                            <i class="fas fa-bolt"></i>
+                        <div class="stat-icon-wrapper" style="background-color: rgba(255, 230, 0, 0.2); color: #2D3277;">
+                            <i class="fas fa-store"></i>
                         </div>
                         <div class="stat-info">
-                            <span class="stat-value">${erpConnections.length + supplierConnections.length}</span>
-                            <span class="stat-label">Total de Pontos de Integração</span>
+                            <span class="stat-value">${meliConnections.length}</span>
+                            <span class="stat-label">Contas Mercado Livre (${connectedMelis} auth)</span>
                         </div>
                     </div>
+                    <div class="stat-card">
+                        <div class="stat-icon-wrapper stat-icon-green">
+                            <i class="fas fa-rectangle-ad"></i>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-value">${activeMeliAds}</span>
+                            <span class="stat-label">Anúncios ML Ativos (${meliItems.length} total)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Seção Mercado Livre -->
+                <div class="dashboard-section">
+                    <div class="section-header">
+                        <h3 class="section-title"><i class="fas fa-store" style="color: #FFE600;"></i> Marketplace Mercado Livre</h3>
+                        <a href="#" class="section-link" data-action="nav-goto-meli-ads">Ver todos os anúncios <i class="fas fa-arrow-right"></i></a>
+                    </div>
+            `;
+
+            if (meliConnections.length === 0) {
+                html += `
+                    <div class="empty-state">
+                        <div class="empty-state-icon" style="color: #2D3277; background-color: rgba(255, 230, 0, 0.25);">
+                            <i class="fas fa-store"></i>
+                        </div>
+                        <h3>Nenhuma conta do Mercado Livre conectada</h3>
+                        <p>Cadastre suas credenciais do Mercado Livre Developers (App ID e Secret) para publicar anúncios e sincronizar preços/estoques.</p>
+                        <button class="btn btn-meli" data-action="add-marketplace">
+                            <i class="fas fa-plus"></i> Conectar Mercado Livre
+                        </button>
+                    </div>
+                `;
+            } else if (meliItems.length === 0) {
+                html += `
+                    <div class="empty-state">
+                        <div class="empty-state-icon" style="color: var(--color-primary); background-color: var(--color-primary-light);">
+                            <i class="fas fa-boxes-packing"></i>
+                        </div>
+                        <h3>Nenhum anúncio cadastrado no integrador</h3>
+                        <p>Publique seu primeiro anúncio a partir do catálogo de produtos do ERP, do scraper Dismatal ou importe seus anúncios existentes do Mercado Livre.</p>
+                        <div style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
+                            <button class="btn btn-meli" data-action="open-create-ad-modal">
+                                <i class="fas fa-paper-plane"></i> Criar Novo Anúncio
+                            </button>
+                            <button class="btn btn-secondary" data-action="import-meli-items" data-conn-id="${meliConnections[0].id}">
+                                <i class="fas fa-cloud-arrow-down"></i> Importar do Mercado Livre
+                            </button>
+                        </div>
+                    </div>
+                `;
+            } else {
+                html += '<div class="connections-grid">';
+                meliItems.slice(0, 3).forEach(item => {
+                    const thumb = item.thumbnail || '/assets/logos/default-erp.svg';
+                    const isPaused = item.status === 'paused';
+                    const isActive = item.status === 'active';
+                    const statusClass = isActive ? 'status-connected' : (isPaused ? 'status-requires_auth' : 'status-disconnected');
+                    const statusText = isActive ? 'Ativo' : (isPaused ? 'Pausado' : item.status);
+
+                    html += `
+                        <div class="connection-card">
+                            <div class="card-header">
+                                <div class="logo-container" style="width: 48px; height: 48px;">
+                                    <img src="${thumb}" alt="${item.title}" class="brand-logo-img" style="object-fit: contain;" onerror="this.src='/assets/logos/default-erp.svg'">
+                                </div>
+                                <span class="status-pill ${statusClass}"><span class="status-dot"></span> ${statusText}</span>
+                            </div>
+                            <div class="card-body">
+                                <div class="card-title-row">
+                                    <h4 class="card-title" style="font-size: 0.95rem; line-height: 1.3;" title="${item.title}">${item.title.substring(0, 45)}...</h4>
+                                </div>
+                                <ul class="card-details-list">
+                                    <li class="card-details-item">
+                                        <span class="detail-label">MLB ID:</span>
+                                        <span class="detail-val"><code>${item.item_id}</code></span>
+                                    </li>
+                                    <li class="card-details-item">
+                                        <span class="detail-label">Preço:</span>
+                                        <span class="detail-val" style="font-weight: 700; color: var(--color-text);">R$ ${parseFloat(item.price).toFixed(2)}</span>
+                                    </li>
+                                    <li class="card-details-item">
+                                        <span class="detail-label">Estoque:</span>
+                                        <span class="detail-val">${item.available_quantity} un.</span>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="card-footer">
+                                <div class="card-footer-actions-left">
+                                    ${item.permalink ? `<a href="${item.permalink}" target="_blank" class="btn btn-small btn-secondary" title="Ver no Mercado Livre"><i class="fas fa-external-link"></i> Ver no ML</a>` : ''}
+                                </div>
+                                <div class="card-footer-actions-right">
+                                    <button class="card-action-btn" data-action="edit-meli-item" data-item="${encodeURIComponent(JSON.stringify(item))}" data-tooltip="Editar Anúncio">
+                                        <i class="fas fa-pencil"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+
+            html += `
                 </div>
 
                 <!-- Seção 1: Conexões ERP -->
@@ -1104,6 +1735,354 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * =================================================================
+     * 3.1 ANÚNCIOS MERCADO LIVRE (GERENCIADOR & SINCRONIZAÇÃO)
+     * =================================================================
+     */
+    const renderMercadoLivreListings = async () => {
+        mainTitle.textContent = 'Anúncios Mercado Livre';
+        if (mainSubtitle) mainSubtitle.textContent = 'Gerencie, altere preços/estoques, sincronize e monitore seus anúncios no Mercado Livre';
+        headerActions.innerHTML = `
+            <button class="btn btn-meli" data-action="open-create-ad-modal">
+                <i class="fas fa-plus"></i> Novo Anúncio
+            </button>
+            <button class="btn btn-secondary" data-action="import-meli-items" title="Importar anúncios existentes diretamente da conta ML">
+                <i class="fas fa-cloud-arrow-down"></i> Importar do ML
+            </button>
+            <button class="btn btn-secondary" data-action="nav-goto-meli-accounts">
+                <i class="fas fa-key"></i> Contas ML
+            </button>
+        `;
+
+        showLoading('Carregando anúncios do Mercado Livre...');
+
+        try {
+            const [itemsRes, connRes] = await Promise.all([
+                api('/api/marketplace/mercadolivre/items'),
+                api('/api/marketplace-connections').catch(() => ({ connections: [] }))
+            ]);
+
+            const items = itemsRes.items || [];
+            const connections = (connRes.connections || []).filter(c => c.type === 'mercadolivre');
+
+            if (connections.length === 0) {
+                pageContent.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon" style="background-color: rgba(255, 230, 0, 0.2); color: #2D3277;">
+                            <i class="fas fa-store"></i>
+                        </div>
+                        <h3>Nenhuma conta do Mercado Livre conectada</h3>
+                        <p>Para criar e gerenciar anúncios, primeiro cadastre e autorize sua conta do Mercado Livre.</p>
+                        <button class="btn btn-meli" data-action="add-marketplace">
+                            <i class="fas fa-plus"></i> Conectar Conta do Mercado Livre
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            const accountsOptions = connections.map(c => `
+                <option value="${c.id}">${c.name} (${c.credentials?.nickname ? '@' + c.credentials.nickname : '#' + c.id})</option>
+            `).join('');
+
+            let html = `
+                <div class="search-filter-card">
+                    <div class="filter-form-grid" style="grid-template-columns: 2fr 1.2fr 1.2fr auto;">
+                        <div class="form-group" style="margin: 0;">
+                            <label for="meli-filter-search"><i class="fas fa-magnifying-glass"></i> Buscar por Título, SKU ou MLB ID</label>
+                            <input type="search" id="meli-filter-search" class="form-control" placeholder="Digite para filtrar instantaneamente...">
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="meli-filter-status"><i class="fas fa-toggle-on"></i> Status</label>
+                            <select id="meli-filter-status" class="form-control">
+                                <option value="">Todos os Status</option>
+                                <option value="active">🟢 Ativos</option>
+                                <option value="paused">🟠 Pausados</option>
+                                <option value="closed">🔴 Finalizados</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin: 0;">
+                            <label for="meli-filter-account"><i class="fas fa-user-tag"></i> Conta ML</label>
+                            <select id="meli-filter-account" class="form-control">
+                                <option value="">Todas as Contas</option>
+                                ${accountsOptions}
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin: 0; align-self: flex-end;">
+                            <button type="button" class="btn btn-secondary" id="meli-filter-refresh-btn" style="height: 42px;" title="Atualizar listagem">
+                                <i class="fas fa-rotate"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="meli-listings-container" class="results-container">
+            `;
+
+            const renderTable = (listings) => {
+                if (listings.length === 0) {
+                    return `
+                        <div class="empty-state">
+                            <div class="empty-state-icon" style="color: var(--color-warning); background-color: var(--color-warning-light);">
+                                <i class="fas fa-box-open"></i>
+                            </div>
+                            <h3>Nenhum anúncio encontrado</h3>
+                            <p>Não há anúncios correspondentes aos filtros aplicados. Publique novos anúncios ou sincronize com sua conta do Mercado Livre.</p>
+                            <button class="btn btn-meli" data-action="open-create-ad-modal">
+                                <i class="fas fa-plus"></i> Criar Anúncio Agora
+                            </button>
+                        </div>
+                    `;
+                }
+
+                const rows = listings.map(item => {
+                    const thumb = item.thumbnail || '/assets/logos/default-erp.svg';
+                    const isPaused = item.status === 'paused';
+                    const isActive = item.status === 'active';
+                    const statusClass = isActive ? 'status-connected' : (isPaused ? 'status-requires_auth' : 'status-disconnected');
+                    const statusText = isActive ? 'Ativo' : (isPaused ? 'Pausado' : (item.status === 'closed' ? 'Finalizado' : item.status));
+                    const isClassic = item.listing_type_id === 'gold_special';
+                    const listingBadge = isClassic
+                        ? '<span class="listing-type-badge listing-type-gold_special"><i class="fas fa-bolt"></i> Clássico</span>'
+                        : '<span class="listing-type-badge listing-type-gold_pro"><i class="fas fa-crown"></i> Premium</span>';
+
+                    const hasSource = item.source_type && item.source_type !== 'manual';
+                    const sourceTag = hasSource
+                        ? `<span class="sku-badge" style="background-color: var(--color-primary-light); color: var(--color-primary);" title="Origem: ${item.source_type.toUpperCase()}"><i class="fas fa-link"></i> ${item.source_type.toUpperCase()}</span>`
+                        : '';
+
+                    const inStock = item.available_quantity > 0;
+
+                    return `
+                        <tr data-item-id="${item.item_id}">
+                            <td style="width: 54px; text-align: center;">
+                                <img src="${thumb}" alt="${item.title}" class="meli-table-img" onerror="this.src='/assets/logos/default-erp.svg'">
+                            </td>
+                            <td>
+                                <div style="display: flex; flex-direction: column; gap: 0.2rem;">
+                                    <div style="font-weight: 600; color: var(--color-text); font-size: 0.92rem;">
+                                        ${item.permalink ? `<a href="${item.permalink}" target="_blank" style="text-decoration: none; color: inherit;" title="Abrir no Mercado Livre">${item.title} <i class="fas fa-arrow-up-right-from-square" style="font-size: 0.72rem; color: var(--color-text-offset);"></i></a>` : item.title}
+                                    </div>
+                                    <div style="display: flex; gap: 0.5rem; align-items: center; font-size: 0.78rem;">
+                                        <span style="color: var(--color-text-offset);">MLB: <code>${item.item_id}</code></span>
+                                        ${item.connection_name ? `<span style="color: var(--color-text-muted);">| Conta: ${item.connection_name}</span>` : ''}
+                                        ${sourceTag}
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="sku-badge">${item.sku || 'N/A'}</span>
+                            </td>
+                            <td>
+                                <div style="display: flex; flex-direction: column;">
+                                    <span class="price-text" style="font-size: 0.98rem; font-weight: 700;">R$ ${parseFloat(item.price).toFixed(2)}</span>
+                                    ${item.markup_percent > 0 ? `<small style="color: var(--color-success); font-size: 0.74rem;">+${item.markup_percent}% markup</small>` : ''}
+                                </div>
+                            </td>
+                            <td>
+                                <span class="stock-badge ${inStock ? 'in-stock' : 'out-of-stock'}">
+                                    <i class="fas ${inStock ? 'fa-check' : 'fa-xmark'}"></i> ${item.available_quantity} un.
+                                </span>
+                            </td>
+                            <td>${listingBadge}</td>
+                            <td>
+                                <span class="status-pill ${statusClass}"><span class="status-dot"></span> ${statusText}</span>
+                            </td>
+                            <td style="text-align: right; white-space: nowrap;">
+                                <div style="display: inline-flex; gap: 0.35rem; align-items: center;">
+                                    ${isActive ? `
+                                        <button class="card-action-btn" data-action="toggle-meli-status" data-item-id="${item.item_id}" data-current-status="active" data-conn-id="${item.connection_id}" data-tooltip="Pausar Anúncio">
+                                            <i class="fas fa-pause"></i>
+                                        </button>
+                                    ` : `
+                                        <button class="card-action-btn" data-action="toggle-meli-status" data-item-id="${item.item_id}" data-current-status="paused" data-conn-id="${item.connection_id}" data-tooltip="Ativar Anúncio" style="color: var(--color-success);">
+                                            <i class="fas fa-play"></i>
+                                        </button>
+                                    `}
+                                    ${hasSource ? `
+                                        <button class="card-action-btn" data-action="sync-meli-item" data-item-id="${item.item_id}" data-tooltip="Sincronizar com Origem (${item.source_type.toUpperCase()})" style="color: var(--color-info);">
+                                            <i class="fas fa-rotate"></i>
+                                        </button>
+                                    ` : ''}
+                                    <button class="card-action-btn" data-action="edit-meli-item" data-item="${encodeURIComponent(JSON.stringify(item))}" data-tooltip="Editar Preço / Estoque">
+                                        <i class="fas fa-pencil"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+                return `
+                    <div class="results-card">
+                        <div class="table-responsive">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Foto</th>
+                                        <th>Título e Identificação</th>
+                                        <th>SKU</th>
+                                        <th>Preço de Venda</th>
+                                        <th>Estoque</th>
+                                        <th>Tipo</th>
+                                        <th>Status</th>
+                                        <th style="text-align: right;">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${rows}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            };
+
+            html += renderTable(items);
+            html += '</div>';
+
+            pageContent.innerHTML = html;
+
+            // Filtros dinâmicos no frontend
+            const searchInput = document.getElementById('meli-filter-search');
+            const statusSelect = document.getElementById('meli-filter-status');
+            const accountSelect = document.getElementById('meli-filter-account');
+            const listingsContainer = document.getElementById('meli-listings-container');
+            const refreshBtn = document.getElementById('meli-filter-refresh-btn');
+
+            const applyFilters = () => {
+                const term = (searchInput?.value || '').toLowerCase().trim();
+                const status = statusSelect?.value || '';
+                const account = accountSelect?.value || '';
+
+                const filtered = items.filter(i => {
+                    const matchTerm = !term || 
+                        (i.title && i.title.toLowerCase().includes(term)) || 
+                        (i.sku && i.sku.toLowerCase().includes(term)) || 
+                        (i.item_id && i.item_id.toLowerCase().includes(term));
+                    const matchStatus = !status || (i.status === status);
+                    const matchAccount = !account || (String(i.connection_id) === String(account));
+                    return matchTerm && matchStatus && matchAccount;
+                });
+
+                if (listingsContainer) listingsContainer.innerHTML = renderTable(filtered);
+            };
+
+            if (searchInput) searchInput.addEventListener('input', applyFilters);
+            if (statusSelect) statusSelect.addEventListener('change', applyFilters);
+            if (accountSelect) accountSelect.addEventListener('change', applyFilters);
+            if (refreshBtn) refreshBtn.addEventListener('click', () => renderMercadoLivreListings());
+
+        } catch (error) {
+            renderError(error);
+        }
+    };
+
+    /**
+     * =================================================================
+     * 3.2 CONEXÕES MERCADO LIVRE (CONTAS OAUTH)
+     * =================================================================
+     */
+    const renderMarketplaceConnections = async () => {
+        mainTitle.textContent = 'Contas Mercado Livre';
+        if (mainSubtitle) mainSubtitle.textContent = 'Gerencie suas credenciais de desenvolvedor e autorize suas contas do Mercado Livre via OAuth 2.0';
+        headerActions.innerHTML = `
+            <button class="btn btn-meli" data-action="add-marketplace">
+                <i class="fas fa-plus"></i> Adicionar Conta ML
+            </button>
+        `;
+
+        showLoading('Buscando contas do Mercado Livre...');
+
+        try {
+            const { connections } = await api('/api/marketplace-connections');
+            const meliConnections = (connections || []).filter(c => c.type === 'mercadolivre');
+
+            if (meliConnections.length === 0) {
+                pageContent.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon" style="background-color: rgba(255, 230, 0, 0.2); color: #2D3277;">
+                            <i class="fas fa-store"></i>
+                        </div>
+                        <h3>Nenhuma conta do Mercado Livre configurada</h3>
+                        <p>Adicione sua aplicação criada no Mercado Livre Developers com o App ID (Client ID) e Client Secret.</p>
+                        <button class="btn btn-meli" data-action="add-marketplace">
+                            <i class="fas fa-plus"></i> Adicionar Conta Mercado Livre
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+
+            let cardsHtml = '<div class="connections-grid">';
+            meliConnections.forEach(conn => {
+                const isConnected = conn.status === 'connected';
+                const nickname = conn.credentials?.nickname;
+                const siteId = conn.credentials?.site_id || 'MLB';
+
+                cardsHtml += `
+                    <div class="connection-card" data-conn-id="${conn.id}">
+                        <div class="card-header">
+                            <div class="logo-container" title="Mercado Livre">
+                                <img src="/assets/logos/mercadolivre.svg" alt="${conn.name}" class="brand-logo-img" onerror="this.src='/assets/logos/default-erp.svg'">
+                            </div>
+                            ${formatStatusBadge(conn.status)}
+                        </div>
+                        <div class="card-body">
+                            <div class="card-title-row">
+                                <h3 class="card-title">${conn.name}</h3>
+                                <span class="type-tag" style="background-color: rgba(255, 230, 0, 0.25); color: #2D3277; font-weight: 700;">MERCADO LIVRE</span>
+                            </div>
+                            <ul class="card-details-list">
+                                <li class="card-details-item">
+                                    <span class="detail-label">Identificador:</span>
+                                    <span class="detail-val">#${conn.id}</span>
+                                </li>
+                                ${nickname ? `
+                                <li class="card-details-item">
+                                    <span class="detail-label">Vendedor:</span>
+                                    <span class="detail-val"><strong>@${nickname}</strong> (${siteId})</span>
+                                </li>` : ''}
+                                <li class="card-details-item">
+                                    <span class="detail-label">App ID / Client:</span>
+                                    <span class="detail-val"><code>${conn.credentials?.client_id || 'N/A'}</code></span>
+                                </li>
+                                <li class="card-details-item">
+                                    <span class="detail-label">Autenticação:</span>
+                                    <span class="detail-val">OAuth 2.0 Oficial</span>
+                                </li>
+                            </ul>
+                        </div>
+                        <div class="card-footer">
+                            <div class="card-footer-actions-left">
+                                <button class="btn btn-small ${isConnected ? 'btn-secondary' : 'btn-meli'}" data-action="auth-meli" data-id="${conn.id}" title="Autenticar conta no Mercado Livre via OAuth">
+                                    <i class="fas fa-key"></i> ${isConnected ? 'Reautorizar' : 'Autorizar Login ML'}
+                                </button>
+                                <button class="btn btn-small btn-primary" data-action="nav-goto-meli-ads" title="Ver anúncios desta conta">
+                                    <i class="fas fa-rectangle-ad"></i> Anúncios
+                                </button>
+                            </div>
+                            <div class="card-footer-actions-right">
+                                <button class="card-action-btn" data-action="edit-marketplace" data-id="${conn.id}" data-tooltip="Editar Conta">
+                                    <i class="fas fa-pencil"></i>
+                                </button>
+                                <button class="card-action-btn danger" data-action="remove-marketplace" data-id="${conn.id}" data-tooltip="Excluir Conta">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            cardsHtml += '</div>';
+
+            pageContent.innerHTML = cardsHtml;
+        } catch (error) {
+            renderError(error);
+        }
+    };
+
+    /**
+     * =================================================================
      * 4. PÁGINA DE PRODUTOS & BUSCA
      * =================================================================
      */
@@ -1267,12 +2246,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const rowsHtml = products.map(p => {
                         const price = (typeof p.price === 'number') ? `R$ ${p.price.toFixed(2)}` : (p.price || 'N/D');
+                        const rawPrice = typeof p.price === 'number' ? p.price : (parseFloat(String(p.price).replace(/[^\d.,]/g, '').replace(',', '.')) || 0);
                         const stock = p.stock !== null && p.stock !== undefined ? p.stock : 'N/D';
                         const inStock = typeof stock === 'number' ? stock > 0 : true;
+                        const safeName = (p.name || '').replace(/"/g, '&quot;');
+                        const safeSku = p.sku || '';
 
                         return `
                             <tr>
-                                <td><span class="sku-badge">${p.sku || 'N/A'}</span></td>
+                                <td><span class="sku-badge">${safeSku || 'N/A'}</span></td>
                                 <td><strong>${p.name || 'Sem nome'}</strong></td>
                                 <td>
                                     <span class="stock-badge ${inStock ? 'in-stock' : 'out-of-stock'}">
@@ -1280,6 +2262,11 @@ document.addEventListener('DOMContentLoaded', () => {
                                     </span>
                                 </td>
                                 <td><span class="price-text">${price}</span></td>
+                                <td style="text-align: right;">
+                                    <button type="button" class="btn btn-small btn-meli" data-action="create-ad-from-erp" data-sku="${safeSku}" data-name="${safeName}" data-price="${rawPrice}" data-stock="${stock !== 'N/D' ? stock : 1}" data-conn-id="${connectionId}" title="Publicar este produto no Mercado Livre">
+                                        <i class="fas fa-store"></i> Criar Anúncio ML
+                                    </button>
+                                </td>
                             </tr>
                         `;
                     }).join('');
@@ -1294,6 +2281,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                             <th>Descrição do Produto</th>
                                             <th>Estoque Atual</th>
                                             <th>Preço de Venda</th>
+                                            <th style="text-align: right;">Ações Mercado Livre</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -1348,7 +2336,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const actionButton = e.target.closest('[data-action]');
         if (!actionButton) return;
 
-        const { action, id, name } = actionButton.dataset;
+        const { action, id, name, itemId, currentStatus, connId, sku, price, stock, images, item } = actionButton.dataset;
 
         // 1. Navegação de atalhos rápidos
         if (action === 'nav-goto-products') {
@@ -1364,6 +2352,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (action === 'nav-goto-supplier') {
             setActiveNavLink('nav-conexoes-fornecedores');
             renderSupplierConnections();
+            return;
+        }
+        if (action === 'nav-goto-meli-ads') {
+            setActiveNavLink('nav-meli-anuncios');
+            renderMercadoLivreListings();
+            return;
+        }
+        if (action === 'nav-goto-meli-accounts') {
+            setActiveNavLink('nav-meli-conexoes');
+            renderMarketplaceConnections();
             return;
         }
 
@@ -1395,7 +2393,28 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 4. Testar Conexão / Buscar Produto do Fornecedor em POP-UP NA MESMA TELA
+        // 4. Autenticação OAuth do Mercado Livre
+        if (action === 'auth-meli') {
+            actionButton.classList.add('loading');
+            actionButton.disabled = true;
+            try {
+                const res = await api(`/api/marketplace/auth/${id}/mercadolivre`);
+                if (res.url) {
+                    showToast('Redirecionando para o Mercado Livre para autorização oficial...', 'info');
+                    window.location.href = res.url;
+                } else {
+                    showToast('URL de autorização não retornada pelo servidor.', 'error');
+                }
+            } catch (authError) {
+                showToast(`Falha ao iniciar OAuth do Mercado Livre: ${authError.message}`, 'error');
+            } finally {
+                actionButton.classList.remove('loading');
+                actionButton.disabled = false;
+            }
+            return;
+        }
+
+        // 5. Testar Conexão / Buscar Produto do Fornecedor em POP-UP NA MESMA TELA
         if (action === 'test-scraper-link') {
             e.preventDefault();
             e.stopPropagation();
@@ -1403,24 +2422,153 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 5. Ações de CRUD (Adicionar, Editar, Remover)
+        // 6. Ações do Mercado Livre (Criar, Editar, Pausar/Ativar, Sincronizar, Importar)
+        if (action === 'open-create-ad-modal') {
+            openMeliCreateModal();
+            return;
+        }
+
+        if (action === 'create-ad-from-erp') {
+            const rawPrice = parseFloat(price) || 0;
+            const rawStock = parseInt(stock, 10) || 1;
+            openMeliCreateModal({
+                source_type: 'erp',
+                source_id: connId || '',
+                source_name: 'ERP',
+                sku: sku || '',
+                name: name || '',
+                price: rawPrice,
+                stock: rawStock
+            });
+            return;
+        }
+
+        if (action === 'create-ad-from-supplier') {
+            let parsedImages = [];
+            try {
+                if (images) parsedImages = JSON.parse(decodeURIComponent(images));
+            } catch (err) {
+                parsedImages = [];
+            }
+
+            const rawPrice = parseFloat(price) || 0;
+            const rawStock = parseInt(stock, 10) || 1;
+            openMeliCreateModal({
+                source_type: 'supplier',
+                source_id: connId || '',
+                source_name: 'Dismatal',
+                sku: sku || '',
+                name: name || '',
+                price: rawPrice,
+                stock: rawStock,
+                images: parsedImages
+            });
+            return;
+        }
+
+        if (action === 'edit-meli-item') {
+            try {
+                const itemObj = JSON.parse(decodeURIComponent(item));
+                openMeliEditModal(itemObj);
+            } catch (err) {
+                showToast('Erro ao carregar dados para edição.', 'error');
+            }
+            return;
+        }
+
+        if (action === 'toggle-meli-status') {
+            const newStatus = currentStatus === 'active' ? 'paused' : 'active';
+            const actionLabel = newStatus === 'active' ? 'Reativando' : 'Pausando';
+            actionButton.classList.add('loading');
+            actionButton.disabled = true;
+
+            try {
+                await api(`/api/marketplace/mercadolivre/items/${itemId}/status`, 'PUT', {
+                    newStatus,
+                    connectionId: connId
+                });
+                showToast(`Anúncio ${newStatus === 'active' ? 'reativado' : 'pausado'} com sucesso no Mercado Livre!`, 'success');
+                renderMercadoLivreListings();
+            } catch (err) {
+                showToast(`Falha ao alterar status: ${err.message}`, 'error');
+            } finally {
+                actionButton.classList.remove('loading');
+                actionButton.disabled = false;
+            }
+            return;
+        }
+
+        if (action === 'sync-meli-item') {
+            actionButton.classList.add('loading');
+            actionButton.disabled = true;
+            try {
+                const syncRes = await api(`/api/marketplace/mercadolivre/items/${itemId}/sync-from-source`, 'POST');
+                showToast(syncRes.mensagem || 'Estoque e preço sincronizados com sucesso!', 'success');
+                renderMercadoLivreListings();
+            } catch (err) {
+                showToast(`Erro na sincronização: ${err.message}`, 'error');
+            } finally {
+                actionButton.classList.remove('loading');
+                actionButton.disabled = false;
+            }
+            return;
+        }
+
+        if (action === 'import-meli-items') {
+            actionButton.classList.add('loading');
+            actionButton.disabled = true;
+
+            try {
+                const { connections } = await api('/api/marketplace-connections');
+                const meliConnections = (connections || []).filter(c => c.type === 'mercadolivre' && c.status === 'connected');
+                
+                if (meliConnections.length === 0) {
+                    showToast('Nenhuma conta do Mercado Livre autenticada. Autorize sua conta antes de importar.', 'warning');
+                    return;
+                }
+
+                const targetConnId = connId || meliConnections[0].id;
+                showToast('Importando anúncios do Mercado Livre...', 'info');
+
+                const importRes = await api('/api/marketplace/mercadolivre/items/import-from-meli', 'POST', {
+                    connectionId: targetConnId
+                });
+
+                showToast(`Importação concluída! ${importRes.importados || 0} anúncios importados/atualizados.`, 'success');
+                renderMercadoLivreListings();
+            } catch (err) {
+                showToast(`Falha na importação: ${err.message}`, 'error');
+            } finally {
+                actionButton.classList.remove('loading');
+                actionButton.disabled = false;
+            }
+            return;
+        }
+
+        // 7. Ações de CRUD (Adicionar, Editar, Remover Conexões de ERP, Fornecedor e Marketplace)
+        const isMarketplace = action.includes('marketplace');
         const isErp = action.includes('erp');
-        const type = isErp ? 'erp' : 'supplier';
-        const typeTitle = isErp ? 'ERP' : 'Fornecedor';
-        const endpoint = isErp ? '/api/erp-connections' : '/api/supplier-connections';
-        const renderFn = isErp ? renderErpConnections : renderSupplierConnections;
+        const type = isMarketplace ? 'marketplace' : (isErp ? 'erp' : 'supplier');
+        const typeTitle = isMarketplace ? 'Marketplace Mercado Livre' : (isErp ? 'ERP' : 'Fornecedor');
+        const endpoint = isMarketplace ? '/api/marketplace-connections' : (isErp ? '/api/erp-connections' : '/api/supplier-connections');
+        const renderFn = isMarketplace ? renderMarketplaceConnections : (isErp ? renderErpConnections : renderSupplierConnections);
 
         try {
             // ADICIONAR
             if (action.startsWith('add')) {
                 modalTitle.textContent = `Adicionar Conexão de ${typeTitle}`;
-                modalSubtitle.textContent = `Configure os parâmetros de integração com o novo ${typeTitle}`;
-                modalIconBadge.innerHTML = `<i class="fas ${isErp ? 'fa-server' : 'fa-truck-fast'}"></i>`;
+                modalSubtitle.textContent = `Configure os parâmetros de integração com ${typeTitle}`;
+                modalIconBadge.innerHTML = `<i class="fas ${isMarketplace ? 'fa-store' : (isErp ? 'fa-server' : 'fa-truck-fast')}"></i>`;
                 
                 formFields.innerHTML = '';
-                formFields.appendChild(isErp ? generateErpForm() : generateSupplierForm());
+                if (isMarketplace) {
+                    formFields.appendChild(generateMarketplaceForm());
+                } else if (isErp) {
+                    formFields.appendChild(generateErpForm());
+                } else {
+                    formFields.appendChild(generateSupplierForm());
+                }
                 openModal();
-                if (!isErp) setupJsonValidation();
 
                 modalForm.onsubmit = async (ev) => {
                     ev.preventDefault();
@@ -1433,7 +2581,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         const formData = new FormData(modalForm);
                         const body = { name: formData.get('name'), type: formData.get('type'), credentials: {} };
 
-                        if (isErp) {
+                        if (isMarketplace) {
+                            body.credentials = {
+                                client_id: formData.get('client_id'),
+                                client_secret: formData.get('client_secret'),
+                                redirect_uri: formData.get('redirect_uri')
+                            };
+                        } else if (isErp) {
                             const erpType = formData.get('type');
                             if (erpType === 'bling') {
                                 body.credentials.client_id = formData.get('client_id');
@@ -1445,7 +2599,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                 body.credentials.password = formData.get('password');
                             }
                         } else {
-                            // Coleta os dados dos campos separados para fornecedores
                             body.credentials = {
                                 url: formData.get('url'),
                                 username: formData.get('username'),
@@ -1478,9 +2631,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 modalIconBadge.innerHTML = `<i class="fas fa-sliders"></i>`;
 
                 formFields.innerHTML = '';
-                formFields.appendChild(isErp ? generateErpForm(connection) : generateSupplierForm(connection));
+                if (isMarketplace) {
+                    formFields.appendChild(generateMarketplaceForm(connection));
+                } else if (isErp) {
+                    formFields.appendChild(generateErpForm(connection));
+                } else {
+                    formFields.appendChild(generateSupplierForm(connection));
+                }
                 openModal();
-                if (!isErp) setupJsonValidation();
 
                 modalForm.onsubmit = async (ev) => {
                     ev.preventDefault();
@@ -1493,7 +2651,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         const formData = new FormData(modalForm);
                         const body = { name: formData.get('name'), type: formData.get('type'), credentials: {} };
 
-                        if (isErp) {
+                        if (isMarketplace) {
+                            body.credentials = {
+                                client_id: formData.get('client_id'),
+                                client_secret: formData.get('client_secret'),
+                                redirect_uri: formData.get('redirect_uri')
+                            };
+                        } else if (isErp) {
                             const erpType = formData.get('type');
                             if (erpType === 'bling') {
                                 body.credentials.client_id = formData.get('client_id');
@@ -1505,7 +2669,6 @@ document.addEventListener('DOMContentLoaded', () => {
                                 body.credentials.password = formData.get('password');
                             }
                         } else {
-                            // Coleta os dados dos campos separados para fornecedores
                             body.credentials = {
                                 url: formData.get('url'),
                                 username: formData.get('username'),
@@ -1562,6 +2725,8 @@ document.addEventListener('DOMContentLoaded', () => {
         'nav-produtos': renderProductsPage,
         'nav-conexoes-erp': renderErpConnections,
         'nav-conexoes-fornecedores': renderSupplierConnections,
+        'nav-meli-anuncios': renderMercadoLivreListings,
+        'nav-meli-conexoes': renderMarketplaceConnections
     };
 
     document.querySelector('.menu-links').addEventListener('click', (e) => {
@@ -1601,13 +2766,19 @@ document.addEventListener('DOMContentLoaded', () => {
     if (navSupplierLink) {
         navSupplierLink.textContent = 'Fornecedores';
     }
-    // FIM DA CORREÇÃO
 
-    // Checar se veio de retorno OAuth do Bling
+    // Checar se veio de retorno OAuth do Bling ou Mercado Livre
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('autorizado') === 'true') {
         showToast('Bling autenticado com sucesso via OAuth!', 'success');
         window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    if (urlParams.get('ml_autorizado') === 'true') {
+        showToast('Conta do Mercado Livre autorizada e conectada com sucesso!', 'success');
+        window.history.replaceState({}, document.title, window.location.pathname);
+        setActiveNavLink('nav-meli-conexoes');
+        renderMarketplaceConnections();
+        return;
     }
 
     // Carregar tela inicial (Dashboard)

@@ -4,6 +4,7 @@ import fs from 'fs/promises';
 import erpRoutes from './api/erpRoutes.js';
 import supplierRoutes from './api/supplierRoutes.js'; // Caminho já estava correto, apenas confirmando
 import productRoutes from './api/productRoutes.js';
+import marketplaceRoutes from './api/marketplaceRoutes.js';
 import { getLogger } from './core/logger.js'; // logger.js irá para src/core/
 import { loadInitialData } from './services/productService.js'; // productService.js irá para src/services/
 
@@ -30,6 +31,7 @@ export async function createApp(db) {
     app.use('/api', erpRoutes(db));
     app.use('/api', supplierRoutes(db));
     app.use('/api', productRoutes(db));
+    app.use('/api', marketplaceRoutes(db));
 
     // Middleware para servir arquivos estáticos com controle de cache inteligente.
     app.use(express.static(path.join(process.cwd(), 'public'), {

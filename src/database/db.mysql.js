@@ -100,6 +100,43 @@ export const initializeDatabase = async () => {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS marketplace_connections (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        type VARCHAR(50) NOT NULL DEFAULT 'mercadolivre',
+        credentials JSON NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS mercado_livre_anuncios (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        connection_id INT NOT NULL,
+        item_id VARCHAR(50) NOT NULL,
+        sku VARCHAR(100) DEFAULT NULL,
+        title VARCHAR(255) NOT NULL,
+        price DECIMAL(10,2) NOT NULL,
+        available_quantity INT NOT NULL DEFAULT 0,
+        status VARCHAR(50) NOT NULL DEFAULT 'active',
+        listing_type_id VARCHAR(50) DEFAULT 'gold_special',
+        permalink VARCHAR(500) DEFAULT NULL,
+        thumbnail VARCHAR(500) DEFAULT NULL,
+        category_id VARCHAR(50) DEFAULT NULL,
+        category_name VARCHAR(255) DEFAULT NULL,
+        source_type VARCHAR(50) DEFAULT NULL,
+        source_id VARCHAR(100) DEFAULT NULL,
+        source_data JSON DEFAULT NULL,
+        sync_auto_stock BOOLEAN DEFAULT FALSE,
+        sync_auto_price BOOLEAN DEFAULT FALSE,
+        markup_percent DECIMAL(5,2) DEFAULT 0.00,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY mlb_item (item_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
     console.log('Banco de dados MySQL pronto.');
   } finally {
     connection.release();
@@ -216,3 +253,101 @@ export const updateDb = async (partial) => {
     connection.release();
   }
 };
+
+export const updateMarketplaceConnection = async (connection) => {
+  await ensureInitialized();
+  const conn = await getPool().getConnection();
+  try {
+    const { id, name, type = 'mercadolivre', credentials } = connection;
+    await conn.execute(
+      'UPDATE marketplace_connections SET name = ?, type = ?, credentials = ? WHERE id = ?',
+      [
+        name,
+        type,
+        JSON.stringify(credentials),
+        id
+      ]
+    );
+  } catch (error) {
+    console.error(`Erro ao atualizar a conexão de marketplace (ID: ${connection.id}) no MySQL:`, error);
+    throw error;
+  } finally {
+    conn.release();
+  }
+};
+
+export const saveOrUpdateMercadoLivreAnuncio = async (anuncio) => {
+  await ensureInitialized();
+  const conn = await getPool().getConnection();
+  try {
+    const {
+      connection_id,
+      item_id,
+      sku = null,
+      title,
+      price,
+      available_quantity = 0,
+      status = 'active',
+      listing_type_id = 'gold_special',
+      permalink = null,
+      thumbnail = null,
+      category_id = null,
+      category_name = null,
+      source_type = null,
+      source_id = null,
+      source_data = null,
+      sync_auto_stock = false,
+      sync_auto_price = false,
+      markup_percent = 0.00
+    } = anuncio;
+
+    await conn.execute(`
+      INSERT INTO mercado_livre_anuncios 
+        (connection_id, item_id, sku, title, price, available_quantity, status, listing_type_id, permalink, thumbnail, category_id, category_name, source_type, source_id, source_data, sync_auto_stock, sync_auto_price, markup_percent)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        connection_id = VALUES(connection_id),
+        sku = VALUES(sku),
+        title = VALUES(title),
+        price = VALUES(price),
+        available_quantity = VALUES(available_quantity),
+        status = VALUES(status),
+        listing_type_id = VALUES(listing_type_id),
+        permalink = VALUES(permalink),
+        thumbnail = VALUES(thumbnail),
+        category_id = VALUES(category_id),
+        category_name = VALUES(category_name),
+        source_type = VALUES(source_type),
+        source_id = VALUES(source_id),
+        source_data = VALUES(source_data),
+        sync_auto_stock = VALUES(sync_auto_stock),
+        sync_auto_price = VALUES(sync_auto_price),
+        markup_percent = VALUES(markup_percent),
+        updated_at = CURRENT_TIMESTAMP
+    `, [
+      connection_id,
+      item_id,
+      sku,
+      title,
+      price,
+      available_quantity,
+      status,
+      listing_type_id,
+      permalink,
+      thumbnail,
+      category_id,
+      category_name,
+      source_type,
+      source_id,
+      source_data ? JSON.stringify(source_data) : null,
+      sync_auto_stock ? 1 : 0,
+      sync_auto_price ? 1 : 0,
+      markup_percent
+    ]);
+  } catch (error) {
+    console.error(`Erro ao salvar/atualizar anúncio do Mercado Livre (${anuncio.item_id}) no MySQL:`, error);
+    throw error;
+  } finally {
+    conn.release();
+  }
+};
