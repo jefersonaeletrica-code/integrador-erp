@@ -234,12 +234,18 @@ export default (db) => {
                 paginationInfo.totalItems = totalItems;
             }
 
-            // Normaliza a estrutura dos produtos para o formato esperado pelo frontend.
+            // Normaliza a estrutura dos produtos para o formato esperado pelo frontend,
+            // tratando a extração de estoque de forma específica para cada ERP.
             const products = apiProducts.map(p => ({
+                id: p.id,
                 sku: p.codigo,
                 name: p.nome,
-                stock: p.saldoFisicoTotal ?? p.estoque ?? null, // Garante que o estoque seja numérico ou nulo, nunca 'N/A'.
-                price: p.preco ?? null // Ambas as APIs agora retornam 'preco'
+                // CORREÇÃO: Extrai o estoque do Bling do objeto aninhado `estoque.saldoVirtualTotal`.
+                // Mantém a compatibilidade com CissPoder (p.saldoFisicoTotal).
+                stock: (connection.type === 'bling' && p.estoque)
+                    ? p.estoque.saldoVirtualTotal ?? null
+                    : p.saldoFisicoTotal ?? p.estoque ?? null,
+                price: p.preco ?? null
             }));
 
             logger.info(`[ERPRoutes] Busca concluída. Encontrados ${products.length} produtos.`);
