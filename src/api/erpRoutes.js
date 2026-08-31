@@ -231,7 +231,9 @@ export default (db) => {
                 rawData = await erpService.fetchProductsByName(connection, searchTerm, page, limit);
             } else {
                 // Lógica para outros ERPs (CissPoder)
-                rawData = isSku(searchTerm) ? await erpService.fetchProductsByCode(connection, searchTerm, page) : await erpService.fetchProductsByName(connection, searchTerm, page);
+                rawData = isSku(searchTerm)
+                    ? await erpService.fetchProductsByCode(connection, searchTerm, page)
+                    : await erpService.fetchProductsByName(connection, searchTerm, page, 100); // Passa o limite para outros ERPs
             }
 
             apiProducts = rawData.data || [];
