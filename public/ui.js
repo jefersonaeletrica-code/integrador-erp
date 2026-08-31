@@ -214,9 +214,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
     if (cancelModalBtn) cancelModalBtn.addEventListener('click', closeModal);
     
-    supplierTestModalCloseBtns.forEach(btn => {
-        btn.addEventListener('click', closeSupplierTestModal);
-    });
+    if (supplierTestModalCloseBtns) {
+        supplierTestModalCloseBtns.forEach(btn => {
+            btn.addEventListener('click', closeSupplierTestModal);
+        });
+    }
 
     // Fechar ao clicar no backdrop ou pressionar ESC
     window.addEventListener('click', (e) => {
@@ -236,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     /**
-     * Listener para o formulário de teste de fornecedor (Pop-up)
+     * Listener para o formulário de teste de fornecedor (Pop-up Dismatal)
      */
     if (supplierTestForm) {
         supplierTestForm.addEventListener('submit', async (e) => {
@@ -857,11 +859,8 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                             <div class="card-footer">
                                 <div class="card-footer-actions-left">
-                                    <!-- <button class="btn btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Validar Sessão">
-                                        <i class="fas fa-shield-halved"></i> Validar
-                                    </button> -->
-                                    <button class="btn btn-small btn-warning" data-action="test-scraper-link" data-id="${conn.id}" data-name="${conn.name}" title="Buscar produto no Scraper via Pop-up">
-                                        <i class="fas fa-vial"></i> Testar
+                                    <button class="btn btn-small btn-primary" data-action="test-scraper-link" data-id="${conn.id}" data-name="${conn.name}" title="Buscar produto no Scraper via Pop-up">
+                                        <i class="fas fa-vial"></i> Testar Conexão
                                     </button>
                                 </div>
                                 <div class="card-footer-actions-right">
@@ -1060,14 +1059,8 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <div class="card-footer">
                             <div class="card-footer-actions-left">
-                                <!-- <button class="btn btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Verificar se a sessão salva ainda é válida">
-                                    <i class="fas fa-shield-halved"></i> Validar
-                                </button>
-                                <button class="btn btn-small btn-warning" data-action="auth-supplier" data-id="${conn.id}" title="Forçar novo login para renovar os cookies de sessão">
-                                    <i class="fas fa-rotate"></i> Renovar
-                                </button> -->
-                                <button class="btn btn-small btn-secondary" data-action="test-scraper-link" data-id="${conn.id}" data-name="${conn.name}" title="Abrir pop-up para buscar e testar produto no Scraper">
-                                    <i class="fas fa-vial"></i> Testar
+                                <button class="btn btn-small btn-primary" data-action="test-scraper-link" data-id="${conn.id}" data-name="${conn.name}" title="Abrir pop-up para buscar e testar produto no Scraper">
+                                    <i class="fas fa-vial"></i> Testar Conexão
                                 </button>
                             </div>
                             <div class="card-footer-actions-right">
@@ -1383,31 +1376,15 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 4. Ações de Fornecedor: Validar e Autenticar
-        if (action === 'test-supplier' || action === 'auth-supplier') {
-            actionButton.classList.add('loading');
-            actionButton.disabled = true;
-
-            const endpointAction = action === 'test-supplier' ? 'validate-authentication' : 'authenticate';
-            try {
-                const result = await api(`/api/supplier-connections/${id}/${endpointAction}`, 'POST');
-                showToast(result.mensagem || 'Tarefa iniciada com sucesso!', 'success');
-            } catch (error) {
-                showToast(`Erro: ${error.message}`, 'error');
-            } finally {
-                actionButton.classList.remove('loading');
-                actionButton.disabled = false;
-            }
-            return;
-        }
-
-        // 5. Testar Conexão / Buscar Produto do Fornecedor em POP-UP
+        // 4. Testar Conexão / Buscar Produto do Fornecedor em POP-UP NA MESMA TELA
         if (action === 'test-scraper-link') {
+            e.preventDefault();
+            e.stopPropagation();
             openSupplierTestModal(id, name || 'Dismatal');
             return;
         }
 
-        // 6. Ações de CRUD (Adicionar, Editar, Remover)
+        // 5. Ações de CRUD (Adicionar, Editar, Remover)
         const isErp = action.includes('erp');
         const type = isErp ? 'erp' : 'supplier';
         const typeTitle = isErp ? 'ERP' : 'Fornecedor';
