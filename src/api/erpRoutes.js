@@ -248,10 +248,12 @@ export default (db) => {
                 // 3. Executa as buscas exaustivas em paralelo.
                 const [nameProducts, codeProducts] = await Promise.all(searchTasks.map(task => fetchAllPages(task)));
 
-                // 4. Combina e remove duplicatas.
+                // 4. Combina e remove duplicatas, priorizando os resultados da busca por código.
                 const combinedProductsMap = new Map();
-                nameProducts.forEach(p => combinedProductsMap.set(p.id, p));
+                // Adiciona primeiro os resultados da busca por código.
                 codeProducts.forEach(p => combinedProductsMap.set(p.id, p));
+                // Em seguida, adiciona os resultados da busca por nome, apenas se o produto ainda não existir no mapa.
+                nameProducts.forEach(p => { if (!combinedProductsMap.has(p.id)) combinedProductsMap.set(p.id, p); });
                 const allProducts = Array.from(combinedProductsMap.values());
                 const totalItems = allProducts.length;
 
