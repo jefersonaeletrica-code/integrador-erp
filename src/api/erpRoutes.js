@@ -225,12 +225,13 @@ export default (db) => {
             apiProducts = rawData.data || [];
 
             if (connection.type === 'bling') {
-                const totalItems = rawData.meta?.total ?? 0;
-                const limit = rawData.meta?.limit ?? 100;
+                // CORREÇÃO: Acessa o total de itens diretamente do objeto meta.
+                const totalItems = rawData.meta?.total || 0;
+                const limit = rawData.meta?.limit || 100;
                 paginationInfo.totalPages = totalItems > 0 ? Math.ceil(totalItems / limit) : 1;
                 paginationInfo.totalItems = totalItems;
             } else if (connection.type === 'cisspoder') {
-                const totalItems = rawData.total ?? 0;
+                const totalItems = rawData.total || 0;
                 const limit = 20;
                 paginationInfo.totalPages = totalItems > 0 ? Math.ceil(totalItems / limit) : 1;
                 paginationInfo.totalItems = totalItems;
