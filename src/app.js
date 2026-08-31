@@ -32,36 +32,34 @@ export async function createApp(db) {
     app.use('/api', productRoutes(db));
 
     // Middleware para servir arquivos estáticos com controle de cache inteligente.
-    // Deve vir DEPOIS das rotas de API e ANTES da rota catch-all.
-    // Isso ajuda a resolver o problema de "visual diferente" entre o ambiente local e o servidor.
     app.use(express.static(path.join(process.cwd(), 'public'), {
-        etag: true, // Habilita o uso de ETags para validação de cache.
-        lastModified: true, // Habilita o uso do cabeçalho Last-Modified.
-        setHeaders: (res, filePath) => {
-            // Para o arquivo HTML principal, desativa o cache completamente.
-            // O navegador sempre pedirá a versão mais recente.
-            if (path.basename(filePath) === 'index.html') {
-                res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-                res.setHeader('Pragma', 'no-cache');
-                res.setHeader('Expires', '0');
-            }
+        index: false, // Desativa o envio automático do index.html pelo middleware estático para passar pelo catch-all
+        etag: false,
+        lastModified: false,
+        setHeaders: (res) => {
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
         }
     }));
 
     // Rota "Catch-All": Para qualquer outra requisição que não seja de API,
-    // serve o index.html. Isso é crucial para o funcionamento do roteamento
-    // no lado do cliente (Single-Page Application).
+    // serve o index.html com cacheBuster dinâmico.
     app.get('*', async (req, res, next) => {
         try {
             const indexPath = path.join(process.cwd(), 'public', 'index.html');
             let html = await fs.readFile(indexPath, 'utf-8');
             
-            // Substitui o placeholder pela versão única gerada na inicialização.
-            html = html.replace(/__CACHE_BUSTER__/g, cacheBuster);
+            // Substitui o placeholder por um cache buster novo a cada requisição
+            const dynamicCacheBuster = Date.now().toString();
+            html = html.replace(/__CACHE_BUSTER__/g, dynamicCacheBuster);
 
+            res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+            res.setHeader('Pragma', 'no-cache');
+            res.setHeader('Expires', '0');
             res.setHeader('Content-Type', 'text/html').send(html);
         } catch (error) {
-            next(error); // Passa o erro para o próximo manipulador de erros do Express.
+            next(error);
         }
     });
 

@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cancelModalBtn = document.querySelector('.modal-cancel');
     const brandLink = document.getElementById('brand-link');
 
-    // Modal de Teste de Fornecedor (Dismatal Pop-up)
+    // Modal Pop-up de Teste de Fornecedor (Dismatal)
     const supplierTestModal = document.getElementById('supplier-test-modal');
     const supplierTestForm = document.getElementById('supplier-test-form');
     const supplierTestTerm = document.getElementById('supplier-test-term');
@@ -299,7 +299,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="supplier-test-product-card">
                             <div class="supplier-test-img-container">
                                 ${imgUrl 
-                                    ? `<img src="${imgUrl}" alt="${p.name || 'Produto'}" class="supplier-test-img" onerror="this.parentElement.innerHTML='<i class=\\\'fas fa-box-open\\\' style=\\\'font-size: 2.2rem; color: var(--color-text-offset);\\\'></i>'">` 
+                                    ? `<img src="${imgUrl}" alt="${p.name || 'Produto'}" class="supplier-test-img" onerror="this.parentElement.innerHTML='<i class=\'fas fa-box-open\' style=\'font-size: 2.2rem; color: var(--color-text-offset);\'></i>'">` 
                                     : `<i class="fas fa-box-open" style="font-size: 2.2rem; color: var(--color-text-offset);"></i>`}
                             </div>
                             <div class="supplier-test-details">
@@ -860,7 +860,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="card-footer">
                                 <div class="card-footer-actions-left">
                                     <button class="btn btn-small btn-primary" data-action="test-scraper-link" data-id="${conn.id}" data-name="${conn.name}" title="Buscar produto no Scraper via Pop-up">
-                                        <i class="fas fa-vial"></i> Testar Conexão
+                                        <i class="fas fa-vial"></i> Testar
                                     </button>
                                 </div>
                                 <div class="card-footer-actions-right">
@@ -1060,7 +1060,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div class="card-footer">
                             <div class="card-footer-actions-left">
                                 <button class="btn btn-small btn-primary" data-action="test-scraper-link" data-id="${conn.id}" data-name="${conn.name}" title="Abrir pop-up para buscar e testar produto no Scraper">
-                                    <i class="fas fa-vial"></i> Testar Conexão
+                                    <i class="fas fa-vial"></i> Testar
                                 </button>
                             </div>
                             <div class="card-footer-actions-right">
