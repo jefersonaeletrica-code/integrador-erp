@@ -189,10 +189,12 @@ export default (db) => {
             const products = scraperResult.produtos.map(p => ({
                 name: p.nome,
                 stock: p.estoque,
-                sku: p.sku,
-                price: p.preco
+                sku: p.sku || p.codigoFornecedor || p.codigo,
+                price: p.preco,
+                barcode: p.barcode,
+                images: p.imagens || (p.imagem ? [p.imagem] : [])
             }));
-            res.status(200).json({ sucesso: true, products });
+            res.status(200).json({ sucesso: true, products, produtos: scraperResult.produtos });
         } catch (e) {
             res.status(500).json({ sucesso: false, erro: `Erro durante a busca de produtos: ${e.message}` });
         }

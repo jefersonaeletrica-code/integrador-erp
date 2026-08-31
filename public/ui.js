@@ -10,6 +10,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const mainTitle = document.getElementById('main-title');
     const mainSubtitle = document.getElementById('main-subtitle');
     const headerActions = document.getElementById('header-actions');
+    
+    // Modal de Conexões CRUD
     const modal = document.getElementById('form-modal');
     const modalTitle = document.getElementById('modal-title');
     const modalSubtitle = document.getElementById('modal-subtitle');
@@ -17,9 +19,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const formFields = document.getElementById('form-fields');
     const modalForm = document.getElementById('modal-form');
     const modalSaveBtn = document.getElementById('modal-save-btn');
-    const closeModalBtn = document.querySelector('.modal-close');
+    const closeModalBtn = document.querySelector('.modal-close:not(.supplier-test-modal-close)');
     const cancelModalBtn = document.querySelector('.modal-cancel');
     const brandLink = document.getElementById('brand-link');
+
+    // Modal de Teste de Fornecedor (Dismatal Pop-up)
+    const supplierTestModal = document.getElementById('supplier-test-modal');
+    const supplierTestForm = document.getElementById('supplier-test-form');
+    const supplierTestTerm = document.getElementById('supplier-test-term');
+    const supplierTestConnectionId = document.getElementById('supplier-test-connection-id');
+    const supplierTestResults = document.getElementById('supplier-test-results');
+    const supplierTestSubmitBtn = document.getElementById('supplier-test-submit-btn');
+    const supplierTestModalCloseBtns = document.querySelectorAll('.supplier-test-modal-close');
 
     /**
      * Inicializa a lógica do seletor de tema (Dark Mode).
@@ -172,21 +183,159 @@ document.addEventListener('DOMContentLoaded', () => {
         if (modal) modal.style.display = 'none';
     };
 
+    const openSupplierTestModal = (connectionId, connectionName = 'Dismatal') => {
+        if (!supplierTestModal) return;
+        if (supplierTestConnectionId) supplierTestConnectionId.value = connectionId;
+        if (supplierTestTerm) {
+            supplierTestTerm.value = '';
+            setTimeout(() => supplierTestTerm.focus(), 150);
+        }
+        const titleEl = document.getElementById('supplier-test-modal-title');
+        if (titleEl) titleEl.textContent = `Testar Conexão ${connectionName}`;
+
+        if (supplierTestResults) {
+            supplierTestResults.innerHTML = `
+                <div class="empty-state" style="padding: 2rem 1rem; margin: 0;">
+                    <div class="empty-state-icon" style="color: var(--color-warning); background-color: var(--color-warning-light); width: 48px; height: 48px; font-size: 1.3rem;">
+                        <i class="fas fa-barcode"></i>
+                    </div>
+                    <h4 style="font-size: 1.05rem; font-weight: 600;">Pronto para testar</h4>
+                    <p style="font-size: 0.85rem; margin: 0;">Informe o SKU do produto acima para testar a comunicação com a ${connectionName}.</p>
+                </div>
+            `;
+        }
+        supplierTestModal.style.display = 'flex';
+    };
+
+    const closeSupplierTestModal = () => {
+        if (supplierTestModal) supplierTestModal.style.display = 'none';
+    };
+
     if (closeModalBtn) closeModalBtn.addEventListener('click', closeModal);
     if (cancelModalBtn) cancelModalBtn.addEventListener('click', closeModal);
     
+    supplierTestModalCloseBtns.forEach(btn => {
+        btn.addEventListener('click', closeSupplierTestModal);
+    });
+
     // Fechar ao clicar no backdrop ou pressionar ESC
     window.addEventListener('click', (e) => {
-        if (e.target === modal || e.target.classList.contains('modal-backdrop')) {
+        if (e.target === modal || (e.target.classList && e.target.classList.contains('modal-backdrop') && e.target.closest('#form-modal'))) {
             closeModal();
+        }
+        if (e.target === supplierTestModal || (e.target.classList && e.target.classList.contains('modal-backdrop') && e.target.closest('#supplier-test-modal'))) {
+            closeSupplierTestModal();
         }
     });
 
     document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && modal && modal.style.display === 'flex') {
-            closeModal();
+        if (e.key === 'Escape') {
+            if (modal && modal.style.display === 'flex') closeModal();
+            if (supplierTestModal && supplierTestModal.style.display === 'flex') closeSupplierTestModal();
         }
     });
+
+    /**
+     * Listener para o formulário de teste de fornecedor (Pop-up)
+     */
+    if (supplierTestForm) {
+        supplierTestForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const connId = supplierTestConnectionId ? supplierTestConnectionId.value : '';
+            const searchTerm = supplierTestTerm ? supplierTestTerm.value.trim() : '';
+
+            if (!searchTerm) {
+                showToast('Informe o SKU do produto para testar.', 'warning');
+                return;
+            }
+
+            if (supplierTestSubmitBtn) {
+                supplierTestSubmitBtn.classList.add('loading');
+                supplierTestSubmitBtn.disabled = true;
+            }
+
+            if (supplierTestResults) {
+                supplierTestResults.innerHTML = `
+                    <div class="loader-container" style="padding: 2.5rem 1rem;">
+                        <div class="loader"></div>
+                        <p style="font-size: 0.9rem;">Consultando produto no B2B do fornecedor via Puppeteer...</p>
+                    </div>
+                `;
+            }
+
+            try {
+                const response = await api(`/api/supplier-connections/${connId}/products`, 'POST', { searchTerm });
+
+                const products = response.products || response.produtos || [];
+                if (!response.sucesso || products.length === 0) {
+                    supplierTestResults.innerHTML = `
+                        <div class="empty-state" style="padding: 2rem 1rem; margin: 0;">
+                            <div class="empty-state-icon" style="color: var(--color-warning); background-color: var(--color-warning-light); width: 48px; height: 48px; font-size: 1.3rem;">
+                                <i class="fas fa-box-open"></i>
+                            </div>
+                            <h4 style="font-size: 1.05rem; font-weight: 600;">Produto não localizado</h4>
+                            <p style="font-size: 0.85rem; margin: 0;">Nenhum item retornado para o SKU "<strong>${searchTerm}</strong>".</p>
+                        </div>
+                    `;
+                    showToast('Nenhum produto encontrado para este SKU.', 'warning');
+                    return;
+                }
+
+                let productsHtml = '';
+                products.forEach(p => {
+                    const priceFormatted = (typeof p.price === 'number') 
+                        ? `R$ ${p.price.toFixed(2)}` 
+                        : (p.price ? `R$ ${p.price}` : 'Preço indisponível');
+                    const stockVal = p.stock !== null && p.stock !== undefined ? p.stock : (p.estoque !== null && p.estoque !== undefined ? p.estoque : null);
+                    const stockLabel = stockVal !== null ? `${stockVal} em estoque` : 'Estoque indisponível';
+                    const hasStock = stockVal !== null ? Number(stockVal) > 0 : true;
+
+                    const images = p.images || p.imagens || [];
+                    const imgUrl = (Array.isArray(images) && images.length > 0) ? images[0] : (typeof images === 'string' ? images : null);
+
+                    productsHtml += `
+                        <div class="supplier-test-product-card">
+                            <div class="supplier-test-img-container">
+                                ${imgUrl 
+                                    ? `<img src="${imgUrl}" alt="${p.name || 'Produto'}" class="supplier-test-img" onerror="this.parentElement.innerHTML='<i class=\\\'fas fa-box-open\\\' style=\\\'font-size: 2.2rem; color: var(--color-text-offset);\\\'></i>'">` 
+                                    : `<i class="fas fa-box-open" style="font-size: 2.2rem; color: var(--color-text-offset);"></i>`}
+                            </div>
+                            <div class="supplier-test-details">
+                                <h4 class="supplier-test-name">${p.name || 'Produto Sem Descrição'}</h4>
+                                <div class="supplier-test-meta-row">
+                                    <span class="sku-badge"><i class="fas fa-hashtag"></i> SKU: ${p.sku || searchTerm}</span>
+                                    ${p.barcode ? `<span class="sku-badge"><i class="fas fa-barcode"></i> EAN: ${p.barcode}</span>` : ''}
+                                    <span class="stock-badge ${hasStock ? 'in-stock' : 'out-of-stock'}">
+                                        <i class="fas ${hasStock ? 'fa-check' : 'fa-xmark'}"></i> ${stockLabel}
+                                    </span>
+                                </div>
+                                <div class="supplier-test-price">${priceFormatted}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+
+                supplierTestResults.innerHTML = productsHtml;
+                showToast('Produto consultado e retornado com sucesso!', 'success');
+            } catch (err) {
+                supplierTestResults.innerHTML = `
+                    <div class="empty-state" style="padding: 2rem 1rem; margin: 0;">
+                        <div class="empty-state-icon" style="color: var(--color-danger); background-color: var(--color-danger-light); width: 48px; height: 48px; font-size: 1.3rem;">
+                            <i class="fas fa-triangle-exclamation"></i>
+                        </div>
+                        <h4 style="font-size: 1.05rem; font-weight: 600;">Falha na consulta</h4>
+                        <p style="font-size: 0.85rem; margin: 0; color: var(--color-danger);">${err.message}</p>
+                    </div>
+                `;
+                showToast(`Erro na busca: ${err.message}`, 'error');
+            } finally {
+                if (supplierTestSubmitBtn) {
+                    supplierTestSubmitBtn.classList.remove('loading');
+                    supplierTestSubmitBtn.disabled = false;
+                }
+            }
+        });
+    }
 
     /**
      * =================================================================
@@ -417,6 +566,58 @@ document.addEventListener('DOMContentLoaded', () => {
         return fragment;
     };
 
+    const generateSupplierForm = (conn = {}) => {
+        let credsText = '';
+        if (conn.credentials) {
+            credsText = typeof conn.credentials === 'string' ? conn.credentials : JSON.stringify(conn.credentials, null, 2);
+        } else {
+            credsText = JSON.stringify({
+                url: "https://www.dismatal.com.br",
+                username: "",
+                password: ""
+            }, null, 2);
+        }
+
+        const fragment = document.createDocumentFragment();
+
+        const idInput = document.createElement('input');
+        idInput.type = 'hidden';
+        idInput.name = 'id';
+        idInput.value = conn.id || '';
+        fragment.appendChild(idInput);
+
+        const nameInput = document.createElement('input');
+        nameInput.type = 'text';
+        nameInput.id = 'name';
+        nameInput.name = 'name';
+        nameInput.className = 'form-control';
+        nameInput.placeholder = 'Ex: Dismatal Distribuidora';
+        nameInput.value = conn.name || 'Dismatal';
+        nameInput.required = true;
+        fragment.appendChild(createFormGroup('Nome do Fornecedor', nameInput));
+
+        const typeSelect = document.createElement('select');
+        typeSelect.id = 'type';
+        typeSelect.name = 'type';
+        typeSelect.className = 'form-control';
+        typeSelect.required = true;
+        typeSelect.innerHTML = `
+            <option value="dismatal_webscraper" selected>Dismatal (Web Scraper Automatizado)</option>
+        `;
+        fragment.appendChild(createFormGroup('Tipo de Integração', typeSelect));
+
+        const credsTextarea = document.createElement('textarea');
+        credsTextarea.id = 'credentials';
+        credsTextarea.name = 'credentials';
+        credsTextarea.className = 'form-control';
+        credsTextarea.rows = 8;
+        credsTextarea.value = credsText;
+        credsTextarea.required = true;
+        fragment.appendChild(createFormGroup('Credenciais e Parâmetros (Formato JSON)', credsTextarea, 'Insira o JSON com as credenciais necessárias para autenticação e raspagem.'));
+
+        return fragment;
+    };
+
     const setupJsonValidation = () => {
         const credentialsTextarea = document.getElementById('credentials');
         if (!credentialsTextarea) return;
@@ -442,73 +643,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         credentialsTextarea.addEventListener('input', validate);
         validate();
-    };
-
-    const generateSupplierForm = (conn = {}) => {
-        const creds = conn.credentials || {};
-        const fragment = document.createDocumentFragment();
-
-        // ID Oculto
-        const idInput = document.createElement('input');
-        idInput.type = 'hidden';
-        idInput.name = 'id';
-        idInput.value = conn.id || '';
-        fragment.appendChild(idInput);
-
-        // Campo Nome
-        const nameInput = document.createElement('input');
-        nameInput.type = 'text';
-        nameInput.id = 'name';
-        nameInput.name = 'name';
-        nameInput.className = 'form-control';
-        nameInput.placeholder = 'Ex: Dismatal Distribuidora';
-        nameInput.value = conn.name || 'Dismatal';
-        nameInput.required = true;
-        fragment.appendChild(createFormGroup('Nome do Fornecedor', nameInput));
-
-        // Campo Tipo
-        const typeSelect = document.createElement('select');
-        typeSelect.id = 'type';
-        typeSelect.name = 'type';
-        typeSelect.className = 'form-control';
-        typeSelect.required = true;
-        typeSelect.innerHTML = `
-            <option value="dismatal_webscraper" selected>Dismatal (Web Scraper Automatizado)</option>
-        `;
-        fragment.appendChild(createFormGroup('Tipo de Integração', typeSelect));
-
-        // Campos de Credenciais
-        const urlInput = document.createElement('input');
-        urlInput.type = 'text';
-        urlInput.id = 'supplier_url';
-        urlInput.name = 'supplier_url';
-        urlInput.className = 'form-control';
-        urlInput.placeholder = 'https://www.dismatal.com.br';
-        urlInput.value = creds.url || 'https://www.dismatal.com.br';
-        urlInput.required = true;
-        fragment.appendChild(createFormGroup('URL do Portal', urlInput));
-
-        const userInput = document.createElement('input');
-        userInput.type = 'text';
-        userInput.id = 'supplier_username';
-        userInput.name = 'supplier_username';
-        userInput.className = 'form-control';
-        userInput.placeholder = 'Seu CNPJ ou usuário de acesso';
-        userInput.value = creds.username || '';
-        userInput.required = true;
-        fragment.appendChild(createFormGroup('Usuário (CNPJ)', userInput));
-
-        const passInput = document.createElement('input');
-        passInput.type = 'password';
-        passInput.id = 'supplier_password';
-        passInput.name = 'supplier_password';
-        passInput.className = 'form-control';
-        passInput.placeholder = 'Sua senha de acesso';
-        passInput.value = creds.password || '';
-        passInput.required = true;
-        fragment.appendChild(createFormGroup('Senha', passInput));
-
-        return fragment;
     };
 
     /**
@@ -540,7 +674,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const supplierConnections = supRes.connections || [];
 
             const connectedErps = erpConnections.filter(c => c.status === 'connected').length;
-            const connectedSups = supplierConnections.length; // Suppliers with session data or configured
 
             let html = `
                 <!-- Hero Banner -->
@@ -549,7 +682,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="hero-badge"><i class="fas fa-circle-nodes"></i> Hub Central de Integrações</span>
                         <h2 class="hero-title">Bem-vindo ao Integrador ERP</h2>
                         <p class="hero-description">
-                            Conecte e sincronize dados entre sistemas ERP e distribuidores em tempo real.
+                            Conecte e sincronize dados entre sistemas ERP (Bling, CissPoder) e distribuidores de autopeças como a Dismatal em tempo real.
                         </p>
                         <div class="hero-actions">
                             <button class="btn btn-primary" data-action="nav-goto-products">
@@ -727,7 +860,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     <button class="btn btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Validar Sessão">
                                         <i class="fas fa-shield-halved"></i> Validar
                                     </button>
-                                    <button class="btn btn-small btn-secondary" data-action="test-scraper-link" data-id="${conn.id}" title="Testar busca no Scraper">
+                                    <button class="btn btn-small btn-warning" data-action="test-scraper-link" data-id="${conn.id}" data-name="${conn.name}" title="Buscar produto no Scraper via Pop-up">
                                         <i class="fas fa-vial"></i> Testar Scraper
                                     </button>
                                 </div>
@@ -927,13 +1060,13 @@ document.addEventListener('DOMContentLoaded', () => {
                         </div>
                         <div class="card-footer">
                             <div class="card-footer-actions-left">
-                                <!-- <button class="btn btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Verificar se a sessão salva ainda é válida">
+                                <button class="btn btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Verificar se a sessão salva ainda é válida">
                                     <i class="fas fa-shield-halved"></i> Validar
                                 </button>
                                 <button class="btn btn-small btn-warning" data-action="auth-supplier" data-id="${conn.id}" title="Forçar novo login para renovar os cookies de sessão">
                                     <i class="fas fa-rotate"></i> Renovar
-                                </button> -->
-                                <button class="btn btn-small btn-secondary" data-action="test-scraper-link" data-id="${conn.id}" title="Abrir interface de teste do raspador">
+                                </button>
+                                <button class="btn btn-small btn-secondary" data-action="test-scraper-link" data-id="${conn.id}" data-name="${conn.name}" title="Abrir pop-up para buscar e testar produto no Scraper">
                                     <i class="fas fa-vial"></i> Testar
                                 </button>
                             </div>
@@ -1203,7 +1336,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const actionButton = e.target.closest('[data-action]');
         if (!actionButton) return;
 
-        const { action, id } = actionButton.dataset;
+        const { action, id, name } = actionButton.dataset;
 
         // 1. Navegação de atalhos rápidos
         if (action === 'nav-goto-products') {
@@ -1250,7 +1383,7 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 4. Ações de Fornecedor: Testar e Autenticar
+        // 4. Ações de Fornecedor: Validar e Autenticar
         if (action === 'test-supplier' || action === 'auth-supplier') {
             actionButton.classList.add('loading');
             actionButton.disabled = true;
@@ -1268,9 +1401,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // 5. Testar Scraper em Nova Janela
+        // 5. Testar Conexão / Buscar Produto do Fornecedor em POP-UP
         if (action === 'test-scraper-link') {
-            window.open(`/api/supplier-connections/${id}/test-scraper`, '_blank');
+            openSupplierTestModal(id, name || 'Dismatal');
             return;
         }
 
@@ -1291,6 +1424,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 formFields.innerHTML = '';
                 formFields.appendChild(isErp ? generateErpForm() : generateSupplierForm());
                 openModal();
+                if (!isErp) setupJsonValidation();
 
                 modalForm.onsubmit = async (ev) => {
                     ev.preventDefault();
@@ -1315,10 +1449,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 body.credentials.password = formData.get('password');
                             }
                         } else {
-                            // Monta o objeto de credenciais a partir dos campos individuais
-                            body.credentials.url = formData.get('supplier_url');
-                            body.credentials.username = formData.get('supplier_username');
-                            body.credentials.password = formData.get('supplier_password');
+                            body.credentials = JSON.parse(formData.get('credentials'));
                         }
 
                         await api(endpoint, 'POST', body);
@@ -1348,6 +1479,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 formFields.innerHTML = '';
                 formFields.appendChild(isErp ? generateErpForm(connection) : generateSupplierForm(connection));
                 openModal();
+                if (!isErp) setupJsonValidation();
 
                 modalForm.onsubmit = async (ev) => {
                     ev.preventDefault();
@@ -1372,10 +1504,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 body.credentials.password = formData.get('password');
                             }
                         } else {
-                            // Monta o objeto de credenciais a partir dos campos individuais
-                            body.credentials.url = formData.get('supplier_url');
-                            body.credentials.username = formData.get('supplier_username');
-                            body.credentials.password = formData.get('supplier_password');
+                            body.credentials = JSON.parse(formData.get('credentials'));
                         }
 
                         await api(`${endpoint}/${id}`, 'PUT', body);

@@ -115,6 +115,53 @@
         </div>
     </div>
 
+    <!-- Modal Pop-up para Teste de Conexão com Fornecedor (Dismatal) -->
+    <div id="supplier-test-modal" class="modal" style="display: none;">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content modal-content-large">
+            <div class="modal-header">
+                <div class="modal-title-wrapper">
+                    <div class="modal-icon-badge" style="background-color: var(--color-warning-light); color: var(--color-warning);">
+                        <i class="fas fa-vial"></i>
+                    </div>
+                    <div>
+                        <h2 class="modal-title" id="supplier-test-modal-title">Testar Conexão Dismatal</h2>
+                        <p class="modal-subtitle">Buscar produto em tempo real via Web Scraper</p>
+                    </div>
+                </div>
+                <button class="modal-close supplier-test-modal-close" title="Fechar">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="supplier-test-form">
+                    <input type="hidden" id="supplier-test-connection-id" value="">
+                    <div class="form-group">
+                        <label for="supplier-test-term"><i class="fas fa-magnifying-glass"></i> Código SKU do Produto</label>
+                        <div style="display: flex; gap: 0.65rem;">
+                            <input type="text" id="supplier-test-term" class="form-control" placeholder="Digite o SKU para buscar (Ex: 001234, 102030...)" required>
+                            <button type="submit" class="btn btn-primary" id="supplier-test-submit-btn" style="min-width: 140px;">
+                                <i class="fas fa-search"></i> Buscar
+                            </button>
+                        </div>
+                    </div>
+                </form>
+                <div id="supplier-test-results" class="supplier-test-results-area" style="margin-top: 1.5rem;">
+                    <div class="empty-state" style="padding: 2rem 1rem; margin: 0;">
+                        <div class="empty-state-icon" style="color: var(--color-warning); background-color: var(--color-warning-light); width: 48px; height: 48px; font-size: 1.3rem;">
+                            <i class="fas fa-barcode"></i>
+                        </div>
+                        <h4 style="font-size: 1.05rem; font-weight: 600;">Pronto para testar</h4>
+                        <p style="font-size: 0.85rem; margin: 0;">Informe o SKU do produto para testar a comunicação com a Dismatal.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary supplier-test-modal-close">
+                    <i class="fas fa-times"></i> Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="ui.js?v=__CACHE_BUSTER__" defer></script>
 </body>
 </html>
