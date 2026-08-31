@@ -684,7 +684,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         <span class="hero-badge"><i class="fas fa-circle-nodes"></i> Hub Central de Integrações</span>
                         <h2 class="hero-title">Bem-vindo ao Integrador ERP</h2>
                         <p class="hero-description">
-                            Conecte e sincronize dados entre sistemas ERP (Bling, CissPoder) e distribuidores de autopeças como a Dismatal em tempo real.
+                            Conecte e sincronize dados entre sistemas ERP e distribuidores em tempo real.
                         </p>
                         <div class="hero-actions">
                             <button class="btn btn-primary" data-action="nav-goto-products">
