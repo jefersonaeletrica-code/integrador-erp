@@ -569,17 +569,12 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const generateSupplierForm = (conn = {}) => {
-        let credsText = '';
-        if (conn.credentials) {
-            credsText = typeof conn.credentials === 'string' ? conn.credentials : JSON.stringify(conn.credentials, null, 2);
-        } else {
-            credsText = JSON.stringify({
-                url: "https://www.dismatal.com.br",
-                username: "",
-                password: ""
-            }, null, 2);
-        }
-
+        const creds = conn.credentials || {};
+        // Define valores padrão para Dismatal
+        const defaultUrl = "https://www.dismatal.com.br";
+        const defaultUsername = "";
+        const defaultPassword = "";
+        
         const fragment = document.createDocumentFragment();
 
         const idInput = document.createElement('input');
@@ -608,15 +603,39 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
         fragment.appendChild(createFormGroup('Tipo de Integração', typeSelect));
 
-        const credsTextarea = document.createElement('textarea');
-        credsTextarea.id = 'credentials';
-        credsTextarea.name = 'credentials';
-        credsTextarea.className = 'form-control';
-        credsTextarea.rows = 8;
-        credsTextarea.value = credsText;
-        credsTextarea.required = true;
-        fragment.appendChild(createFormGroup('Credenciais e Parâmetros (Formato JSON)', credsTextarea, 'Insira o JSON com as credenciais necessárias para autenticação e raspagem.'));
+        // Campos separados para URL, Usuário e Senha
+        const urlInput = document.createElement('input');
+        urlInput.type = 'url';
+        urlInput.id = 'url';
+        urlInput.name = 'url';
+        urlInput.className = 'form-control';
+        urlInput.placeholder = 'Ex: https://www.dismatal.com.br';
+        urlInput.value = creds.url || defaultUrl;
+        urlInput.required = true;
+        fragment.appendChild(createFormGroup('URL do Portal', urlInput, 'Endereço do portal B2B do fornecedor.'));
 
+        const usernameInput = document.createElement('input');
+        usernameInput.type = 'text';
+        usernameInput.id = 'username';
+        usernameInput.name = 'username';
+        usernameInput.className = 'form-control';
+        usernameInput.placeholder = 'Usuário de acesso';
+        usernameInput.value = creds.username || defaultUsername;
+        usernameInput.required = true;
+        fragment.appendChild(createFormGroup('Usuário', usernameInput));
+
+        const passwordInput = document.createElement('input');
+        passwordInput.type = 'password';
+        passwordInput.id = 'password';
+        passwordInput.name = 'password';
+        passwordInput.className = 'form-control';
+        passwordInput.placeholder = 'Senha de acesso';
+        passwordInput.value = creds.password || defaultPassword;
+        passwordInput.required = true;
+        fragment.appendChild(createFormGroup('Senha', passwordInput));
+
+        // Remove a necessidade de validação JSON, pois os campos são separados.
+        // setupJsonValidation(); // Não é mais necessário
         return fragment;
     };
 
@@ -630,7 +649,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 credentialsTextarea.classList.remove('valid', 'invalid');
                 if (modalSaveBtn) modalSaveBtn.disabled = true;
                 return;
-            }
+            } // Removido o restante da função, pois não é mais necessário.
             try {
                 JSON.parse(val);
                 credentialsTextarea.classList.add('valid');
@@ -1426,7 +1445,12 @@ document.addEventListener('DOMContentLoaded', () => {
                                 body.credentials.password = formData.get('password');
                             }
                         } else {
-                            body.credentials = JSON.parse(formData.get('credentials'));
+                            // Coleta os dados dos campos separados para fornecedores
+                            body.credentials = {
+                                url: formData.get('url'),
+                                username: formData.get('username'),
+                                password: formData.get('password'),
+                            };
                         }
 
                         await api(endpoint, 'POST', body);
@@ -1481,7 +1505,12 @@ document.addEventListener('DOMContentLoaded', () => {
                                 body.credentials.password = formData.get('password');
                             }
                         } else {
-                            body.credentials = JSON.parse(formData.get('credentials'));
+                            // Coleta os dados dos campos separados para fornecedores
+                            body.credentials = {
+                                url: formData.get('url'),
+                                username: formData.get('username'),
+                                password: formData.get('password'),
+                            };
                         }
 
                         await api(`${endpoint}/${id}`, 'PUT', body);
