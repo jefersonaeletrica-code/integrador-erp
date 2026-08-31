@@ -213,13 +213,15 @@ export default (db) => {
             let apiProducts = [];
             let paginationInfo = { currentPage: parseInt(page, 10), totalPages: 1, totalItems: 0 };
 
-            // Garante que o token de acesso é válido antes de fazer a chamada
+            // Garante que o token de acesso seja válido antes de fazer a chamada
             await erpService.ensureValidToken(connection, db);
 
+            // Determina se a busca é por SKU ou por nome e chama o serviço apropriado
             const rawData = isSku(searchTerm)
                 ? await erpService.fetchProductsByCode(connection, searchTerm, page)
                 : await erpService.fetchProductsByName(connection, searchTerm, page);
 
+            // Extrai os produtos do campo 'data' da resposta
             apiProducts = rawData.data || [];
 
             if (connection.type === 'bling') {
