@@ -1562,6 +1562,18 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeThemeSwitcher();
     initializeSidebar();
 
+    // CORREÇÃO: Atualiza o texto dos links de navegação no menu lateral
+    const navErpLink = document.getElementById('nav-conexoes-erp');
+    if (navErpLink) {
+        navErpLink.textContent = 'ERPs';
+    }
+
+    const navSupplierLink = document.getElementById('nav-conexoes-fornecedores');
+    if (navSupplierLink) {
+        navSupplierLink.textContent = 'Fornecedores';
+    }
+    // FIM DA CORREÇÃO
+
     // Checar se veio de retorno OAuth do Bling
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('autorizado') === 'true') {
