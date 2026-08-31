@@ -60,8 +60,12 @@ export async function fetchProductsByCode(connection, code, page = 1, limit = 10
  */
 export async function fetchProductsByName(connection, name, page = 1, limit = 100) {
     const { access_token } = connection.credentials;
-    // Lógica ajustada para usar criterio=2 (apenas produtos ativos) e tipo=T (todos os tipos de produto).
-    const response = await axiosInstance.get(`https://www.bling.com.br/Api/v3/produtos?pagina=${page}&limite=${limit}&criterio=2&tipo=T&nome=${encodeURIComponent(name)}`, {
+    // CORREÇÃO: Adiciona '%' antes e entre os termos da busca para uma pesquisa mais abrangente (LIKE).
+    // Ex: "cabo flexivel" se torna "%cabo%flexivel%"
+    const searchWords = name.trim().split(/\s+/).filter(Boolean);
+    const searchTerm = `%${searchWords.join('%')}%`;
+
+    const response = await axiosInstance.get(`https://www.bling.com.br/Api/v3/produtos?pagina=${page}&limite=${limit}&criterio=2&tipo=T&nome=${encodeURIComponent(searchTerm)}`, {
         headers: { 'Authorization': `Bearer ${access_token}` }
     });
     return response.data;
