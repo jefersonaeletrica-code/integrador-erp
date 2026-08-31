@@ -232,6 +232,9 @@ export default (db) => {
                     let currentPage = 1;
                     let keepFetching = true;
                     while (keepFetching) {
+                        // CORREÇÃO: Adiciona um delay para evitar o erro 429 (Too Many Requests) da API do Bling.
+                        if (currentPage > 1) await new Promise(resolve => setTimeout(resolve, 300)); // 300ms de atraso
+
                         const result = await fetchFn(currentPage);
                         const items = result.data || [];
                         allItems = allItems.concat(items);
