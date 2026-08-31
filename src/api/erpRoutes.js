@@ -217,32 +217,53 @@ export default (db) => {
 
             let rawData;
             if (connection.type === 'bling') {
-                // LÓGICA CORRIGIDA: Busca por nome e código em paralelo e combina os resultados.
-                logger.info(`[ERPRoutes] Bling: Iniciando busca combinada por nome e código para o termo "${searchTerm}"...`);
+                // LÓGICA CORRIGIDA: Busca exaustiva em todas as páginas para obter o total real.
+                logger.info(`[ERPRoutes] Bling: Iniciando busca exaustiva para o termo "${searchTerm}"...`);
 
-                // 1. Executa as buscas por nome e código em paralelo para obter os totais.
-                const [nameResults, codeResults] = await Promise.all([
-                    erpService.fetchProductsByName(connection, searchTerm, 1, 100), // Busca a primeira página completa
-                    erpService.fetchProductsByCode(connection, searchTerm, 1, 100)  // Busca a primeira página completa
-                ]);
+                // 1. Define as funções de busca a serem executadas.
+                const searchTasks = [
+                    (p) => erpService.fetchProductsByName(connection, searchTerm, p),
+                    (p) => erpService.fetchProductsByCode(connection, searchTerm, p)
+                ];
 
-                // 2. Combina os resultados e remove duplicatas usando um Map pelo ID do produto.
+                // 2. Função auxiliar para buscar todas as páginas de uma determinada consulta.
+                const fetchAllPages = async (fetchFn) => {
+                    let allItems = [];
+                    let currentPage = 1;
+                    let keepFetching = true;
+                    while (keepFetching) {
+                        const result = await fetchFn(currentPage);
+                        const items = result.data || [];
+                        allItems = allItems.concat(items);
+                        // Se a página retornou menos de 100 itens, é a última.
+                        if (items.length < 100) {
+                            keepFetching = false;
+                        } else {
+                            currentPage++;
+                        }
+                    }
+                    return allItems;
+                };
+
+                // 3. Executa as buscas exaustivas em paralelo.
+                const [nameProducts, codeProducts] = await Promise.all(searchTasks.map(task => fetchAllPages(task)));
+
+                // 4. Combina e remove duplicatas.
                 const combinedProductsMap = new Map();
-                (nameResults.data || []).forEach(p => combinedProductsMap.set(p.id, p));
-                (codeResults.data || []).forEach(p => combinedProductsMap.set(p.id, p));
-
+                nameProducts.forEach(p => combinedProductsMap.set(p.id, p));
+                codeProducts.forEach(p => combinedProductsMap.set(p.id, p));
                 const allProducts = Array.from(combinedProductsMap.values());
-                const totalItems = allProducts.length; // O total de itens é o tamanho da lista combinada e única.
+                const totalItems = allProducts.length;
 
-                logger.info(`[ERPRoutes] Bling: Busca combinada resultou em ${totalItems} produtos únicos.`);
+                logger.info(`[ERPRoutes] Bling: Busca exaustiva concluída. Total de ${totalItems} produtos únicos encontrados.`);
 
-                // 3. Calcula a paginação com base no total de itens únicos.
+                // 5. Calcula a paginação com base no total real.
                 const limit = 100; // Limite padrão do Bling
                 paginationInfo.totalPages = totalItems > 0 ? Math.ceil(totalItems / limit) : 1;
                 paginationInfo.totalItems = totalItems;
                 paginationInfo.currentPage = parseInt(page, 10);
 
-                // 4. "Fatia" o array combinado para retornar apenas os produtos da página solicitada.
+                // 6. "Fatia" o array para a paginação do frontend.
                 const startIndex = (page - 1) * limit;
                 const paginatedProducts = allProducts.slice(startIndex, startIndex + limit);
                 rawData = { data: paginatedProducts }; // Formata para corresponder à estrutura esperada.
