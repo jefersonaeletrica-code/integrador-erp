@@ -221,6 +221,7 @@ export default (db) => {
                 logger.info(`[ERPRoutes] Bling: Buscando contagem total de itens para o termo "${searchTerm}"...`);
                 const countData = await erpService.fetchProductsByName(connection, searchTerm, 1, 1); // page=1, limit=1
                 const totalItems = countData.meta?.total || 0;
+                logger.info(`[ERPRoutes] Bling: Contagem total de itens retornada pela API: ${totalItems}`);
                 const limit = 100; // Limite padrão do Bling
                 paginationInfo.totalPages = totalItems > 0 ? Math.ceil(totalItems / limit) : 1;
                 paginationInfo.totalItems = totalItems;
