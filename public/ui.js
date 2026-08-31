@@ -889,7 +889,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * =================================================================
      */
     const renderErpConnections = async () => {
-        mainTitle.textContent = 'Conexões ERP';
+        mainTitle.textContent = 'ERPs';
         if (mainSubtitle) mainSubtitle.textContent = 'Gerencie e monitore suas credenciais e status de autenticação com sistemas ERP';
         headerActions.innerHTML = `
             <button class="btn btn-primary" data-action="add-erp">
@@ -993,7 +993,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * =================================================================
      */
     const renderSupplierConnections = async () => {
-        mainTitle.textContent = 'Conexões de Fornecedores';
+        mainTitle.textContent = 'Fornecedores';
         if (mainSubtitle) mainSubtitle.textContent = 'Gerencie raspadores e integrações automatizadas para consulta a catálogos e estoques de fornecedores';
         headerActions.innerHTML = `
             <button class="btn btn-primary" data-action="add-supplier">
