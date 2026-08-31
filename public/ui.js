@@ -857,11 +857,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                             <div class="card-footer">
                                 <div class="card-footer-actions-left">
-                                    <button class="btn btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Validar Sessão">
+                                    <!-- <button class="btn btn-small btn-info" data-action="test-supplier" data-id="${conn.id}" title="Validar Sessão">
                                         <i class="fas fa-shield-halved"></i> Validar
-                                    </button>
+                                    </button> -->
                                     <button class="btn btn-small btn-warning" data-action="test-scraper-link" data-id="${conn.id}" data-name="${conn.name}" title="Buscar produto no Scraper via Pop-up">
-                                        <i class="fas fa-vial"></i> Testar Scraper
+                                        <i class="fas fa-vial"></i> Testar
                                     </button>
                                 </div>
                                 <div class="card-footer-actions-right">
