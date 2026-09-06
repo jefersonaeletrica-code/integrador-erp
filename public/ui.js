@@ -2615,7 +2615,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     connectionId: targetConnId
                 });
 
-                showToast(`Importação concluída! ${importRes.importados || 0} anúncios importados/atualizados.`, 'success');
+                showToast(`Importação concluída! ${importRes.count || 0} anúncios importados/atualizados.`, 'success');
                 renderMercadoLivreListings();
             } catch (err) {
                 showToast(`Falha na importação: ${err.message}`, 'error');

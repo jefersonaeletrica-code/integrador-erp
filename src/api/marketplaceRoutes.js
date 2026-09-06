@@ -620,7 +620,7 @@ export default (db) => {
 
             res.json({
                 sucesso: true,
-                mensagem: `${importedCount} anúncios importados da conta do Mercado Livre com sucesso!`,
+                mensagem: `${importedCount} anúncios importados/atualizados da conta do Mercado Livre com sucesso!`,
                 count: importedCount
             });
         } catch (error) {
