@@ -704,8 +704,8 @@ export default (db) => {
                 logger.warn(`[MarketplaceRoutes] Falha ao buscar descrição do item ${itemId}: ${err.message}`);
             }
 
-            // Se for item de catálogo, busca status da Buy Box e preço sugerido para ganhar
-            const isCatalog = !!(meliItem?.catalog_listing || localItem?.catalog_listing || meliItem?.catalog_product_id || localItem?.catalog_product_id);
+            // Se for item de catálogo oficial, busca status da Buy Box e preço sugerido para ganhar
+            const isCatalog = !!(meliItem?.catalog_listing === true || (meliItem?.catalog_listing === undefined && localItem?.catalog_listing));
             if (isCatalog) {
                 try {
                     catalog = await meliService.getItemPriceToWin(connection, itemId, db);
@@ -723,6 +723,18 @@ export default (db) => {
                     }
                 } catch (catErr) {
                     logger.warn(`[MarketplaceRoutes] Falha ao buscar concorrência de catálogo do item ${itemId}: ${catErr.message}`);
+                }
+            } else if (meliItem && meliItem.catalog_listing === false && localItem?.catalog_listing) {
+                // Se a API do ML confirmou que NÃO é de catálogo mas o DB local tinha 1, corrige no banco
+                await pool.execute(
+                    'UPDATE mercado_livre_anuncios SET catalog_listing = 0, catalog_status = NULL, catalog_price_to_win = NULL, catalog_details = NULL WHERE item_id = ?',
+                    [itemId]
+                );
+                if (localItem) {
+                    localItem.catalog_listing = false;
+                    localItem.catalog_status = null;
+                    localItem.catalog_price_to_win = null;
+                    localItem.catalog_details = null;
                 }
             }
 
@@ -818,7 +830,7 @@ export default (db) => {
                 return res.status(404).json({ sucesso: false, erro: 'Conexão do Mercado Livre não encontrada.' });
             }
 
-            const isCatalog = !!(req.body.is_catalog || localItem?.catalog_listing || localItem?.catalog_product_id);
+            const isCatalog = !!(req.body.is_catalog || localItem?.catalog_listing);
 
             // Atualiza no Mercado Livre via API
             const updatedMeli = await meliService.updateItem(connection, itemId, {
@@ -1079,7 +1091,7 @@ export default (db) => {
                     ? (item.pictures[0].secure_url || item.pictures[0].url)
                     : (item.thumbnail || null);
 
-                const isCatalog = !!(item.catalog_listing || item.catalog_product_id);
+                const isCatalog = item.catalog_listing === true || item.catalog_listing === 1 || item.catalog_listing === 'true';
                 const anuncio = {
                     connection_id: connection.id,
                     item_id: item.id,
@@ -1093,6 +1105,9 @@ export default (db) => {
                     thumbnail,
                     catalog_listing: isCatalog,
                     catalog_product_id: item.catalog_product_id || null,
+                    catalog_status: isCatalog ? null : null,
+                    catalog_price_to_win: null,
+                    catalog_details: null,
                     category_id: item.category_id,
                     category_name: null,
                     source_type: 'manual',

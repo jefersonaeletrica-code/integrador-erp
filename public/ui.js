@@ -913,8 +913,8 @@ document.addEventListener('DOMContentLoaded', () => {
         meliEditImagesArray = [];
         renderMeliClipState(null);
 
-        // Inicializa estado de catálogo local imediato
-        if (item.catalog_listing || item.catalog_product_id) {
+        // Inicializa estado de catálogo local imediato (apenas se for anúncio de catálogo ativo)
+        if (item.catalog_listing) {
             renderMeliCatalogState({
                 is_catalog: true,
                 catalog_product_id: item.catalog_product_id,
@@ -990,7 +990,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Catálogo & Concorrência na Buy Box
                 if (res.catalog && res.catalog.is_catalog) {
                     renderMeliCatalogState(res.catalog, fullItem.price || item.price);
-                } else if (fullItem.catalog_listing || fullItem.catalog_product_id || local.catalog_listing) {
+                } else if (fullItem.catalog_listing || (fullItem.catalog_listing === undefined && local.catalog_listing)) {
                     renderMeliCatalogState({
                         is_catalog: true,
                         catalog_product_id: fullItem.catalog_product_id || local.catalog_product_id,
@@ -2912,8 +2912,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const inStock = item.available_quantity > 0;
 
-                    // Badges de Catálogo e Buy Box
-                    const isCatalog = !!(item.catalog_listing || item.catalog_product_id);
+                    // Badges de Catálogo e Buy Box (apenas para anúncios de catálogo ativos)
+                    const isCatalog = !!item.catalog_listing;
                     let catalogBadges = '';
                     if (isCatalog) {
                         const rawCatStatus = String(item.catalog_status || '').toLowerCase();
@@ -3134,7 +3134,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const matchStatus = !status || (i.status === status);
                     const matchAccount = !account || (String(i.connection_id) === String(account));
 
-                    const isCat = !!(i.catalog_listing || i.catalog_product_id);
+                    const isCat = !!i.catalog_listing;
                     const catStatus = String(i.catalog_status || '').toLowerCase();
                     const isWin = isCat && (catStatus === 'winner' || catStatus === 'winning');
                     const isLose = isCat && (catStatus === 'losing' || catStatus === 'opportunity' || (i.catalog_price_to_win !== null && i.catalog_price_to_win !== undefined));

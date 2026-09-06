@@ -557,7 +557,7 @@ export async function updateItem(connection, itemId, updateData, db) {
         logger.warn(`[MercadoLivreService] Não foi possível obter item atual ${itemId}: ${fetchErr.message}`);
     }
 
-    const isCatalogItem = !!(updateData.is_catalog || updateData.catalog_listing || currentItem?.catalog_listing || currentItem?.catalog_product_id);
+    const isCatalogItem = !!(updateData.is_catalog || updateData.catalog_listing || currentItem?.catalog_listing);
     if (isCatalogItem) {
         logger.info(`[MercadoLivreService] Anúncio ${itemId} é de Catálogo. Atualizando apenas campos permitidos (preço, estoque, status, etc.).`);
     }
@@ -1170,7 +1170,7 @@ export async function syncAllCatalogItemsStatus(db, connectionId = null) {
         let query = `
             SELECT item_id, connection_id, catalog_product_id, catalog_status, catalog_price_to_win, price
             FROM mercado_livre_anuncios
-            WHERE (catalog_listing = 1 OR catalog_product_id IS NOT NULL)
+            WHERE catalog_listing = 1
         `;
         const params = [];
         if (connectionId) {
