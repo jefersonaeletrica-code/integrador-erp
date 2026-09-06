@@ -536,20 +536,24 @@ export default (db) => {
 
             const [rows] = await pool.execute(query, queryParams);
 
-            const parsedItems = rows.map(r => ({
-                ...r,
-                price: parseFloat(r.price),
-                markup_percent: parseFloat(r.markup_percent || 0),
-                sync_auto_stock: !!r.sync_auto_stock,
-                sync_auto_price: !!r.sync_auto_price,
-                catalog_listing: !!r.catalog_listing,
-                catalog_product_id: r.catalog_product_id || null,
-                catalog_status: r.catalog_status || null,
-                catalog_price_to_win: r.catalog_price_to_win !== null && r.catalog_price_to_win !== undefined ? parseFloat(r.catalog_price_to_win) : null,
-                catalog_details: safeJsonParse(r.catalog_details),
-                source_data: safeJsonParse(r.source_data),
-                credentials: undefined // omite credenciais
-            }));
+            const parsedItems = rows.map(r => {
+                const isActive = r.status === 'active';
+                const isCatalog = !!r.catalog_listing;
+                return {
+                    ...r,
+                    price: parseFloat(r.price),
+                    markup_percent: parseFloat(r.markup_percent || 0),
+                    sync_auto_stock: !!r.sync_auto_stock,
+                    sync_auto_price: !!r.sync_auto_price,
+                    catalog_listing: isCatalog,
+                    catalog_product_id: r.catalog_product_id || null,
+                    catalog_status: (isCatalog && isActive) ? (r.catalog_status || null) : null,
+                    catalog_price_to_win: (isCatalog && isActive && r.catalog_price_to_win !== null && r.catalog_price_to_win !== undefined) ? parseFloat(r.catalog_price_to_win) : null,
+                    catalog_details: (isCatalog && isActive) ? safeJsonParse(r.catalog_details) : null,
+                    source_data: safeJsonParse(r.source_data),
+                    credentials: undefined // omite credenciais
+                };
+            });
 
             // Paginação flexível (suporta limit=all, 0 ou números)
             const isAll = limit === 'all' || limit === '0' || limit === 0;
@@ -705,26 +709,42 @@ export default (db) => {
             }
 
             // Se for item de catálogo oficial, busca status da Buy Box e preço sugerido para ganhar
-            const isCatalog = !!(meliItem?.catalog_listing === true || (meliItem?.catalog_listing === undefined && localItem?.catalog_listing));
+            const isCatalog = meliItem ? meliService.isMeliCatalogItem(meliItem) : !!localItem?.catalog_listing;
+            const isItemActive = (meliItem?.status || localItem?.status) === 'active';
+
             if (isCatalog) {
-                try {
-                    catalog = await meliService.getItemPriceToWin(connection, itemId, db);
-                    if (catalog) {
-                        await pool.execute(
-                            'UPDATE mercado_livre_anuncios SET catalog_listing = 1, catalog_product_id = ?, catalog_status = ?, catalog_price_to_win = ?, catalog_details = ? WHERE item_id = ?',
-                            [
-                                catalog.catalog_product_id || meliItem?.catalog_product_id || localItem?.catalog_product_id || null,
-                                catalog.status || null,
-                                catalog.price_to_win !== null && catalog.price_to_win !== undefined ? parseFloat(catalog.price_to_win) : null,
-                                catalog.details ? JSON.stringify(catalog.details) : null,
-                                itemId
-                            ]
-                        );
+                if (isItemActive) {
+                    try {
+                        catalog = await meliService.getItemPriceToWin(connection, itemId, db);
+                        if (catalog) {
+                            await pool.execute(
+                                'UPDATE mercado_livre_anuncios SET catalog_listing = 1, catalog_product_id = ?, catalog_status = ?, catalog_price_to_win = ?, catalog_details = ? WHERE item_id = ?',
+                                [
+                                    catalog.catalog_product_id || meliItem?.catalog_product_id || localItem?.catalog_product_id || null,
+                                    catalog.status || null,
+                                    catalog.price_to_win !== null && catalog.price_to_win !== undefined ? parseFloat(catalog.price_to_win) : null,
+                                    catalog.details ? JSON.stringify(catalog.details) : null,
+                                    itemId
+                                ]
+                            );
+                        }
+                    } catch (catErr) {
+                        logger.warn(`[MarketplaceRoutes] Falha ao buscar concorrência de catálogo do item ${itemId}: ${catErr.message}`);
                     }
-                } catch (catErr) {
-                    logger.warn(`[MarketplaceRoutes] Falha ao buscar concorrência de catálogo do item ${itemId}: ${catErr.message}`);
+                } else {
+                    // Anúncio de catálogo pausado/inativo: limpa concorrência da Buy Box
+                    await pool.execute(
+                        'UPDATE mercado_livre_anuncios SET catalog_listing = 1, catalog_product_id = ?, catalog_status = NULL, catalog_price_to_win = NULL, catalog_details = NULL WHERE item_id = ?',
+                        [meliItem?.catalog_product_id || localItem?.catalog_product_id || null, itemId]
+                    );
+                    catalog = {
+                        is_catalog: true,
+                        is_paused: true,
+                        status: meliItem?.status || localItem?.status || 'paused',
+                        status_label: 'Anúncio Pausado (Buy Box Inativa)'
+                    };
                 }
-            } else if (meliItem && meliItem.catalog_listing === false && localItem?.catalog_listing) {
+            } else if (meliItem && !isCatalog && localItem?.catalog_listing) {
                 // Se a API do ML confirmou que NÃO é de catálogo mas o DB local tinha 1, corrige no banco
                 await pool.execute(
                     'UPDATE mercado_livre_anuncios SET catalog_listing = 0, catalog_status = NULL, catalog_price_to_win = NULL, catalog_details = NULL WHERE item_id = ?',
@@ -914,9 +934,13 @@ export default (db) => {
             const updated = await meliService.updateItemStatus(connection, itemId, status, db);
 
             if (localItem) {
+                const isNowActive = status === 'active';
                 const updatedDb = {
                     ...localItem,
                     status,
+                    catalog_status: isNowActive ? localItem.catalog_status : null,
+                    catalog_price_to_win: isNowActive ? localItem.catalog_price_to_win : null,
+                    catalog_details: isNowActive ? safeJsonParse(localItem.catalog_details) : null,
                     source_data: safeJsonParse(localItem.source_data)
                 };
                 await db.saveOrUpdateMercadoLivreAnuncio(updatedDb);
@@ -960,6 +984,11 @@ export default (db) => {
                     continue;
                 }
                 await meliService.updateItemStatus(connection, itemId, newStatus, db);
+                if (newStatus !== 'active') {
+                    await pool.execute('UPDATE mercado_livre_anuncios SET status = ?, catalog_status = NULL, catalog_price_to_win = NULL, catalog_details = NULL, updated_at = CURRENT_TIMESTAMP WHERE item_id = ?', [newStatus, itemId]);
+                } else {
+                    await pool.execute('UPDATE mercado_livre_anuncios SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE item_id = ?', [newStatus, itemId]);
+                }
                 successCount++;
             } catch (error) {
                 logger.error(`[MarketplaceRoutes] Bulk-status: Falha ao atualizar o anúncio ${itemId}.`, error);
@@ -1091,7 +1120,7 @@ export default (db) => {
                     ? (item.pictures[0].secure_url || item.pictures[0].url)
                     : (item.thumbnail || null);
 
-                const isCatalog = item.catalog_listing === true || item.catalog_listing === 1 || item.catalog_listing === 'true';
+                const isCatalog = meliService.isMeliCatalogItem(item);
                 const anuncio = {
                     connection_id: connection.id,
                     item_id: item.id,
@@ -1105,7 +1134,7 @@ export default (db) => {
                     thumbnail,
                     catalog_listing: isCatalog,
                     catalog_product_id: item.catalog_product_id || null,
-                    catalog_status: isCatalog ? null : null,
+                    catalog_status: null,
                     catalog_price_to_win: null,
                     catalog_details: null,
                     category_id: item.category_id,

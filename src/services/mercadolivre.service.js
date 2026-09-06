@@ -557,7 +557,7 @@ export async function updateItem(connection, itemId, updateData, db) {
         logger.warn(`[MercadoLivreService] Não foi possível obter item atual ${itemId}: ${fetchErr.message}`);
     }
 
-    const isCatalogItem = !!(updateData.is_catalog || updateData.catalog_listing || currentItem?.catalog_listing);
+    const isCatalogItem = isMeliCatalogItem(currentItem) || isMeliCatalogItem(updateData) || !!(updateData.is_catalog);
     if (isCatalogItem) {
         logger.info(`[MercadoLivreService] Anúncio ${itemId} é de Catálogo. Atualizando apenas campos permitidos (preço, estoque, status, etc.).`);
     }
@@ -1157,7 +1157,23 @@ export async function getItemPriceToWin(connection, itemId, db) {
 }
 
 /**
- * Sincroniza o status do catálogo e concorrência na Buy Box para todos os anúncios de catálogo
+ * Verifica de forma rigorosa se um anúncio do Mercado Livre pertence de fato ao Catálogo Oficial
+ * @param {object} item - Objeto do anúncio vindo da API do ML ou banco de dados
+ * @returns {boolean} True se for anúncio de catálogo
+ */
+export function isMeliCatalogItem(item) {
+    if (!item) return false;
+    if (item.catalog_listing === true || item.catalog_listing === 1 || item.catalog_listing === 'true') {
+        return true;
+    }
+    if (Array.isArray(item.tags) && item.tags.includes('catalog_listing')) {
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Sincroniza o status do catálogo e concorrência na Buy Box para todos os anúncios de catálogo ativos
  * @param {object} db - Instância do banco de dados
  * @param {number|null} connectionId - ID opcional de uma conexão específica (ou null para todas)
  * @returns {Promise<object>} Resumo da sincronização { total, updated, winners, losers, competing }
@@ -1167,10 +1183,19 @@ export async function syncAllCatalogItemsStatus(db, connectionId = null) {
 
     try {
         const pool = db.getPool();
+
+        // 1. Limpa status de Buy Box/catálogo de anúncios que NÃO estão ativos ou que já foram desmarcados
+        await pool.execute(`
+            UPDATE mercado_livre_anuncios 
+            SET catalog_status = NULL, catalog_price_to_win = NULL, catalog_details = NULL 
+            WHERE status != 'active' OR catalog_listing = 0
+        `);
+
+        // 2. Busca anúncios ATIVOS que tenham catalog_listing = 1 OU catalog_product_id IS NOT NULL para revalidação rigorosa
         let query = `
-            SELECT item_id, connection_id, catalog_product_id, catalog_status, catalog_price_to_win, price
+            SELECT item_id, connection_id, catalog_product_id, catalog_status, catalog_price_to_win, price, status
             FROM mercado_livre_anuncios
-            WHERE catalog_listing = 1
+            WHERE status = 'active' AND (catalog_listing = 1 OR catalog_product_id IS NOT NULL)
         `;
         const params = [];
         if (connectionId) {
@@ -1181,11 +1206,11 @@ export async function syncAllCatalogItemsStatus(db, connectionId = null) {
         const [items] = await pool.execute(query, params);
 
         if (!items || items.length === 0) {
-            logger.info('[MercadoLivreService] Nenhum anúncio de catálogo encontrado para sincronizar Buy Box.');
+            logger.info('[MercadoLivreService] Nenhum anúncio ativo de catálogo encontrado para sincronizar Buy Box.');
             return { total: 0, updated: 0, winners: 0, losers: 0, competing: 0 };
         }
 
-        logger.info(`[MercadoLivreService] Iniciando sincronização em lote de Buy Box para ${items.length} anúncio(s) de catálogo...`);
+        logger.info(`[MercadoLivreService] Iniciando verificação e sincronização de Buy Box para ${items.length} anúncio(s) ativo(s)...`);
 
         // Cache de conexões de marketplace para evitar queries repetitivas
         const connectionsCache = new Map();
@@ -1218,6 +1243,53 @@ export async function syncAllCatalogItemsStatus(db, connectionId = null) {
                     continue;
                 }
 
+                // Busca detalhes atuais do item no ML para validação se é catálogo genuíno
+                let meliItem = null;
+                try {
+                    meliItem = await getItem(connection, item.item_id, db);
+                } catch (getErr) {
+                    logger.warn(`[MercadoLivreService] Não foi possível consultar detalhes do item ${item.item_id}: ${getErr.message}`);
+                }
+
+                if (meliItem) {
+                    const isRealCatalog = isMeliCatalogItem(meliItem);
+                    const isItemActive = meliItem.status === 'active';
+
+                    // Se não for catálogo genuíno (era apenas tradicional com referência de catálogo), corrige no banco
+                    if (!isRealCatalog) {
+                        await pool.execute(
+                            `UPDATE mercado_livre_anuncios 
+                             SET catalog_listing = 0,
+                                 catalog_status = NULL,
+                                 catalog_price_to_win = NULL,
+                                 catalog_details = NULL,
+                                 status = ?,
+                                 updated_at = CURRENT_TIMESTAMP
+                             WHERE item_id = ?`,
+                            [meliItem.status || item.status, item.item_id]
+                        );
+                        continue;
+                    }
+
+                    // Se for catálogo genuíno mas não estiver ativo, mantém catalog_listing = 1 mas limpa status da Buy Box
+                    if (!isItemActive) {
+                        await pool.execute(
+                            `UPDATE mercado_livre_anuncios 
+                             SET catalog_listing = 1,
+                                 catalog_product_id = ?,
+                                 catalog_status = NULL,
+                                 catalog_price_to_win = NULL,
+                                 catalog_details = NULL,
+                                 status = ?,
+                                 updated_at = CURRENT_TIMESTAMP
+                             WHERE item_id = ?`,
+                            [meliItem.catalog_product_id || item.catalog_product_id || null, meliItem.status, item.item_id]
+                        );
+                        continue;
+                    }
+                }
+
+                // Item é catálogo e ativo: consulta concorrência e preço sugerido (price_to_win)
                 const catalog = await getItemPriceToWin(connection, item.item_id, db);
                 if (catalog) {
                     await pool.execute(
@@ -1251,7 +1323,7 @@ export async function syncAllCatalogItemsStatus(db, connectionId = null) {
             }
         }
 
-        logger.info(`[MercadoLivreService] Sincronização de catálogo concluída: ${updated}/${items.length} atualizados (${winners} vencendo, ${losers} perdendo).`);
+        logger.info(`[MercadoLivreService] Sincronização de catálogo concluída: ${updated} atualizados (${winners} vencendo, ${losers} perdendo).`);
         return { total: items.length, updated, winners, losers, competing };
     } catch (error) {
         logger.error(`[MercadoLivreService] Erro na sincronização geral de catálogo: ${error.message}`, error);
