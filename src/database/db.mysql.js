@@ -132,6 +132,10 @@ export const initializeDatabase = async () => {
         catalog_status VARCHAR(50) DEFAULT NULL,
         catalog_price_to_win DECIMAL(10,2) DEFAULT NULL,
         catalog_details JSON DEFAULT NULL,
+        sale_fee_amount DECIMAL(10,2) DEFAULT NULL,
+        shipping_cost DECIMAL(10,2) DEFAULT NULL,
+        net_amount DECIMAL(10,2) DEFAULT NULL,
+        fee_details JSON DEFAULT NULL,
         category_id VARCHAR(50) DEFAULT NULL,
         category_name VARCHAR(255) DEFAULT NULL,
         source_type VARCHAR(50) DEFAULT NULL,
@@ -169,6 +173,10 @@ export const initializeDatabase = async () => {
     await addColumnIfNotExists('mercado_livre_anuncios', 'catalog_status VARCHAR(50) DEFAULT NULL', 'catalog_status');
     await addColumnIfNotExists('mercado_livre_anuncios', 'catalog_price_to_win DECIMAL(10,2) DEFAULT NULL', 'catalog_price_to_win');
     await addColumnIfNotExists('mercado_livre_anuncios', 'catalog_details JSON DEFAULT NULL', 'catalog_details');
+    await addColumnIfNotExists('mercado_livre_anuncios', 'sale_fee_amount DECIMAL(10,2) DEFAULT NULL', 'sale_fee_amount');
+    await addColumnIfNotExists('mercado_livre_anuncios', 'shipping_cost DECIMAL(10,2) DEFAULT NULL', 'shipping_cost');
+    await addColumnIfNotExists('mercado_livre_anuncios', 'net_amount DECIMAL(10,2) DEFAULT NULL', 'net_amount');
+    await addColumnIfNotExists('mercado_livre_anuncios', 'fee_details JSON DEFAULT NULL', 'fee_details');
 
     console.log('Banco de dados MySQL pronto.');
   } finally {
@@ -333,6 +341,10 @@ export const saveOrUpdateMercadoLivreAnuncio = async (anuncio) => {
       catalog_status = null,
       catalog_price_to_win = null,
       catalog_details = null,
+      sale_fee_amount = null,
+      shipping_cost = null,
+      net_amount = null,
+      fee_details = null,
       category_id = null,
       category_name = null,
       source_type = null,
@@ -345,8 +357,8 @@ export const saveOrUpdateMercadoLivreAnuncio = async (anuncio) => {
 
     await conn.execute(`
       INSERT INTO mercado_livre_anuncios 
-        (connection_id, item_id, sku, title, price, available_quantity, status, listing_type_id, permalink, thumbnail, video_url, clip_id, clip_status, clip_details, catalog_listing, catalog_product_id, catalog_status, catalog_price_to_win, catalog_details, category_id, category_name, source_type, source_id, source_data, sync_auto_stock, sync_auto_price, markup_percent)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (connection_id, item_id, sku, title, price, available_quantity, status, listing_type_id, permalink, thumbnail, video_url, clip_id, clip_status, clip_details, catalog_listing, catalog_product_id, catalog_status, catalog_price_to_win, catalog_details, sale_fee_amount, shipping_cost, net_amount, fee_details, category_id, category_name, source_type, source_id, source_data, sync_auto_stock, sync_auto_price, markup_percent)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
         connection_id = VALUES(connection_id),
         sku = VALUES(sku),
@@ -366,6 +378,10 @@ export const saveOrUpdateMercadoLivreAnuncio = async (anuncio) => {
         catalog_status = VALUES(catalog_status),
         catalog_price_to_win = VALUES(catalog_price_to_win),
         catalog_details = VALUES(catalog_details),
+        sale_fee_amount = VALUES(sale_fee_amount),
+        shipping_cost = VALUES(shipping_cost),
+        net_amount = VALUES(net_amount),
+        fee_details = VALUES(fee_details),
         category_id = VALUES(category_id),
         category_name = VALUES(category_name),
         source_type = VALUES(source_type),
@@ -395,6 +411,10 @@ export const saveOrUpdateMercadoLivreAnuncio = async (anuncio) => {
       catalog_status,
       catalog_price_to_win !== null && catalog_price_to_win !== undefined ? parseFloat(catalog_price_to_win) : null,
       catalog_details ? (typeof catalog_details === 'string' ? catalog_details : JSON.stringify(catalog_details)) : null,
+      sale_fee_amount !== null && sale_fee_amount !== undefined ? parseFloat(sale_fee_amount) : null,
+      shipping_cost !== null && shipping_cost !== undefined ? parseFloat(shipping_cost) : null,
+      net_amount !== null && net_amount !== undefined ? parseFloat(net_amount) : null,
+      fee_details ? (typeof fee_details === 'string' ? fee_details : JSON.stringify(fee_details)) : null,
       category_id,
       category_name,
       source_type,

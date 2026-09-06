@@ -130,10 +130,27 @@ document.addEventListener('DOMContentLoaded', () => {
     const meliEditCatalogBannerText = document.getElementById('meli-edit-catalog-banner-text');
     const meliEditCatalogApplyPriceBtn = document.getElementById('meli-edit-catalog-apply-price-btn');
 
+    // Elementos de Retorno Financeiro & Valor Líquido
+    const meliEditFinContainer = document.getElementById('meli-edit-financial-container');
+    const meliEditFinRefreshBtn = document.getElementById('meli-edit-financial-refresh-btn');
+    const meliEditFinPrice = document.getElementById('meli-edit-fin-price');
+    const meliEditFinListingType = document.getElementById('meli-edit-fin-listing-type');
+    const meliEditFinFee = document.getElementById('meli-edit-fin-fee');
+    const meliEditFinFeeDesc = document.getElementById('meli-edit-fin-fee-desc');
+    const meliEditFinShipping = document.getElementById('meli-edit-fin-shipping');
+    const meliEditFinShippingDesc = document.getElementById('meli-edit-fin-shipping-desc');
+    const meliEditFinNet = document.getElementById('meli-edit-fin-net');
+    const meliEditFinNetPct = document.getElementById('meli-edit-fin-net-pct');
+    const meliEditFinProfitRow = document.getElementById('meli-edit-fin-profit-row');
+    const meliEditFinCostPrice = document.getElementById('meli-edit-fin-cost-price');
+    const meliEditFinRealProfit = document.getElementById('meli-edit-fin-real-profit');
+    const meliEditFinRealMargin = document.getElementById('meli-edit-fin-real-margin');
+
     let meliImagesList = [];
     let meliEditImagesArray = [];
     let meliCurrentClip = null;
     let meliCurrentCatalog = null;
+    let meliCurrentFinancial = null;
 
     /**
      * Inicializa a lógica do seletor de tema (Dark Mode).
@@ -832,6 +849,86 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    /**
+     * Renderiza e formata os dados do card financeiro no Modal de Edição
+     */
+    const renderMeliFinancialState = (financialData, costPrice = null) => {
+        meliCurrentFinancial = financialData;
+
+        if (!financialData) {
+            if (meliEditFinPrice) meliEditFinPrice.textContent = 'R$ 0,00';
+            if (meliEditFinFee) meliEditFinFee.textContent = '- R$ 0,00';
+            if (meliEditFinShipping) meliEditFinShipping.textContent = 'R$ 0,00';
+            if (meliEditFinNet) meliEditFinNet.textContent = 'R$ 0,00';
+            if (meliEditFinNetPct) meliEditFinNetPct.textContent = '0% do valor';
+            if (meliEditFinProfitRow) meliEditFinProfitRow.style.display = 'none';
+            return;
+        }
+
+        const price = parseFloat(financialData.price || 0);
+        const fee = parseFloat(financialData.sale_fee_amount || 0);
+        const ship = parseFloat(financialData.shipping_cost || 0);
+        const net = parseFloat(financialData.net_amount !== null && financialData.net_amount !== undefined ? financialData.net_amount : (price - fee - ship));
+        const netPct = price > 0 ? ((net / price) * 100).toFixed(1) : '0';
+
+        const details = financialData.fee_details || {};
+        const isPro = details.listing_type_id === 'gold_pro' || (meliEditListingType && meliEditListingType.value === 'gold_pro');
+        const typeLabel = isPro ? 'Premium (gold_pro)' : 'Clássico (gold_special)';
+
+        if (meliEditFinPrice) meliEditFinPrice.textContent = `R$ ${price.toFixed(2)}`;
+        if (meliEditFinListingType) meliEditFinListingType.textContent = typeLabel;
+
+        if (meliEditFinFee) {
+            meliEditFinFee.textContent = fee > 0 ? `- R$ ${fee.toFixed(2)}` : 'R$ 0,00';
+        }
+        if (meliEditFinFeeDesc) {
+            let desc = '';
+            if (details.percentage_fee) desc += `${details.percentage_fee}%`;
+            if (details.fixed_fee) desc += (desc ? ' + ' : '') + `R$ ${parseFloat(details.fixed_fee).toFixed(2)} fixo`;
+            meliEditFinFeeDesc.textContent = desc || 'Comissão Mercado Livre';
+        }
+
+        if (meliEditFinShipping) {
+            if (ship > 0) {
+                meliEditFinShipping.textContent = `- R$ ${ship.toFixed(2)}`;
+                if (meliEditFinShippingDesc) meliEditFinShippingDesc.textContent = 'Frete Grátis pago pelo Vendedor';
+            } else {
+                meliEditFinShipping.textContent = 'R$ 0,00';
+                if (meliEditFinShippingDesc) meliEditFinShippingDesc.textContent = 'Frete por conta do Comprador';
+            }
+        }
+
+        if (meliEditFinNet) {
+            meliEditFinNet.textContent = `R$ ${net.toFixed(2)}`;
+        }
+        if (meliEditFinNetPct) {
+            meliEditFinNetPct.textContent = `${netPct}% do valor de venda`;
+        }
+
+        // Lucro real caso haja custo de mercadoria do ERP ou Fornecedor
+        const numCost = (costPrice !== null && costPrice !== undefined && !isNaN(parseFloat(costPrice)) && parseFloat(costPrice) > 0)
+            ? parseFloat(costPrice)
+            : null;
+
+        if (numCost !== null && meliEditFinProfitRow) {
+            meliEditFinProfitRow.style.display = 'flex';
+            const realProfit = net - numCost;
+            const realMargin = price > 0 ? ((realProfit / price) * 100).toFixed(1) : '0';
+
+            if (meliEditFinCostPrice) meliEditFinCostPrice.textContent = `R$ ${numCost.toFixed(2)}`;
+            if (meliEditFinRealProfit) {
+                meliEditFinRealProfit.textContent = `R$ ${realProfit.toFixed(2)}`;
+                meliEditFinRealProfit.className = realProfit >= 0 ? 'text-success' : 'text-danger';
+            }
+            if (meliEditFinRealMargin) {
+                meliEditFinRealMargin.textContent = `${realMargin}%`;
+                meliEditFinRealMargin.className = realProfit >= 0 ? 'text-success' : 'text-danger';
+            }
+        } else if (meliEditFinProfitRow) {
+            meliEditFinProfitRow.style.display = 'none';
+        }
+    };
+
     const openMeliCreateModal = async (initialData = {}) => {
         if (!meliCreateModal) return;
         meliCreateForm.reset();
@@ -950,6 +1047,20 @@ document.addEventListener('DOMContentLoaded', () => {
             renderMeliCatalogState(null);
         }
 
+        // Inicializa retorno financeiro e taxas locais imediatas
+        const initialCostPrice = item.cost_price || item.source_data?.price || null;
+        if (item.sale_fee_amount !== null && item.sale_fee_amount !== undefined) {
+            renderMeliFinancialState({
+                price: item.price,
+                sale_fee_amount: item.sale_fee_amount,
+                shipping_cost: item.shipping_cost,
+                net_amount: item.net_amount,
+                fee_details: item.fee_details
+            }, initialCostPrice);
+        } else {
+            renderMeliFinancialState(null);
+        }
+
         const itemId = item.item_id || item.id;
         const connectionId = item.connection_id;
 
@@ -1029,6 +1140,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 } else {
                     renderMeliCatalogState(null);
+                }
+
+                // Retorno Financeiro, Taxas ML e Custo de Frete
+                const resolvedCostPrice = local.cost_price || local.source_data?.price || item.cost_price || item.source_data?.price || null;
+                if (res.financial) {
+                    renderMeliFinancialState(res.financial, resolvedCostPrice);
+                } else if (local.sale_fee_amount !== null && local.sale_fee_amount !== undefined) {
+                    renderMeliFinancialState({
+                        price: local.price || item.price,
+                        sale_fee_amount: local.sale_fee_amount,
+                        shipping_cost: local.shipping_cost,
+                        net_amount: local.net_amount,
+                        fee_details: local.fee_details
+                    }, resolvedCostPrice);
                 }
 
                 // Fotos completas
@@ -1572,11 +1697,71 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // Recalcular taxas e valor líquido dinamicamente
+    let meliFeeCalcTimeout = null;
+    const triggerMeliFinancialRecalculation = () => {
+        clearTimeout(meliFeeCalcTimeout);
+        meliFeeCalcTimeout = setTimeout(async () => {
+            const itemId = meliEditItemId ? meliEditItemId.value : '';
+            const connId = meliEditConnectionId ? meliEditConnectionId.value : '';
+            const price = parseFloat(meliEditPrice?.value || 0);
+            const listingTypeId = meliEditListingType?.value || 'gold_special';
+            if (!price || price <= 0) return;
+
+            try {
+                const res = await api('/api/marketplace/mercadolivre/items/calculate-fees', 'POST', {
+                    connectionId: connId,
+                    itemId,
+                    price,
+                    listing_type_id: listingTypeId
+                });
+                if (res.sucesso && res.financial) {
+                    renderMeliFinancialState(res.financial);
+                }
+            } catch (err) {
+                console.warn('Falha ao simular taxas dinâmicas:', err);
+            }
+        }, 350);
+    };
+
+    if (meliEditFinRefreshBtn) {
+        meliEditFinRefreshBtn.addEventListener('click', async () => {
+            meliEditFinRefreshBtn.classList.add('loading');
+            meliEditFinRefreshBtn.disabled = true;
+            try {
+                const itemId = meliEditItemId ? meliEditItemId.value : '';
+                const connId = meliEditConnectionId ? meliEditConnectionId.value : '';
+                const price = parseFloat(meliEditPrice?.value || 0);
+                const listingTypeId = meliEditListingType?.value || 'gold_special';
+                const res = await api('/api/marketplace/mercadolivre/items/calculate-fees', 'POST', {
+                    connectionId: connId,
+                    itemId,
+                    price,
+                    listing_type_id: listingTypeId
+                });
+                if (res.sucesso && res.financial) {
+                    renderMeliFinancialState(res.financial);
+                    showToast(`Taxas recalculadas: Líquido R$ ${res.financial.net_amount.toFixed(2)}`, 'success');
+                }
+            } catch (err) {
+                showToast(`Erro ao recalcular taxas: ${err.message}`, 'error');
+            } finally {
+                meliEditFinRefreshBtn.classList.remove('loading');
+                meliEditFinRefreshBtn.disabled = false;
+            }
+        });
+    }
+
+    if (meliEditListingType) {
+        meliEditListingType.addEventListener('change', triggerMeliFinancialRecalculation);
+    }
+
     if (meliEditPrice) {
         meliEditPrice.addEventListener('input', () => {
             if (meliCurrentCatalog && meliCurrentCatalog.is_catalog) {
                 renderMeliCatalogState(meliCurrentCatalog, meliEditPrice.value);
             }
+            triggerMeliFinancialRecalculation();
         });
     }
 
@@ -2779,6 +2964,9 @@ document.addEventListener('DOMContentLoaded', () => {
             <button class="btn btn-secondary" data-action="sync-all-catalog-items" title="Atualizar status da Buy Box e sugestão de preço de todos os anúncios de catálogo">
                 <i class="fas fa-trophy"></i> Atualizar Buy Box
             </button>
+            <button class="btn btn-secondary" data-action="sync-all-fees-items" title="Recalcular comissões ML, frete e valor líquido de todos os anúncios">
+                <i class="fas fa-calculator"></i> Recalcular Líquido
+            </button>
             <button class="btn btn-secondary" data-action="import-meli-items" title="Importar anúncios existentes diretamente da conta ML">
                 <i class="fas fa-cloud-arrow-down"></i> Importar do ML
             </button>
@@ -2998,6 +3186,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                  <div style="display: flex; flex-direction: column; gap: 0.1rem;">
                                      <span class="price-text" style="font-size: 0.92rem; font-weight: 700;">R$ ${parseFloat(item.price).toFixed(2)}</span>
                                      ${isActive && item.catalog_price_to_win && item.catalog_price_to_win != item.price && (String(item.catalog_status).toLowerCase() === 'losing' || String(item.catalog_status).toLowerCase() === 'opportunity') ? `<small style="color: #f59e0b; font-weight: 600; font-size: 0.72rem;" title="Preço sugerido para ganhar a Buy Box"><i class="fas fa-bolt"></i> Ganhe: R$ ${parseFloat(item.catalog_price_to_win).toFixed(2)}</small>` : ''}
+                                     ${item.net_amount !== null && item.net_amount !== undefined ? `<span class="net-amount-pill" title="Valor líquido estimado a receber por venda (descontando comissão ML e frete)"><i class="fas fa-coins"></i> Líquido: R$ ${parseFloat(item.net_amount).toFixed(2)}</span>` : ''}
                                      ${item.markup_percent > 0 ? `<small style="color: var(--color-success); font-size: 0.7rem;">+${item.markup_percent}% markup</small>` : ''}
                                  </div>
                             </td>
@@ -3815,6 +4004,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } catch (err) {
                 showToast(`Erro na sincronização da Buy Box: ${err.message}`, 'error');
+            } finally {
+                actionButton.classList.remove('loading');
+                actionButton.disabled = false;
+            }
+            return;
+        }
+
+        if (action === 'sync-all-fees-items') {
+            actionButton.classList.add('loading');
+            actionButton.disabled = true;
+            showToast('Recalculando comissões ML, frete e valor líquido de todos os anúncios...', 'info');
+
+            try {
+                const res = await api('/api/marketplace/mercadolivre/sync-all-fees', 'POST');
+                if (res.sucesso) {
+                    showToast(res.mensagem || 'Cálculo de taxas concluído!', 'success');
+                    renderMercadoLivreListings();
+                } else {
+                    showToast(`Erro ao recalcular taxas: ${res.erro || 'Falha desconhecida'}`, 'error');
+                }
+            } catch (err) {
+                showToast(`Erro ao recalcular taxas: ${err.message}`, 'error');
             } finally {
                 actionButton.classList.remove('loading');
                 actionButton.disabled = false;

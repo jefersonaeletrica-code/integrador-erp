@@ -1370,6 +1370,218 @@ export function startCatalogStatusSyncJob(db, intervalMinutes = 10) {
     return catalogSyncTimer;
 }
 
+/**
+ * Consulta as taxas de venda (comissão ML) e custo de frete (Mercado Envíos) para calcular o valor líquido recebido por venda
+ * @param {object} connection - Conexão do Mercado Livre
+ * @param {object} itemData - Objeto com dados do anúncio { item_id, price, listing_type_id, category_id, shipping }
+ * @param {object} db - Instância do banco de dados
+ * @returns {Promise<object>} Detalhamento financeiro { price, sale_fee_amount, percentage_fee, fixed_fee, shipping_cost, free_shipping, net_amount, net_percent, fee_details }
+ */
+export async function calculateItemFeesAndNet(connection, itemData, db) {
+    const price = parseFloat(itemData.price || 0);
+    if (isNaN(price) || price <= 0) {
+        return {
+            price: 0,
+            sale_fee_amount: 0,
+            shipping_cost: 0,
+            net_amount: 0,
+            net_percent: 0,
+            fee_details: null
+        };
+    }
+
+    const listingTypeId = itemData.listing_type_id || 'gold_special';
+    const categoryId = itemData.category_id || null;
+    const itemId = itemData.item_id || itemData.id || null;
+    const siteId = connection.site_id || 'MLB';
+
+    let saleFeeAmount = 0;
+    let percentageFee = null;
+    let fixedFee = null;
+    let shippingCost = 0;
+    let freeShipping = false;
+    let logisticType = itemData.shipping?.logistic_type || null;
+
+    // 1. Consulta taxas de venda (comissão do Mercado Livre)
+    try {
+        const lpData = await executeMeliRequest(connection, db, async (token) => {
+            const params = {
+                price,
+                listing_type_id: listingTypeId
+            };
+            if (categoryId) params.category_id = categoryId;
+
+            const res = await meliAxios.get(`/sites/${siteId}/listing_prices`, {
+                params,
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            return res.data;
+        });
+
+        if (Array.isArray(lpData) && lpData.length > 0) {
+            const matched = lpData.find(e => e.listing_type_id === listingTypeId) || lpData[0];
+            saleFeeAmount = parseFloat(matched.sale_fee_amount || 0);
+            percentageFee = matched.sale_fee_details?.percentage_fee ?? null;
+            fixedFee = matched.sale_fee_details?.fixed_fee ?? null;
+        } else if (lpData && typeof lpData === 'object') {
+            saleFeeAmount = parseFloat(lpData.sale_fee_amount || 0);
+            percentageFee = lpData.sale_fee_details?.percentage_fee ?? null;
+            fixedFee = lpData.sale_fee_details?.fixed_fee ?? null;
+        }
+    } catch (feeErr) {
+        logger.warn(`[MercadoLivreService] Falha ao consultar listing_prices para ${itemId || 'item'}: ${feeErr.message}`);
+        // Fallback padrão para MLB caso a API falhe temporariamente
+        const rate = listingTypeId === 'gold_pro' ? 0.19 : 0.14;
+        const baseFee = price * rate;
+        const fix = price < 79 ? 6.00 : 0;
+        saleFeeAmount = Math.round((baseFee + fix) * 100) / 100;
+        percentageFee = listingTypeId === 'gold_pro' ? 19.0 : 14.0;
+        fixedFee = fix;
+    }
+
+    // 2. Consulta custo de frete pago pelo vendedor (Mercado Envíos / Frete Grátis)
+    if (itemId) {
+        try {
+            const shipData = await executeMeliRequest(connection, db, async (token) => {
+                const res = await meliAxios.get(`/items/${itemId}/shipping_options/free`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                return res.data;
+            });
+
+            if (shipData) {
+                freeShipping = true;
+                const allCountry = shipData.coverage?.all_country;
+                if (allCountry && allCountry.list_cost !== undefined) {
+                    shippingCost = parseFloat(allCountry.list_cost);
+                } else if (shipData.cost !== undefined) {
+                    shippingCost = parseFloat(shipData.cost);
+                }
+            }
+        } catch (shipErr) {
+            // Se retornar 404/400, o anúncio não tem frete grátis pago pelo vendedor (comprador paga o frete)
+            shippingCost = 0;
+            freeShipping = false;
+        }
+    }
+
+    // 3. Calcula o valor líquido que sobra
+    const netAmount = Math.max(0, Math.round((price - saleFeeAmount - shippingCost) * 100) / 100);
+    const netPercent = price > 0 ? Math.round(((netAmount / price) * 100) * 10) / 10 : 0;
+
+    const feeDetails = {
+        price,
+        sale_fee_amount: saleFeeAmount,
+        percentage_fee: percentageFee,
+        fixed_fee: fixedFee,
+        shipping_cost: shippingCost,
+        free_shipping: freeShipping,
+        logistic_type: logisticType,
+        net_amount: netAmount,
+        net_percent: netPercent,
+        listing_type_id: listingTypeId,
+        calculated_at: new Date().toISOString()
+    };
+
+    return {
+        price,
+        sale_fee_amount: saleFeeAmount,
+        shipping_cost: shippingCost,
+        net_amount: netAmount,
+        net_percent: netPercent,
+        fee_details: feeDetails
+    };
+}
+
+/**
+ * Sincroniza e recalcula em lote as taxas, frete e valor líquido de todos os anúncios
+ * @param {object} db - Instância do banco de dados
+ * @param {number|null} connectionId - ID da conexão (ou null para todas)
+ * @returns {Promise<object>} Resumo { total, updated, errorCount }
+ */
+export async function syncAllItemsFeesAndNet(db, connectionId = null) {
+    if (!db) return { total: 0, updated: 0, errorCount: 0 };
+
+    try {
+        const pool = db.getPool();
+        let query = `
+            SELECT item_id, connection_id, price, listing_type_id, category_id, status
+            FROM mercado_livre_anuncios
+            WHERE 1=1
+        `;
+        const params = [];
+        if (connectionId) {
+            query += ' AND connection_id = ?';
+            params.push(connectionId);
+        }
+
+        const [items] = await pool.execute(query, params);
+        if (!items || items.length === 0) {
+            return { total: 0, updated: 0, errorCount: 0 };
+        }
+
+        logger.info(`[MercadoLivreService] Recalculando taxas e valor líquido para ${items.length} anúncio(s)...`);
+
+        const connectionsCache = new Map();
+        const safeJsonParse = (d) => {
+            if (typeof d === 'string') {
+                try { return JSON.parse(d); } catch (e) { return null; }
+            }
+            return d;
+        };
+
+        const getCachedConnection = async (connId) => {
+            if (connectionsCache.has(connId)) return connectionsCache.get(connId);
+            const [rows] = await pool.execute('SELECT * FROM marketplace_connections WHERE id = ?', [connId]);
+            if (!rows[0]) return null;
+            const conn = { ...rows[0], credentials: safeJsonParse(rows[0].credentials) };
+            connectionsCache.set(connId, conn);
+            return conn;
+        };
+
+        let updated = 0;
+        let errorCount = 0;
+
+        for (const item of items) {
+            try {
+                const connection = await getCachedConnection(item.connection_id);
+                if (!connection) continue;
+
+                const fin = await calculateItemFeesAndNet(connection, item, db);
+
+                await pool.execute(
+                    `UPDATE mercado_livre_anuncios 
+                     SET sale_fee_amount = ?,
+                         shipping_cost = ?,
+                         net_amount = ?,
+                         fee_details = ?,
+                         updated_at = CURRENT_TIMESTAMP
+                     WHERE item_id = ?`,
+                    [
+                        fin.sale_fee_amount,
+                        fin.shipping_cost,
+                        fin.net_amount,
+                        fin.fee_details ? JSON.stringify(fin.fee_details) : null,
+                        item.item_id
+                    ]
+                );
+
+                updated++;
+                await new Promise(resolve => setTimeout(resolve, 80));
+            } catch (err) {
+                logger.warn(`[MercadoLivreService] Falha ao calcular taxas do item ${item.item_id}: ${err.message}`);
+                errorCount++;
+            }
+        }
+
+        logger.info(`[MercadoLivreService] Recálculo de taxas concluído: ${updated}/${items.length} itens atualizados.`);
+        return { total: items.length, updated, errorCount };
+    } catch (error) {
+        logger.error(`[MercadoLivreService] Erro no recálculo em lote de taxas: ${error.message}`, error);
+        return { total: 0, updated: 0, errorCount: 0, erro: error.message };
+    }
+}
+
 
 
 

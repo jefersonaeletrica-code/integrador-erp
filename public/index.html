@@ -482,6 +482,59 @@
                         </div>
                     </div>
 
+                    <!-- Seção Especial: Retorno Financeiro & Recebimento Líquido (Taxas & Frete) -->
+                    <div class="meli-edit-section-card meli-financial-breakdown-card" id="meli-edit-financial-container">
+                        <div class="meli-section-header">
+                            <h3 class="meli-section-title">
+                                <i class="fas fa-calculator" style="color: #10b981;"></i> Retorno Financeiro & Recebimento Líquido
+                                <span id="meli-edit-financial-calc-badge" class="financial-badge-pill"><i class="fas fa-coins"></i> Valor Líquido</span>
+                            </h3>
+                            <button type="button" class="btn btn-small btn-secondary" id="meli-edit-financial-refresh-btn" title="Recalcular comissões e frete com base no preço atual">
+                                <i class="fas fa-rotate"></i> Recalcular
+                            </button>
+                        </div>
+
+                        <div class="meli-financial-grid">
+                            <div class="meli-financial-stat-box">
+                                <div class="stat-label"><i class="fas fa-tag"></i> Preço de Venda</div>
+                                <div class="stat-val" id="meli-edit-fin-price">R$ 0,00</div>
+                                <small id="meli-edit-fin-listing-type" class="stat-desc">Clássico (gold_special)</small>
+                            </div>
+                            <div class="meli-financial-stat-box fee-stat">
+                                <div class="stat-label"><i class="fas fa-hand-holding-dollar"></i> Comissão ML</div>
+                                <div class="stat-val text-danger" id="meli-edit-fin-fee">- R$ 0,00</div>
+                                <small id="meli-edit-fin-fee-desc" class="stat-desc">Taxa percentual + fixa</small>
+                            </div>
+                            <div class="meli-financial-stat-box ship-stat">
+                                <div class="stat-label"><i class="fas fa-truck"></i> Custo de Frete</div>
+                                <div class="stat-val text-warning" id="meli-edit-fin-shipping">R$ 0,00</div>
+                                <small id="meli-edit-fin-shipping-desc" class="stat-desc">Mercado Envíos</small>
+                            </div>
+                            <div class="meli-financial-stat-box net-stat highlight-green">
+                                <div class="stat-label"><i class="fas fa-sack-dollar"></i> Você Recebe (Líquido)</div>
+                                <div class="stat-val" id="meli-edit-fin-net">R$ 0,00</div>
+                                <small id="meli-edit-fin-net-pct" class="stat-desc">0% do valor de venda</small>
+                            </div>
+                        </div>
+
+                        <div class="meli-financial-profit-row" id="meli-edit-fin-profit-row" style="display: none;">
+                            <div class="profit-item">
+                                <span class="profit-lbl">Custo Mercadoria:</span>
+                                <strong id="meli-edit-fin-cost-price">R$ 0,00</strong>
+                            </div>
+                            <div class="profit-divider">→</div>
+                            <div class="profit-item">
+                                <span class="profit-lbl">Lucro Real Estimado:</span>
+                                <strong id="meli-edit-fin-real-profit" class="text-success">R$ 0,00</strong>
+                            </div>
+                            <div class="profit-divider">|</div>
+                            <div class="profit-item">
+                                <span class="profit-lbl">Margem Real:</span>
+                                <strong id="meli-edit-fin-real-margin" class="text-success">0.0%</strong>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- 4. Galeria de Fotos (Upload de Arquivos & Ordenação de Capa) -->
                     <div class="meli-edit-section-card">
                         <div class="meli-section-header">

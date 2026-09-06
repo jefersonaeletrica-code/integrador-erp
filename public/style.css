@@ -2623,3 +2623,152 @@ body.dark-mode textarea.form-control.catalog-locked {
     color: #94a3b8 !important;
     border-color: rgba(255, 255, 255, 0.15) !important;
 }
+
+/* ==========================================================================
+   10. Retorno Financeiro & Valor Líquido (Taxas Mercado Livre & Frete)
+   ========================================================================== */
+
+/* Badge de Valor Líquido na Tabela de Anúncios */
+.net-amount-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.72rem;
+    font-weight: 700;
+    background-color: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+    margin-top: 0.15rem;
+    letter-spacing: 0.01em;
+}
+
+body.dark-mode .net-amount-pill {
+    background-color: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+    border-color: rgba(16, 185, 129, 0.35);
+}
+
+/* Card de Detalhamento Financeiro no Modal de Edição */
+.meli-financial-breakdown-card {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.04) 0%, rgba(5, 150, 105, 0.08) 100%);
+    border: 1px solid rgba(16, 185, 129, 0.25) !important;
+}
+
+body.dark-mode .meli-financial-breakdown-card {
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(5, 150, 105, 0.14) 100%);
+    border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+.financial-badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: var(--border-radius-full);
+    font-size: 0.74rem;
+    font-weight: 700;
+    background-color: #10b981;
+    color: #ffffff;
+    letter-spacing: 0.02em;
+    margin-left: 0.5rem;
+}
+
+.meli-financial-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.85rem;
+    margin-top: 0.85rem;
+}
+
+@media (max-width: 768px) {
+    .meli-financial-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media (max-width: 480px) {
+    .meli-financial-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.meli-financial-stat-box {
+    background-color: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    padding: 0.85rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.meli-financial-stat-box.highlight-green {
+    border-color: #10b981;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(5, 150, 105, 0.14) 100%);
+}
+
+.meli-financial-stat-box .stat-label {
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: var(--color-text-offset);
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.meli-financial-stat-box .stat-val {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--color-text);
+    font-family: var(--font-family-mono);
+}
+
+.meli-financial-stat-box .stat-desc {
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+}
+
+/* Linha de Lucro Real com Custo */
+.meli-financial-profit-row {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    margin-top: 0.95rem;
+    padding: 0.75rem 1rem;
+    background-color: var(--color-card-bg);
+    border: 1px dashed rgba(16, 185, 129, 0.45);
+    border-radius: var(--border-radius-md);
+    flex-wrap: wrap;
+}
+
+.meli-financial-profit-row .profit-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.84rem;
+}
+
+.meli-financial-profit-row .profit-lbl {
+    color: var(--color-text-offset);
+}
+
+.meli-financial-profit-row .profit-divider {
+    color: var(--color-text-offset);
+    opacity: 0.5;
+    font-weight: 700;
+}
+
+/* Classes utilitárias de cores de texto */
+.text-danger {
+    color: #ef4444 !important;
+}
+
+.text-warning {
+    color: #f59e0b !important;
+}
+
+.text-success {
+    color: #10b981 !important;
+}

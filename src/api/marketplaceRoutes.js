@@ -550,6 +550,10 @@ export default (db) => {
                     catalog_status: (isCatalog && isActive) ? (r.catalog_status || null) : null,
                     catalog_price_to_win: (isCatalog && isActive && r.catalog_price_to_win !== null && r.catalog_price_to_win !== undefined) ? parseFloat(r.catalog_price_to_win) : null,
                     catalog_details: (isCatalog && isActive) ? safeJsonParse(r.catalog_details) : null,
+                    sale_fee_amount: r.sale_fee_amount !== null && r.sale_fee_amount !== undefined ? parseFloat(r.sale_fee_amount) : null,
+                    shipping_cost: r.shipping_cost !== null && r.shipping_cost !== undefined ? parseFloat(r.shipping_cost) : null,
+                    net_amount: r.net_amount !== null && r.net_amount !== undefined ? parseFloat(r.net_amount) : null,
+                    fee_details: safeJsonParse(r.fee_details),
                     source_data: safeJsonParse(r.source_data),
                     credentials: undefined // omite credenciais
                 };
@@ -758,12 +762,36 @@ export default (db) => {
                 }
             }
 
+            // Calcula taxas e valor líquido que sobra de cada venda
+            let financial = null;
+            try {
+                const itemForCalc = meliItem || localItem;
+                financial = await meliService.calculateItemFeesAndNet(connection, itemForCalc, db);
+                if (financial) {
+                    await pool.execute(
+                        `UPDATE mercado_livre_anuncios 
+                         SET sale_fee_amount = ?, shipping_cost = ?, net_amount = ?, fee_details = ? 
+                         WHERE item_id = ?`,
+                        [
+                            financial.sale_fee_amount,
+                            financial.shipping_cost,
+                            financial.net_amount,
+                            financial.fee_details ? JSON.stringify(financial.fee_details) : null,
+                            itemId
+                        ]
+                    );
+                }
+            } catch (finErr) {
+                logger.warn(`[MarketplaceRoutes] Falha ao calcular taxas do item ${itemId}: ${finErr.message}`);
+            }
+
             res.json({
                 sucesso: true,
                 item: meliItem || localItem,
                 localItem,
                 description,
-                catalog
+                catalog,
+                financial
             });
         } catch (error) {
             logger.error(`[MarketplaceRoutes] Erro ao buscar detalhes do anúncio ${itemId}: ${error.message}`, error);
@@ -878,6 +906,7 @@ export default (db) => {
             }
 
             // Atualiza no DB local
+            let financial = null;
             if (localItem) {
                 const updatedDb = {
                     ...localItem,
@@ -897,13 +926,32 @@ export default (db) => {
                     markup_percent: markup_percent !== undefined ? parseFloat(markup_percent) : parseFloat(localItem.markup_percent || 0),
                     source_data: safeJsonParse(localItem.source_data)
                 };
+
+                // Recalcula taxas e valor líquido
+                try {
+                    financial = await meliService.calculateItemFeesAndNet(connection, {
+                        ...updatedDb,
+                        id: itemId,
+                        category_id: updatedDb.category_id || localItem.category_id
+                    }, db);
+                    if (financial) {
+                        updatedDb.sale_fee_amount = financial.sale_fee_amount;
+                        updatedDb.shipping_cost = financial.shipping_cost;
+                        updatedDb.net_amount = financial.net_amount;
+                        updatedDb.fee_details = financial.fee_details;
+                    }
+                } catch (finErr) {
+                    logger.warn(`[MarketplaceRoutes] Aviso ao calcular taxas após update do item ${itemId}: ${finErr.message}`);
+                }
+
                 await db.saveOrUpdateMercadoLivreAnuncio(updatedDb);
             }
 
             res.json({
                 sucesso: true,
                 mensagem: 'Anúncio atualizado com sucesso no Mercado Livre!',
-                item: updatedMeli
+                item: updatedMeli,
+                financial
             });
         } catch (error) {
             logger.error(`[MarketplaceRoutes] Erro ao atualizar anúncio ${itemId}: ${error.message}`, error);
@@ -1080,6 +1128,25 @@ export default (db) => {
                 available_quantity: updatePayload.available_quantity !== undefined ? updatePayload.available_quantity : localItem.available_quantity,
                 source_data: safeJsonParse(localItem.source_data)
             };
+
+            // Recalcula taxas e valor líquido
+            let financial = null;
+            try {
+                financial = await meliService.calculateItemFeesAndNet(connection, {
+                    ...updatedDb,
+                    id: itemId,
+                    category_id: updatedDb.category_id || localItem.category_id
+                }, db);
+                if (financial) {
+                    updatedDb.sale_fee_amount = financial.sale_fee_amount;
+                    updatedDb.shipping_cost = financial.shipping_cost;
+                    updatedDb.net_amount = financial.net_amount;
+                    updatedDb.fee_details = financial.fee_details;
+                }
+            } catch (finErr) {
+                logger.warn(`[MarketplaceRoutes] Aviso ao calcular taxas após sync do item ${itemId}: ${finErr.message}`);
+            }
+
             await db.saveOrUpdateMercadoLivreAnuncio(updatedDb);
 
             res.json({
@@ -1090,7 +1157,8 @@ export default (db) => {
                     stock: updatePayload.available_quantity,
                     costPrice: currentCostPrice
                 },
-                item: updatedMeli
+                item: updatedMeli,
+                financial
             });
         } catch (error) {
             logger.error(`[MarketplaceRoutes] Erro na sincronização do item ${itemId}: ${error.message}`, error);
@@ -1158,9 +1226,16 @@ export default (db) => {
                 logger.warn(`[MarketplaceRoutes] Aviso na sincronização de catálogo pós-importação: ${catSyncErr.message}`);
             }
 
+            // Sincroniza automaticamente as taxas e valor líquido que sobra para todos os anúncios importados
+            try {
+                await meliService.syncAllItemsFeesAndNet(db, connection.id);
+            } catch (feeSyncErr) {
+                logger.warn(`[MarketplaceRoutes] Aviso na sincronização de taxas pós-importação: ${feeSyncErr.message}`);
+            }
+
             res.json({
                 sucesso: true,
-                mensagem: `${importedCount} anúncios importados/atualizados da conta do Mercado Livre com sucesso!`,
+                mensagem: `${importedCount} anúncios importados/atualizados com taxas e concorrência calculadas!`,
                 count: importedCount
             });
         } catch (error) {
@@ -1180,6 +1255,57 @@ export default (db) => {
             });
         } catch (error) {
             logger.error(`[MarketplaceRoutes] Erro ao sincronizar Buy Box em lote: ${error.message}`, error);
+            res.status(500).json({ sucesso: false, erro: error.message });
+        }
+    });
+
+    // Simulação e cálculo dinâmico de taxas e valor líquido
+    router.post('/marketplace/mercadolivre/items/calculate-fees', async (req, res) => {
+        const { connectionId, itemId, price, listing_type_id, category_id } = req.body;
+        try {
+            let conn = null;
+            if (connectionId) {
+                conn = await findMarketplaceConnectionById(connectionId);
+            } else if (itemId) {
+                const pool = db.getPool();
+                const [rows] = await pool.execute('SELECT connection_id FROM mercado_livre_anuncios WHERE item_id = ?', [itemId]);
+                if (rows[0]) conn = await findMarketplaceConnectionById(rows[0].connection_id);
+            }
+            if (!conn) {
+                const pool = db.getPool();
+                const [conns] = await pool.execute('SELECT id FROM marketplace_connections WHERE type = "mercadolivre" ORDER BY id ASC LIMIT 1');
+                if (conns[0]) conn = await findMarketplaceConnectionById(conns[0].id);
+            }
+            if (!conn) {
+                return res.status(400).json({ sucesso: false, erro: 'Conexão do Mercado Livre não encontrada.' });
+            }
+
+            const financial = await meliService.calculateItemFeesAndNet(conn, {
+                id: itemId,
+                price: parseFloat(price),
+                listing_type_id: listing_type_id || 'gold_special',
+                category_id
+            }, db);
+
+            res.json({ sucesso: true, financial });
+        } catch (error) {
+            logger.error(`[MarketplaceRoutes] Erro ao simular taxas: ${error.message}`, error);
+            res.status(500).json({ sucesso: false, erro: error.message });
+        }
+    });
+
+    // Sincronização e recálculo em lote de taxas e valor líquido de todos os anúncios
+    router.post('/marketplace/mercadolivre/sync-all-fees', async (req, res) => {
+        const { connectionId } = req.body;
+        try {
+            const result = await meliService.syncAllItemsFeesAndNet(db, connectionId || null);
+            res.json({
+                sucesso: true,
+                mensagem: `Cálculo de taxas e valor líquido concluído! ${result.updated} de ${result.total} anúncio(s) atualizados com sucesso.`,
+                ...result
+            });
+        } catch (error) {
+            logger.error(`[MarketplaceRoutes] Erro ao sincronizar taxas em lote: ${error.message}`, error);
             res.status(500).json({ sucesso: false, erro: error.message });
         }
     });
