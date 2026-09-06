@@ -501,11 +501,12 @@ export async function getUserItems(connection, status = null, db) {
                 }
             }
 
-            // Condição de parada robusta: quebra o loop se a página atual não estiver cheia
-            // OU se já coletamos todos os itens esperados (para evitar loops infinitos com totais imprecisos da API).
-            if (itemIds.length < limit || (total > 0 && allItems.length >= total)) {
+            // Condição de parada: quebra o loop se a página atual não estiver cheia (é a última)
+            // ou se já atingimos o total de itens reportado pela API.
+            if (itemIds.length < limit || allItems.length >= total) {
                 break;
             }
+
             offset += limit;
         } while (true); // O loop agora é quebrado internamente
 
