@@ -2512,3 +2512,114 @@ body.dark-mode .meli-catalog-competition-card {
     flex: 1;
     min-width: 200px;
 }
+
+/* Banner Informativo de Anúncio de Catálogo no Modal de Edição */
+.meli-catalog-notice-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+    padding: 0.95rem 1.15rem;
+    margin-bottom: 1.25rem;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1) 0%, rgba(79, 70, 229, 0.16) 100%);
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    border-radius: var(--border-radius-md);
+    color: var(--color-text);
+}
+
+body.dark-mode .meli-catalog-notice-banner {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.18) 0%, rgba(79, 70, 229, 0.25) 100%);
+    border-color: rgba(99, 102, 241, 0.45);
+}
+
+.meli-catalog-notice-banner .notice-icon {
+    font-size: 1.35rem;
+    color: #6366f1;
+    margin-top: 0.15rem;
+    flex-shrink: 0;
+}
+
+body.dark-mode .meli-catalog-notice-banner .notice-icon {
+    color: #a5b4fc;
+}
+
+.meli-catalog-notice-banner .notice-text {
+    flex: 1;
+}
+
+.meli-catalog-notice-banner .notice-text strong {
+    display: block;
+    font-size: 0.9rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+    color: #4338ca;
+}
+
+body.dark-mode .meli-catalog-notice-banner .notice-text strong {
+    color: #c7d2fe;
+}
+
+.meli-catalog-notice-banner .notice-text p {
+    font-size: 0.8rem;
+    line-height: 1.45;
+    color: var(--color-text-offset);
+    margin: 0;
+}
+
+/* Badges e Avisos de Bloqueio em Campos de Catálogo */
+.catalog-field-locked-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.7rem;
+    font-weight: 700;
+    background-color: rgba(99, 102, 241, 0.12);
+    color: #4f46e5;
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    margin-left: 0.45rem;
+    vertical-align: middle;
+}
+
+body.dark-mode .catalog-field-locked-badge {
+    background-color: rgba(99, 102, 241, 0.22);
+    color: #a5b4fc;
+    border-color: rgba(99, 102, 241, 0.45);
+}
+
+.meli-catalog-field-lock-box {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    padding: 0.75rem 1rem;
+    background-color: var(--color-card-bg);
+    border: 1px dashed rgba(99, 102, 241, 0.45);
+    border-radius: var(--border-radius-md);
+    color: var(--color-text-offset);
+    font-size: 0.82rem;
+    font-weight: 600;
+    margin-bottom: 0.85rem;
+}
+
+body.dark-mode .meli-catalog-field-lock-box {
+    background-color: rgba(99, 102, 241, 0.08);
+    border-color: rgba(99, 102, 241, 0.4);
+    color: #c7d2fe;
+}
+
+/* Estado de campo bloqueado e desabilitado pelo catálogo */
+.form-control.catalog-locked,
+textarea.form-control.catalog-locked {
+    background-color: var(--color-bg, #f1f5f9) !important;
+    color: var(--color-text-offset, #64748b) !important;
+    cursor: not-allowed !important;
+    border-style: dashed !important;
+    opacity: 0.85;
+}
+
+body.dark-mode .form-control.catalog-locked,
+body.dark-mode textarea.form-control.catalog-locked {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    color: #94a3b8 !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+}

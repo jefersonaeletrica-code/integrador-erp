@@ -818,6 +818,8 @@ export default (db) => {
                 return res.status(404).json({ sucesso: false, erro: 'Conexão do Mercado Livre não encontrada.' });
             }
 
+            const isCatalog = !!(req.body.is_catalog || localItem?.catalog_listing || localItem?.catalog_product_id);
+
             // Atualiza no Mercado Livre via API
             const updatedMeli = await meliService.updateItem(connection, itemId, {
                 title,
@@ -830,7 +832,8 @@ export default (db) => {
                 model,
                 listing_type_id,
                 pictures,
-                description
+                description,
+                is_catalog: isCatalog
             }, db);
 
             // Determina thumbnail principal

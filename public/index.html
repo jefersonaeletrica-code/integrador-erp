@@ -354,10 +354,22 @@
                     <input type="hidden" id="meli-edit-item-id" value="">
                     <input type="hidden" id="meli-edit-connection-id" value="">
 
+                    <!-- Banner Informativo de Catálogo -->
+                    <div class="meli-catalog-notice-banner" id="meli-edit-catalog-notice" style="display: none;">
+                        <div class="notice-icon"><i class="fas fa-certificate"></i></div>
+                        <div class="notice-text">
+                            <strong>Anúncio Vinculado ao Catálogo Oficial do Mercado Livre</strong>
+                            <p>Título, Ficha Técnica, Fotos e Descrição são padronizados e gerenciados diretamente pelo Mercado Livre. Você pode alterar e gerenciar livremente <strong>Preço de Venda, Estoque, Status e Estratégia de Buy Box</strong>.</p>
+                        </div>
+                    </div>
+
                     <!-- 1. Título e Informações Principais -->
                     <div class="meli-edit-section-card">
                         <div class="meli-section-header">
-                            <h3 class="meli-section-title"><i class="fas fa-heading"></i> Título do Anúncio</h3>
+                            <h3 class="meli-section-title">
+                                <i class="fas fa-heading"></i> Título do Anúncio
+                                <span id="meli-edit-title-catalog-lock" class="catalog-field-locked-badge" style="display: none;"><i class="fas fa-lock"></i> Catálogo ML</span>
+                            </h3>
                             <span id="meli-edit-title-counter" class="meli-title-counter-badge ok">0/60 caracteres</span>
                         </div>
                         <div class="form-group" style="margin-bottom: 0;">
@@ -371,7 +383,10 @@
                     <!-- 2. Ficha Técnica & Identificação de Catálogo -->
                     <div class="meli-edit-section-card">
                         <div class="meli-section-header">
-                            <h3 class="meli-section-title"><i class="fas fa-barcode"></i> Ficha Técnica & Identificação</h3>
+                            <h3 class="meli-section-title">
+                                <i class="fas fa-barcode"></i> Ficha Técnica & Identificação
+                                <span id="meli-edit-attributes-catalog-lock" class="catalog-field-locked-badge" style="display: none;"><i class="fas fa-lock"></i> Catálogo ML</span>
+                            </h3>
                             <small style="color: var(--color-text-offset); font-size: 0.78rem;">Atributos e códigos universais</small>
                         </div>
                         <div class="form-row-4">
@@ -472,11 +487,18 @@
                         <div class="meli-section-header">
                             <h3 class="meli-section-title">
                                 <i class="fas fa-images"></i> Galeria de Fotos do Anúncio
+                                <span id="meli-edit-images-catalog-lock" class="catalog-field-locked-badge" style="display: none;"><i class="fas fa-lock"></i> Catálogo ML</span>
                                 <span id="meli-edit-images-counter" style="font-size: 0.78rem; font-weight: normal; color: var(--color-text-offset);">(0 fotos)</span>
                             </h3>
-                            <small style="color: var(--color-warning); font-weight: 600; font-size: 0.78rem;">
+                            <small id="meli-edit-images-cover-hint" style="color: var(--color-warning); font-weight: 600; font-size: 0.78rem;">
                                 <i class="fas fa-star" style="color: #f59e0b;"></i> A 1ª foto da lista é a Foto Principal (Capa)
                             </small>
+                        </div>
+
+                        <!-- Aviso de fotos gerenciadas por catálogo -->
+                        <div id="meli-edit-images-catalog-notice" class="meli-catalog-field-lock-box" style="display: none;">
+                            <i class="fas fa-lock" style="color: #6366f1;"></i>
+                            <span>As fotos deste anúncio são padronizadas e administradas pelo Catálogo oficial do Mercado Livre.</span>
                         </div>
 
                         <!-- Upload por Arquivo do Computador -->
@@ -557,7 +579,10 @@
                         <!-- Descrição do Anúncio -->
                         <div class="form-group" style="margin-top: 1.25rem; margin-bottom: 0;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
-                                <label for="meli-edit-description" style="margin: 0;"><i class="fas fa-align-left"></i> Descrição do Anúncio (Texto Simples)</label>
+                                <label for="meli-edit-description" style="margin: 0;">
+                                    <i class="fas fa-align-left"></i> Descrição do Anúncio (Texto Simples)
+                                    <span id="meli-edit-desc-catalog-lock" class="catalog-field-locked-badge" style="display: none;"><i class="fas fa-lock"></i> Catálogo ML</span>
+                                </label>
                                 <span id="meli-edit-desc-status" style="font-size: 0.72rem; color: var(--color-text-offset);">Carregando descrição...</span>
                             </div>
                             <textarea id="meli-edit-description" class="form-control" rows="5" placeholder="Detalhes, especificações técnicas, compatibilidade do produto..."></textarea>

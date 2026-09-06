@@ -503,6 +503,11 @@ export async function updateItem(connection, itemId, updateData, db) {
         logger.warn(`[MercadoLivreService] Não foi possível obter item atual ${itemId}: ${fetchErr.message}`);
     }
 
+    const isCatalogItem = !!(updateData.is_catalog || updateData.catalog_listing || currentItem?.catalog_listing || currentItem?.catalog_product_id);
+    if (isCatalogItem) {
+        logger.info(`[MercadoLivreService] Anúncio ${itemId} é de Catálogo. Atualizando apenas campos permitidos (preço, estoque, status, etc.).`);
+    }
+
     const payload = {};
 
     // Preço: só envia se foi modificado
@@ -528,8 +533,16 @@ export async function updateItem(connection, itemId, updateData, db) {
         }
     }
 
-    // Título: no ML, título só pode ser alterado se o anúncio nunca teve vendas (sold_quantity === 0)
-    if (updateData.title && updateData.title.trim()) {
+    // SKU / seller_custom_field
+    if (updateData.sku !== undefined && updateData.sku !== null) {
+        const skuVal = updateData.sku.trim();
+        if (!currentItem || (currentItem.seller_custom_field || '') !== skuVal) {
+            payload.seller_custom_field = skuVal || null;
+        }
+    }
+
+    // Título: apenas para anúncios NÃO-catálogo e sem vendas
+    if (!isCatalogItem && updateData.title && updateData.title.trim()) {
         const newTitle = updateData.title.trim().substring(0, 60);
         if (!currentItem || currentItem.title !== newTitle) {
             if (currentItem && (currentItem.sold_quantity || 0) > 0) {
@@ -540,16 +553,8 @@ export async function updateItem(connection, itemId, updateData, db) {
         }
     }
 
-    // SKU / seller_custom_field
-    if (updateData.sku !== undefined && updateData.sku !== null) {
-        const skuVal = updateData.sku.trim();
-        if (!currentItem || (currentItem.seller_custom_field || '') !== skuVal) {
-            payload.seller_custom_field = skuVal || null;
-        }
-    }
-
-    // Galeria de fotos: processa e compara
-    if (Array.isArray(updateData.pictures) && updateData.pictures.length > 0) {
+    // Galeria de fotos: apenas para anúncios NÃO-catálogo
+    if (!isCatalogItem && Array.isArray(updateData.pictures) && updateData.pictures.length > 0) {
         const processedPictures = [];
 
         for (const p of updateData.pictures) {
@@ -599,25 +604,27 @@ export async function updateItem(connection, itemId, updateData, db) {
         }
     }
 
-    // Atributos adicionais
+    // Atributos adicionais: apenas para anúncios NÃO-catálogo
     const attributes = [];
-    if (updateData.gtin !== undefined && updateData.gtin !== null && updateData.gtin !== '') {
-        attributes.push({ id: 'GTIN', value_name: updateData.gtin.trim() });
-    }
-    if (updateData.brand !== undefined && updateData.brand !== null && updateData.brand !== '') {
-        attributes.push({ id: 'BRAND', value_name: updateData.brand.trim() });
-    }
-    if (updateData.model !== undefined && updateData.model !== null && updateData.model !== '') {
-        attributes.push({ id: 'MODEL', value_name: updateData.model.trim() });
-    }
-    if (Array.isArray(updateData.attributes) && updateData.attributes.length > 0) {
-        updateData.attributes.forEach(attr => {
-            if (attr.id && attr.value_name) {
-                const idx = attributes.findIndex(a => a.id === attr.id);
-                if (idx >= 0) attributes[idx] = attr;
-                else attributes.push(attr);
-            }
-        });
+    if (!isCatalogItem) {
+        if (updateData.gtin !== undefined && updateData.gtin !== null && updateData.gtin !== '') {
+            attributes.push({ id: 'GTIN', value_name: updateData.gtin.trim() });
+        }
+        if (updateData.brand !== undefined && updateData.brand !== null && updateData.brand !== '') {
+            attributes.push({ id: 'BRAND', value_name: updateData.brand.trim() });
+        }
+        if (updateData.model !== undefined && updateData.model !== null && updateData.model !== '') {
+            attributes.push({ id: 'MODEL', value_name: updateData.model.trim() });
+        }
+        if (Array.isArray(updateData.attributes) && updateData.attributes.length > 0) {
+            updateData.attributes.forEach(attr => {
+                if (attr.id && attr.value_name) {
+                    const idx = attributes.findIndex(a => a.id === attr.id);
+                    if (idx >= 0) attributes[idx] = attr;
+                    else attributes.push(attr);
+                }
+            });
+        }
     }
 
     let updatedItem = currentItem || {};
@@ -702,8 +709,8 @@ export async function updateItem(connection, itemId, updateData, db) {
         logger.info(`[MercadoLivreService] Nenhum campo principal foi alterado no anúncio ${itemId}.`);
     }
 
-    // Se veio descrição para atualizar, salva separadamente no endpoint específico
-    if (updateData.description !== undefined && updateData.description !== null) {
+    // Se veio descrição para atualizar, salva separadamente no endpoint específico (apenas NÃO-catálogo)
+    if (!isCatalogItem && updateData.description !== undefined && updateData.description !== null) {
         try {
             await updateItemDescription(connection, itemId, updateData.description, db);
         } catch (descErr) {

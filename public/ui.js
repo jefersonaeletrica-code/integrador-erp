@@ -110,6 +110,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const meliEditModalCloseBtns = document.querySelectorAll('.meli-edit-modal-close');
 
     // Elementos de Catálogo & Concorrência na Buy Box
+    const meliEditCatalogNotice = document.getElementById('meli-edit-catalog-notice');
+    const meliEditTitleCatalogLock = document.getElementById('meli-edit-title-catalog-lock');
+    const meliEditAttributesCatalogLock = document.getElementById('meli-edit-attributes-catalog-lock');
+    const meliEditImagesCatalogLock = document.getElementById('meli-edit-images-catalog-lock');
+    const meliEditImagesCatalogNotice = document.getElementById('meli-edit-images-catalog-notice');
+    const meliEditImagesCoverHint = document.getElementById('meli-edit-images-cover-hint');
+    const meliEditDescCatalogLock = document.getElementById('meli-edit-desc-catalog-lock');
+
     const meliEditCatalogContainer = document.getElementById('meli-edit-catalog-container');
     const meliEditCatalogBadge = document.getElementById('meli-edit-catalog-badge');
     const meliEditCatalogRefreshBtn = document.getElementById('meli-edit-catalog-refresh-btn');
@@ -470,48 +478,72 @@ document.addEventListener('DOMContentLoaded', () => {
             meliEditImagesList.innerHTML = `
                 <div style="grid-column: 1/-1; text-align: center; color: var(--color-text-offset); font-size: 0.84rem; padding: 1.5rem;">
                     <i class="fas fa-image" style="font-size: 1.75rem; margin-bottom: 0.45rem; display: block; color: var(--color-text-muted);"></i>
-                    Nenhuma foto cadastrada. Arraste fotos acima ou selecione arquivos do computador.
+                    Nenhuma foto cadastrada.
                 </div>
             `;
             return;
         }
+
+        const isCatalog = !!(meliCurrentCatalog && meliCurrentCatalog.is_catalog);
 
         let html = '';
         meliEditImagesArray.forEach((item, idx) => {
             const url = typeof item === 'string' ? item : (item.url || item.source || item.secure_url || '');
             const isCover = idx === 0;
 
-            html += `
-                <div class="meli-image-card ${isCover ? 'is-cover' : ''}" data-idx="${idx}" draggable="true" title="Arraste para reordenar a sequência">
-                    <div class="meli-image-wrapper">
-                        <img src="${url}" alt="Foto ${idx + 1}" onerror="this.src='/assets/logos/default-erp.svg'">
-                        ${isCover ? `
-                            <span class="meli-cover-badge">
-                                <i class="fas fa-star"></i> Capa
+            if (isCatalog) {
+                html += `
+                    <div class="meli-image-card ${isCover ? 'is-cover' : ''}" data-idx="${idx}" title="Foto padrão do Catálogo Mercado Livre">
+                        <div class="meli-image-wrapper">
+                            <img src="${url}" alt="Foto ${idx + 1}" onerror="this.src='/assets/logos/default-erp.svg'">
+                            ${isCover ? `
+                                <span class="meli-cover-badge" style="background: #4f46e5;">
+                                    <i class="fas fa-certificate"></i> Capa do Catálogo
+                                </span>
+                            ` : ''}
+                        </div>
+                        <div class="meli-image-actions-bar" style="justify-content: center;">
+                            <span class="image-index-indicator" style="color: var(--color-text-offset); font-size: 0.74rem;">
+                                <i class="fas fa-lock"></i> Foto ${idx + 1}
                             </span>
-                        ` : ''}
-                        <button type="button" class="meli-image-remove" data-action="remove-meli-edit-image" data-idx="${idx}" title="Excluir esta foto">&times;</button>
+                        </div>
                     </div>
-                    <div class="meli-image-actions-bar">
-                        <button type="button" class="btn-order-move" data-action="move-meli-edit-left" data-idx="${idx}" ${idx === 0 ? 'disabled' : ''} title="Mover para esquerda">
-                            <i class="fas fa-chevron-left"></i>
-                        </button>
-                        ${!isCover ? `
-                            <button type="button" class="btn-set-cover" data-action="set-meli-edit-cover" data-idx="${idx}" title="Tornar esta a Foto Principal (Capa)">
-                                <i class="fas fa-star"></i> Capa
+                `;
+            } else {
+                html += `
+                    <div class="meli-image-card ${isCover ? 'is-cover' : ''}" data-idx="${idx}" draggable="true" title="Arraste para reordenar a sequência">
+                        <div class="meli-image-wrapper">
+                            <img src="${url}" alt="Foto ${idx + 1}" onerror="this.src='/assets/logos/default-erp.svg'">
+                            ${isCover ? `
+                                <span class="meli-cover-badge">
+                                    <i class="fas fa-star"></i> Capa
+                                </span>
+                            ` : ''}
+                            <button type="button" class="meli-image-remove" data-action="remove-meli-edit-image" data-idx="${idx}" title="Excluir esta foto">&times;</button>
+                        </div>
+                        <div class="meli-image-actions-bar">
+                            <button type="button" class="btn-order-move" data-action="move-meli-edit-left" data-idx="${idx}" ${idx === 0 ? 'disabled' : ''} title="Mover para esquerda">
+                                <i class="fas fa-chevron-left"></i>
                             </button>
-                        ` : `
-                            <span class="image-index-indicator" style="color: #b45309; font-weight: 800;">Principal</span>
-                        `}
-                        <button type="button" class="btn-order-move" data-action="move-meli-edit-right" data-idx="${idx}" ${idx === meliEditImagesArray.length - 1 ? 'disabled' : ''} title="Mover para direita">
-                            <i class="fas fa-chevron-right"></i>
-                        </button>
+                            ${!isCover ? `
+                                <button type="button" class="btn-set-cover" data-action="set-meli-edit-cover" data-idx="${idx}" title="Tornar esta a Foto Principal (Capa)">
+                                    <i class="fas fa-star"></i> Capa
+                                </button>
+                            ` : `
+                                <span class="image-index-indicator" style="color: #b45309; font-weight: 800;">Principal</span>
+                            `}
+                            <button type="button" class="btn-order-move" data-action="move-meli-edit-right" data-idx="${idx}" ${idx === meliEditImagesArray.length - 1 ? 'disabled' : ''} title="Mover para direita">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                        </div>
                     </div>
-                </div>
-            `;
+                `;
+            }
         });
         meliEditImagesList.innerHTML = html;
-        setupGalleryDragAndDrop(meliEditImagesList, meliEditImagesArray, renderMeliEditImages);
+        if (!isCatalog) {
+            setupGalleryDragAndDrop(meliEditImagesList, meliEditImagesArray, renderMeliEditImages);
+        }
     };
 
     const renderMeliClipState = (clipData) => {
@@ -626,12 +658,88 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const renderMeliCatalogState = (catalogData, currentPriceVal) => {
         meliCurrentCatalog = catalogData;
-        if (!catalogData || !catalogData.is_catalog) {
+        const isCatalog = !!(catalogData && catalogData.is_catalog);
+
+        if (!isCatalog) {
             if (meliEditCatalogContainer) meliEditCatalogContainer.style.display = 'none';
+            if (meliEditCatalogNotice) meliEditCatalogNotice.style.display = 'none';
+            if (meliEditTitleCatalogLock) meliEditTitleCatalogLock.style.display = 'none';
+            if (meliEditAttributesCatalogLock) meliEditAttributesCatalogLock.style.display = 'none';
+            if (meliEditImagesCatalogLock) meliEditImagesCatalogLock.style.display = 'none';
+            if (meliEditImagesCatalogNotice) meliEditImagesCatalogNotice.style.display = 'none';
+            if (meliEditImagesCoverHint) meliEditImagesCoverHint.style.display = 'inline-block';
+            if (meliEditDropzone) meliEditDropzone.style.display = 'flex';
+            if (meliEditDescCatalogLock) meliEditDescCatalogLock.style.display = 'none';
+
+            // Desbloqueia campos
+            if (meliEditTitle) {
+                meliEditTitle.readOnly = false;
+                meliEditTitle.classList.remove('catalog-locked');
+                meliEditTitle.removeAttribute('title');
+            }
+            if (meliEditGtin) {
+                meliEditGtin.readOnly = false;
+                meliEditGtin.classList.remove('catalog-locked');
+                meliEditGtin.removeAttribute('title');
+            }
+            if (meliEditBrand) {
+                meliEditBrand.readOnly = false;
+                meliEditBrand.classList.remove('catalog-locked');
+                meliEditBrand.removeAttribute('title');
+            }
+            if (meliEditModel) {
+                meliEditModel.readOnly = false;
+                meliEditModel.classList.remove('catalog-locked');
+                meliEditModel.removeAttribute('title');
+            }
+            if (meliEditDescription) {
+                meliEditDescription.readOnly = false;
+                meliEditDescription.classList.remove('catalog-locked');
+                meliEditDescription.removeAttribute('title');
+            }
             return;
         }
 
+        // Ativa modo de Catálogo
         if (meliEditCatalogContainer) meliEditCatalogContainer.style.display = 'block';
+        if (meliEditCatalogNotice) meliEditCatalogNotice.style.display = 'flex';
+        if (meliEditTitleCatalogLock) meliEditTitleCatalogLock.style.display = 'inline-flex';
+        if (meliEditAttributesCatalogLock) meliEditAttributesCatalogLock.style.display = 'inline-flex';
+        if (meliEditImagesCatalogLock) meliEditImagesCatalogLock.style.display = 'inline-flex';
+        if (meliEditImagesCatalogNotice) meliEditImagesCatalogNotice.style.display = 'flex';
+        if (meliEditImagesCoverHint) meliEditImagesCoverHint.style.display = 'none';
+        if (meliEditDropzone) meliEditDropzone.style.display = 'none';
+        if (meliEditDescCatalogLock) meliEditDescCatalogLock.style.display = 'inline-flex';
+
+        // Bloqueia campos gerenciados pelo Mercado Livre
+        if (meliEditTitle) {
+            meliEditTitle.readOnly = true;
+            meliEditTitle.classList.add('catalog-locked');
+            meliEditTitle.title = 'Título padronizado pelo Catálogo oficial do Mercado Livre (não editável).';
+        }
+        if (meliEditGtin) {
+            meliEditGtin.readOnly = true;
+            meliEditGtin.classList.add('catalog-locked');
+            meliEditGtin.title = 'Código EAN/GTIN gerenciado pelo Catálogo do Mercado Livre.';
+        }
+        if (meliEditBrand) {
+            meliEditBrand.readOnly = true;
+            meliEditBrand.classList.add('catalog-locked');
+            meliEditBrand.title = 'Marca gerenciada pelo Catálogo do Mercado Livre.';
+        }
+        if (meliEditModel) {
+            meliEditModel.readOnly = true;
+            meliEditModel.classList.add('catalog-locked');
+            meliEditModel.title = 'Modelo gerenciado pelo Catálogo do Mercado Livre.';
+        }
+        if (meliEditDescription) {
+            meliEditDescription.readOnly = true;
+            meliEditDescription.classList.add('catalog-locked');
+            meliEditDescription.title = 'Descrição oficial padronizada pelo Catálogo do Mercado Livre.';
+        }
+        if (meliEditDescStatus) {
+            meliEditDescStatus.innerHTML = '<span style="color: #6366f1; font-weight: 600;"><i class="fas fa-lock"></i> Descrição padrão do Catálogo ML</span>';
+        }
 
         const numCurrentPrice = typeof currentPriceVal === 'number' ? currentPriceVal : parseFloat(String(currentPriceVal).replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
         if (meliEditCatalogCurrentPrice) {
@@ -1513,11 +1621,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const syncAutoStock = meliEditSyncStock ? meliEditSyncStock.checked : false;
             const syncAutoPrice = meliEditSyncPrice ? meliEditSyncPrice.checked : false;
 
+            const isCatalog = !!(meliCurrentCatalog && meliCurrentCatalog.is_catalog);
+
             if (!itemId) {
                 showToast('ID do anúncio não identificado.', 'error');
                 return;
             }
-            if (!title) {
+            if (!isCatalog && !title) {
                 showToast('O título do anúncio não pode ficar vazio.', 'warning');
                 return;
             }
@@ -1525,7 +1635,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast('Informe um preço de venda válido maior que zero.', 'warning');
                 return;
             }
-            if (meliEditImagesArray.length === 0) {
+            if (!isCatalog && meliEditImagesArray.length === 0) {
                 showToast('O anúncio precisa ter pelo menos uma foto cadastrada.', 'warning');
                 return;
             }
@@ -1549,21 +1659,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const payload = {
                     connectionId,
-                    title,
                     price,
                     available_quantity: stock,
                     status,
                     listing_type_id: listingTypeId,
                     sku,
-                    gtin,
-                    brand,
-                    model,
-                    description,
-                    pictures: formattedPictures,
                     sync_auto_stock: syncAutoStock,
                     sync_auto_price: syncAutoPrice,
-                    markup_percent: markupPercent
+                    markup_percent: markupPercent,
+                    is_catalog: isCatalog
                 };
+
+                if (!isCatalog) {
+                    payload.title = title;
+                    payload.gtin = gtin;
+                    payload.brand = brand;
+                    payload.model = model;
+                    payload.description = description;
+                    payload.pictures = formattedPictures;
+                }
 
                 await api(`/api/marketplace/mercadolivre/items/${itemId}/update`, 'PUT', payload);
                 showToast('Anúncio atualizado com sucesso no Mercado Livre!', 'success');
