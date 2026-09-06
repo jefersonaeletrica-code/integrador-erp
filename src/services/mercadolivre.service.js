@@ -501,9 +501,9 @@ export async function getUserItems(connection, status = null, db) {
                 }
             }
 
-            // Condição de parada: se a API retornar menos itens que o limite,
-            // significa que esta é a última página.
-            if (itemIds.length < limit) {
+            // Condição de parada robusta: quebra o loop se a página atual não estiver cheia
+            // OU se já coletamos todos os itens esperados (para evitar loops infinitos com totais imprecisos da API).
+            if (itemIds.length < limit || (total > 0 && allItems.length >= total)) {
                 break;
             }
             offset += limit;
