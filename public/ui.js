@@ -82,13 +82,25 @@ document.addEventListener('DOMContentLoaded', () => {
     const meliEditStock = document.getElementById('meli-edit-stock');
     const meliEditListingType = document.getElementById('meli-edit-listing-type');
     const meliEditStatus = document.getElementById('meli-edit-status');
-    const meliEditNewImage = document.getElementById('meli-edit-new-image');
-    const meliEditAddImageBtn = document.getElementById('meli-edit-add-image-btn');
     const meliEditFileInput = document.getElementById('meli-edit-file-input');
     const meliEditBrowseFilesBtn = document.getElementById('meli-edit-browse-files-btn');
     const meliEditDropzone = document.getElementById('meli-edit-dropzone');
     const meliEditImagesList = document.getElementById('meli-edit-images-list');
-    const meliEditVideo = document.getElementById('meli-edit-video');
+
+    // Elementos de Clip de Vídeo & Moderação
+    const meliEditClipFile = document.getElementById('meli-edit-clip-file');
+    const meliEditClipDropzone = document.getElementById('meli-edit-clip-dropzone');
+    const meliEditClipBrowseBtn = document.getElementById('meli-edit-clip-browse-btn');
+    const meliEditClipContainer = document.getElementById('meli-edit-clip-container');
+    const meliEditClipPlayer = document.getElementById('meli-edit-clip-player');
+    const meliEditClipBadge = document.getElementById('meli-edit-clip-badge');
+    const meliEditClipMsg = document.getElementById('meli-edit-clip-msg');
+    const meliEditClipFilename = document.getElementById('meli-edit-clip-filename');
+    const meliEditClipIdLabel = document.getElementById('meli-edit-clip-id-label');
+    const meliEditClipHeaderBadge = document.getElementById('meli-edit-clip-header-badge');
+    const meliEditClipCheckBtn = document.getElementById('meli-edit-clip-check-btn');
+    const meliEditClipRemoveBtn = document.getElementById('meli-edit-clip-remove-btn');
+
     const meliEditDescription = document.getElementById('meli-edit-description');
     const meliEditDescStatus = document.getElementById('meli-edit-desc-status');
     const meliEditMarkup = document.getElementById('meli-edit-markup');
@@ -99,6 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let meliImagesList = [];
     let meliEditImagesArray = [];
+    let meliCurrentClip = null;
 
     /**
      * Inicializa a lógica do seletor de tema (Dark Mode).
@@ -486,6 +499,116 @@ document.addEventListener('DOMContentLoaded', () => {
         setupGalleryDragAndDrop(meliEditImagesList, meliEditImagesArray, renderMeliEditImages);
     };
 
+    const renderMeliClipState = (clipData) => {
+        meliCurrentClip = clipData;
+        if (!clipData || (!clipData.videoUrl && !clipData.video_url && !clipData.clipId && !clipData.clip_id)) {
+            if (meliEditClipDropzone) meliEditClipDropzone.style.display = 'flex';
+            if (meliEditClipContainer) meliEditClipContainer.style.display = 'none';
+            if (meliEditClipPlayer) {
+                meliEditClipPlayer.pause();
+                meliEditClipPlayer.removeAttribute('src');
+                meliEditClipPlayer.load();
+            }
+            if (meliEditClipHeaderBadge) {
+                meliEditClipHeaderBadge.className = 'clip-mini-status';
+                meliEditClipHeaderBadge.textContent = 'Sem vídeo';
+            }
+            return;
+        }
+
+        const videoUrl = clipData.videoUrl || clipData.video_url || '';
+        const clipId = clipData.clipId || clipData.clip_id || 'clip_anuncio';
+        const rawStatus = String(clipData.clipStatus || clipData.clip_status || 'under_review').toLowerCase();
+        const details = (typeof clipData.clipDetails === 'object' ? clipData.clipDetails : null) || (typeof clipData.clip_details === 'object' ? clipData.clip_details : null) || {};
+        const filename = clipData.filename || details.filename || 'clip_anuncio.mp4';
+
+        if (meliEditClipDropzone) meliEditClipDropzone.style.display = 'none';
+        if (meliEditClipContainer) meliEditClipContainer.style.display = 'block';
+
+        if (meliEditClipPlayer && videoUrl) {
+            meliEditClipPlayer.src = videoUrl;
+            meliEditClipPlayer.load();
+        }
+
+        if (meliEditClipFilename) {
+            meliEditClipFilename.innerHTML = `<i class="fas fa-file-video"></i> ${filename}`;
+        }
+        if (meliEditClipIdLabel) {
+            meliEditClipIdLabel.innerHTML = `<i class="fas fa-hashtag"></i> ${clipId}`;
+        }
+
+        // Mapeamento do status de moderação
+        let badgeClass = 'under_review';
+        let badgeText = '<i class="fas fa-clock"></i> Em Análise / Moderação';
+        let miniBadgeText = '🟡 Em Moderação';
+        let msgText = details.moderation_message || clipData.moderationMessage || 'O vídeo foi enviado e está sendo analisado pela equipe de moderação do Mercado Livre. Isso pode levar alguns minutos.';
+
+        if (rawStatus === 'approved' || rawStatus === 'active') {
+            badgeClass = 'approved';
+            badgeText = '<i class="fas fa-circle-check"></i> Aprovado no Mercado Livre';
+            miniBadgeText = '🟢 Aprovado';
+            msgText = 'O clipe de vídeo foi aprovado pela moderação e está ativo no anúncio do Mercado Livre!';
+        } else if (rawStatus === 'rejected' || rawStatus === 'error' || rawStatus === 'reprovado') {
+            badgeClass = 'rejected';
+            badgeText = '<i class="fas fa-triangle-exclamation"></i> Reprovado / Rejeitado';
+            miniBadgeText = '🔴 Reprovado';
+            msgText = details.moderation_message || clipData.moderationMessage || 'O clipe de vídeo não atendeu às diretrizes do Mercado Livre e foi recusado. Envie um novo clipe.';
+        }
+
+        if (meliEditClipBadge) {
+            meliEditClipBadge.className = `clip-status-badge ${badgeClass}`;
+            meliEditClipBadge.innerHTML = badgeText;
+        }
+        if (meliEditClipHeaderBadge) {
+            meliEditClipHeaderBadge.className = `clip-mini-status ${badgeClass}`;
+            meliEditClipHeaderBadge.textContent = miniBadgeText;
+        }
+        if (meliEditClipMsg) {
+            meliEditClipMsg.textContent = msgText;
+        }
+    };
+
+    const uploadClipFileToMeli = async (file, itemId, connectionId) => {
+        if (!file) return;
+        if (!file.type.startsWith('video/') && !file.name.match(/\.(mp4|mov|webm)$/i)) {
+            showToast('Por favor, selecione um arquivo de vídeo válido (MP4, MOV, WEBM).', 'warning');
+            return;
+        }
+        if (file.size > 50 * 1024 * 1024) {
+            showToast('O arquivo de vídeo excede o tamanho máximo permitido de 50MB.', 'warning');
+            return;
+        }
+
+        showToast(`Carregando clipe "${file.name}" para moderação...`, 'info');
+
+        try {
+            const base64 = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+
+            const res = await api('/api/marketplace/mercadolivre/upload-clip', 'POST', {
+                videoBase64: base64,
+                filename: file.name,
+                mimeType: file.type || 'video/mp4',
+                itemId,
+                connectionId
+            });
+
+            if (res.sucesso) {
+                renderMeliClipState(res);
+                showToast('Vídeo enviado com sucesso! Status: Em Análise / Moderação 🟡', 'success');
+            } else {
+                throw new Error(res.erro || 'Falha no upload do clipe.');
+            }
+        } catch (err) {
+            console.error('Erro no upload de clip:', err);
+            showToast(`Falha ao carregar clipe: ${err.message}`, 'error');
+        }
+    };
+
     const openMeliCreateModal = async (initialData = {}) => {
         if (!meliCreateModal) return;
         meliCreateForm.reset();
@@ -586,6 +709,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!meliEditModal) return;
         if (meliEditForm) meliEditForm.reset();
         meliEditImagesArray = [];
+        renderMeliClipState(null);
 
         const itemId = item.item_id || item.id;
         const connectionId = item.connection_id;
@@ -613,6 +737,16 @@ document.addEventListener('DOMContentLoaded', () => {
             meliEditImagesArray.push(item.thumbnail);
         }
         renderMeliEditImages();
+
+        // Se tem clip local imediato
+        if (item.video_url || item.clip_id) {
+            renderMeliClipState({
+                video_url: item.video_url,
+                clip_id: item.clip_id,
+                clip_status: item.clip_status || 'under_review',
+                clip_details: item.clip_details
+            });
+        }
 
         const subTitle = document.getElementById('meli-edit-modal-subtitle');
         if (subTitle) subTitle.textContent = `MLB: ${itemId} | SKU: ${item.sku || 'N/D'}`;
@@ -661,9 +795,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (skuAttr && meliEditSku && !meliEditSku.value) meliEditSku.value = skuAttr.value_name || '';
                 }
 
-                // Vídeo
-                if (meliEditVideo && fullItem.video_id) {
-                    meliEditVideo.value = fullItem.video_id;
+                // Clip de Vídeo & Status de Moderação
+                if (local.video_url || local.clip_id || fullItem.clips || fullItem.video_id) {
+                    renderMeliClipState({
+                        video_url: local.video_url,
+                        clip_id: local.clip_id || fullItem.video_id,
+                        clip_status: local.clip_status || (fullItem.video_id ? 'approved' : 'under_review'),
+                        clip_details: local.clip_details,
+                        filename: local.clip_details?.filename || 'clip_anuncio.mp4'
+                    });
+                } else {
+                    renderMeliClipState(null);
                 }
 
                 // Tipo de listagem
@@ -1038,17 +1180,80 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (meliEditAddImageBtn) {
-        meliEditAddImageBtn.addEventListener('click', () => {
-            const url = meliEditNewImage ? meliEditNewImage.value.trim() : '';
-            if (!url || !url.startsWith('http')) {
-                showToast('Informe uma URL de imagem válida (iniciando com http:// ou https://).', 'warning');
+    // Gerenciador de Upload de Clip de Vídeo no Modal de Edição
+    if (meliEditClipBrowseBtn && meliEditClipFile) {
+        meliEditClipBrowseBtn.addEventListener('click', () => meliEditClipFile.click());
+        meliEditClipFile.addEventListener('change', () => {
+            const file = meliEditClipFile.files && meliEditClipFile.files[0];
+            const itemId = meliEditItemId ? meliEditItemId.value : '';
+            const connId = meliEditConnectionId ? meliEditConnectionId.value : '';
+            if (file) {
+                uploadClipFileToMeli(file, itemId, connId);
+                meliEditClipFile.value = '';
+            }
+        });
+    }
+
+    if (meliEditClipDropzone) {
+        meliEditClipDropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            meliEditClipDropzone.classList.add('drag-over');
+        });
+        meliEditClipDropzone.addEventListener('dragleave', () => {
+            meliEditClipDropzone.classList.remove('drag-over');
+        });
+        meliEditClipDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            meliEditClipDropzone.classList.remove('drag-over');
+            const file = e.dataTransfer.files && e.dataTransfer.files[0];
+            const itemId = meliEditItemId ? meliEditItemId.value : '';
+            const connId = meliEditConnectionId ? meliEditConnectionId.value : '';
+            if (file) {
+                uploadClipFileToMeli(file, itemId, connId);
+            }
+        });
+    }
+
+    if (meliEditClipCheckBtn) {
+        meliEditClipCheckBtn.addEventListener('click', async () => {
+            const itemId = meliEditItemId ? meliEditItemId.value : '';
+            if (!itemId) {
+                showToast('ID do anúncio não identificado.', 'error');
                 return;
             }
-            meliEditImagesArray.push(url);
-            if (meliEditNewImage) meliEditNewImage.value = '';
-            renderMeliEditImages();
-            showToast('Foto adicionada ao anúncio!', 'info');
+            meliEditClipCheckBtn.classList.add('loading');
+            meliEditClipCheckBtn.disabled = true;
+            try {
+                const res = await api(`/api/marketplace/mercadolivre/items/${itemId}/clip-status`);
+                if (res.sucesso) {
+                    renderMeliClipState(res);
+                    const statusLabel = res.clipStatus === 'approved' ? 'Aprovado 🟢' : (res.clipStatus === 'rejected' ? 'Reprovado 🔴' : 'Em Análise 🟡');
+                    showToast(`Status de moderação atualizado: ${statusLabel}`, 'info');
+                }
+            } catch (err) {
+                showToast(`Erro ao consultar moderação: ${err.message}`, 'error');
+            } finally {
+                meliEditClipCheckBtn.classList.remove('loading');
+                meliEditClipCheckBtn.disabled = false;
+            }
+        });
+    }
+
+    if (meliEditClipRemoveBtn) {
+        meliEditClipRemoveBtn.addEventListener('click', async () => {
+            if (!confirm('Deseja realmente desvincular o clipe de vídeo deste anúncio?')) return;
+            const itemId = meliEditItemId ? meliEditItemId.value : '';
+            if (itemId) {
+                try {
+                    await api(`/api/marketplace/mercadolivre/items/${itemId}/clip`, 'DELETE');
+                    renderMeliClipState(null);
+                    showToast('Clip de vídeo desvinculado com sucesso!', 'info');
+                } catch (err) {
+                    showToast(`Erro ao remover clipe: ${err.message}`, 'error');
+                }
+            } else {
+                renderMeliClipState(null);
+            }
         });
     }
 
@@ -1117,7 +1322,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const stock = meliEditStock ? parseInt(meliEditStock.value, 10) : 0;
             const listingTypeId = meliEditListingType ? meliEditListingType.value : 'gold_special';
             const status = meliEditStatus ? meliEditStatus.value : 'active';
-            const videoId = meliEditVideo ? meliEditVideo.value.trim() : '';
             const description = meliEditDescription ? meliEditDescription.value.trim() : '';
             const markupPercent = meliEditMarkup ? parseFloat(meliEditMarkup.value) : 0;
             const syncAutoStock = meliEditSyncStock ? meliEditSyncStock.checked : false;
@@ -1168,7 +1372,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     gtin,
                     brand,
                     model,
-                    video_id: videoId,
                     description,
                     pictures: formattedPictures,
                     sync_auto_stock: syncAutoStock,

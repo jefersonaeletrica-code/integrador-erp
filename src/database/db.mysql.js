@@ -123,6 +123,10 @@ export const initializeDatabase = async () => {
         listing_type_id VARCHAR(50) DEFAULT 'gold_special',
         permalink VARCHAR(500) DEFAULT NULL,
         thumbnail VARCHAR(500) DEFAULT NULL,
+        video_url VARCHAR(500) DEFAULT NULL,
+        clip_id VARCHAR(100) DEFAULT NULL,
+        clip_status VARCHAR(50) DEFAULT NULL,
+        clip_details JSON DEFAULT NULL,
         category_id VARCHAR(50) DEFAULT NULL,
         category_name VARCHAR(255) DEFAULT NULL,
         source_type VARCHAR(50) DEFAULT NULL,
@@ -136,6 +140,25 @@ export const initializeDatabase = async () => {
         UNIQUE KEY mlb_item (item_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+    // Migração de colunas para tabela mercado_livre_anuncios existente
+    const addColumnIfNotExists = async (table, columnDef, colName) => {
+      try {
+        await connection.query(`ALTER TABLE ${table} ADD COLUMN ${columnDef}`);
+        console.log(`Coluna '${colName}' adicionada à tabela '${table}'.`);
+      } catch (err) {
+        if (err.code === 'ER_DUP_FIELDNAME') {
+          // Coluna já existe
+        } else {
+          console.warn(`Aviso ao verificar coluna '${colName}' em '${table}':`, err.message);
+        }
+      }
+    };
+
+    await addColumnIfNotExists('mercado_livre_anuncios', 'video_url VARCHAR(500) DEFAULT NULL', 'video_url');
+    await addColumnIfNotExists('mercado_livre_anuncios', 'clip_id VARCHAR(100) DEFAULT NULL', 'clip_id');
+    await addColumnIfNotExists('mercado_livre_anuncios', 'clip_status VARCHAR(50) DEFAULT NULL', 'clip_status');
+    await addColumnIfNotExists('mercado_livre_anuncios', 'clip_details JSON DEFAULT NULL', 'clip_details');
 
     console.log('Banco de dados MySQL pronto.');
   } finally {
@@ -291,6 +314,10 @@ export const saveOrUpdateMercadoLivreAnuncio = async (anuncio) => {
       listing_type_id = 'gold_special',
       permalink = null,
       thumbnail = null,
+      video_url = null,
+      clip_id = null,
+      clip_status = null,
+      clip_details = null,
       category_id = null,
       category_name = null,
       source_type = null,
@@ -303,8 +330,8 @@ export const saveOrUpdateMercadoLivreAnuncio = async (anuncio) => {
 
     await conn.execute(`
       INSERT INTO mercado_livre_anuncios 
-        (connection_id, item_id, sku, title, price, available_quantity, status, listing_type_id, permalink, thumbnail, category_id, category_name, source_type, source_id, source_data, sync_auto_stock, sync_auto_price, markup_percent)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (connection_id, item_id, sku, title, price, available_quantity, status, listing_type_id, permalink, thumbnail, video_url, clip_id, clip_status, clip_details, category_id, category_name, source_type, source_id, source_data, sync_auto_stock, sync_auto_price, markup_percent)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON DUPLICATE KEY UPDATE
         connection_id = VALUES(connection_id),
         sku = VALUES(sku),
@@ -315,6 +342,10 @@ export const saveOrUpdateMercadoLivreAnuncio = async (anuncio) => {
         listing_type_id = VALUES(listing_type_id),
         permalink = VALUES(permalink),
         thumbnail = VALUES(thumbnail),
+        video_url = VALUES(video_url),
+        clip_id = VALUES(clip_id),
+        clip_status = VALUES(clip_status),
+        clip_details = VALUES(clip_details),
         category_id = VALUES(category_id),
         category_name = VALUES(category_name),
         source_type = VALUES(source_type),
@@ -335,11 +366,15 @@ export const saveOrUpdateMercadoLivreAnuncio = async (anuncio) => {
       listing_type_id,
       permalink,
       thumbnail,
+      video_url,
+      clip_id,
+      clip_status,
+      clip_details ? (typeof clip_details === 'string' ? clip_details : JSON.stringify(clip_details)) : null,
       category_id,
       category_name,
       source_type,
       source_id,
-      source_data ? JSON.stringify(source_data) : null,
+      source_data ? (typeof source_data === 'string' ? source_data : JSON.stringify(source_data)) : null,
       sync_auto_stock ? 1 : 0,
       sync_auto_price ? 1 : 0,
       markup_percent

@@ -451,32 +451,74 @@
                             <span class="dropzone-hint">Envie arquivos JPG, PNG ou WEBP • Arraste e solte para reordenar ou clique em "Tornar Capa"</span>
                         </div>
 
-                        <!-- Upload alternativo por URL -->
-                        <div class="meli-url-add-row">
-                            <input type="url" id="meli-edit-new-image" class="form-control" placeholder="Ou cole a URL direta de uma foto (Ex: https://dominio.com/foto.jpg)">
-                            <button type="button" class="btn btn-secondary" id="meli-edit-add-image-btn" style="white-space: nowrap; min-width: 140px;">
-                                <i class="fas fa-plus"></i> Adicionar URL
-                            </button>
-                        </div>
-
                         <!-- Grid de Imagens com Ordenação e Capa -->
                         <div id="meli-edit-images-list" class="meli-images-grid">
                             <!-- Miniaturas das imagens do anúncio serão exibidas aqui -->
                         </div>
                     </div>
 
-                    <!-- 5. Vídeo & Descrição -->
+                    <!-- 5. Clip de Vídeo & Descrição -->
                     <div class="meli-edit-section-card">
                         <div class="meli-section-header">
-                            <h3 class="meli-section-title"><i class="fas fa-file-lines"></i> Vídeo & Descrição do Produto</h3>
-                            <span id="meli-edit-desc-status" style="font-size: 0.75rem; color: var(--color-text-offset);">Carregando descrição...</span>
+                            <h3 class="meli-section-title"><i class="fas fa-video"></i> Clip de Vídeo do Anúncio (com Moderação)</h3>
+                            <span id="meli-edit-clip-header-badge" class="clip-mini-status">Sem vídeo</span>
                         </div>
-                        <div class="form-group" style="margin-bottom: 1rem;">
-                            <label for="meli-edit-video"><i class="fab fa-youtube" style="color: #ef4444;"></i> Vídeo do YouTube (Link ou ID)</label>
-                            <input type="text" id="meli-edit-video" class="form-control" placeholder="Ex: https://www.youtube.com/watch?v=dQw4w9WgXcQ ou dQw4w9WgXcQ">
+
+                        <!-- Upload de Clip de Vídeo -->
+                        <input type="file" id="meli-edit-clip-file" accept="video/mp4,video/quicktime,video/webm" style="display: none;">
+                        
+                        <!-- Dropzone de Vídeo (Exibido quando não há vídeo) -->
+                        <div class="meli-upload-dropzone meli-clip-dropzone" id="meli-edit-clip-dropzone">
+                            <div class="dropzone-icon" style="color: #6366f1;"><i class="fas fa-film"></i></div>
+                            <div class="dropzone-text">
+                                <strong>Arraste um clipe de vídeo aqui</strong> ou
+                                <button type="button" class="btn btn-small btn-primary" id="meli-edit-clip-browse-btn" style="background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%); border-color: #4f46e5;">
+                                    <i class="fas fa-video"></i> Selecionar Vídeo (MP4/MOV)
+                                </button>
+                            </div>
+                            <span class="dropzone-hint">Envie vídeos curtos (Clips) em MP4, MOV ou WEBM (máx. 50MB) • Vídeos passam por moderação automática</span>
                         </div>
-                        <div class="form-group" style="margin-bottom: 0;">
-                            <label for="meli-edit-description"><i class="fas fa-align-left"></i> Descrição do Anúncio (Texto Simples)</label>
+
+                        <!-- Container do Vídeo Carregado e Painel de Moderação (Oculto por padrão) -->
+                        <div id="meli-edit-clip-container" class="meli-clip-preview-card" style="display: none;">
+                            <div class="meli-clip-preview-body">
+                                <div class="meli-clip-player-box">
+                                    <video id="meli-edit-clip-player" controls preload="metadata" class="meli-clip-player-video">
+                                        Seu navegador não suporta a tag de vídeo.
+                                    </video>
+                                </div>
+                                <div class="meli-clip-info-box">
+                                    <div class="meli-clip-status-header">
+                                        <div style="font-weight: 700; font-size: 0.9rem; color: var(--color-text);">Status no Mercado Livre</div>
+                                        <div id="meli-edit-clip-badge" class="clip-status-badge under_review">
+                                            <i class="fas fa-clock"></i> Em Análise / Moderação
+                                        </div>
+                                    </div>
+                                    <p id="meli-edit-clip-msg" class="meli-clip-status-desc">
+                                        O vídeo foi enviado e está sendo analisado pela moderação do Mercado Livre.
+                                    </p>
+                                    <div class="meli-clip-meta-row">
+                                        <span id="meli-edit-clip-filename" class="clip-meta-item"><i class="fas fa-file-video"></i> clip.mp4</span>
+                                        <span id="meli-edit-clip-id-label" class="clip-meta-item"><i class="fas fa-hashtag"></i> ID: clip_xxx</span>
+                                    </div>
+                                    <div class="meli-clip-actions-row">
+                                        <button type="button" class="btn btn-small btn-secondary" id="meli-edit-clip-check-btn" title="Consultar status atual de moderação na API">
+                                            <i class="fas fa-rotate"></i> Consultar Status
+                                        </button>
+                                        <button type="button" class="btn btn-small btn-danger" id="meli-edit-clip-remove-btn" title="Excluir ou substituir este clipe">
+                                            <i class="fas fa-trash"></i> Remover Vídeo
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Descrição do Anúncio -->
+                        <div class="form-group" style="margin-top: 1.25rem; margin-bottom: 0;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                                <label for="meli-edit-description" style="margin: 0;"><i class="fas fa-align-left"></i> Descrição do Anúncio (Texto Simples)</label>
+                                <span id="meli-edit-desc-status" style="font-size: 0.72rem; color: var(--color-text-offset);">Carregando descrição...</span>
+                            </div>
                             <textarea id="meli-edit-description" class="form-control" rows="5" placeholder="Detalhes, especificações técnicas, compatibilidade do produto..."></textarea>
                         </div>
                     </div>

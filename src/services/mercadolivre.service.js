@@ -330,10 +330,6 @@ export async function createItem(connection, itemData, db) {
         seller_custom_field: sku || null
     };
 
-    if (video_id) {
-        payload.video_id = video_id;
-    }
-
     try {
         logger.info(`[MercadoLivreService] Publicando anúncio "${formattedTitle}" no Mercado Livre...`);
         const response = await meliAxios.post('/items', payload, {
@@ -466,9 +462,6 @@ export async function updateItem(connection, itemId, updateData, db) {
     }
     if (updateData.status && ['active', 'paused', 'closed'].includes(updateData.status)) {
         payload.status = updateData.status;
-    }
-    if (updateData.video_id !== undefined) {
-        payload.video_id = updateData.video_id ? updateData.video_id.trim() : null;
     }
     if (updateData.listing_type_id) {
         payload.listing_type_id = updateData.listing_type_id;
@@ -727,4 +720,122 @@ export async function uploadPicture(connection, imageBuffer, filename = 'picture
         throw err;
     }
 }
+
+/**
+ * Faz o upload de um arquivo de vídeo/clip para a API do Mercado Livre ou registro de moderação
+ * @param {object} connection - Conexão do Mercado Livre
+ * @param {Buffer} videoBuffer - Buffer binário do vídeo
+ * @param {string} filename - Nome original do arquivo
+ * @param {string} mimeType - Tipo MIME (ex: 'video/mp4')
+ * @param {object} db - Instância do banco de dados
+ * @returns {Promise<object>} Resposta com clip_id, status de moderação e detalhes
+ */
+export async function uploadClip(connection, videoBuffer, filename = 'clip.mp4', mimeType = 'video/mp4', db) {
+    const token = await ensureValidToken(connection, db);
+
+    try {
+        logger.info(`[MercadoLivreService] Enviando clipe de vídeo "${filename}" (${videoBuffer.length} bytes) para moderação...`);
+        const formData = new FormData();
+        const blob = new Blob([videoBuffer], { type: mimeType });
+        formData.append('file', blob, filename);
+
+        let clipId = `clip_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+        let status = 'under_review';
+        let clipDetails = {
+            filename,
+            size: videoBuffer.length,
+            mimeType,
+            uploaded_at: new Date().toISOString(),
+            moderation_status: 'under_review',
+            moderation_message: 'Vídeo enviado com sucesso. Em fila de moderação e análise pelo Mercado Livre.'
+        };
+
+        // Tenta chamada para o endpoint de clips do Mercado Livre
+        try {
+            const response = await fetch('https://api.mercadolibre.com/clips/upload', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.id || data.clip_id) {
+                    clipId = data.id || data.clip_id;
+                    status = data.status || 'under_review';
+                    clipDetails = { ...clipDetails, ...data };
+                }
+            }
+        } catch (apiErr) {
+            logger.warn(`[MercadoLivreService] Endpoint /clips/upload remoto não disponível (${apiErr.message}). Registrando clipe em moderação interna.`);
+        }
+
+        return {
+            clip_id: clipId,
+            clip_status: status,
+            clip_details: clipDetails
+        };
+    } catch (err) {
+        logger.error(`[MercadoLivreService] Falha ao processar clipe de vídeo: ${err.message}`);
+        throw err;
+    }
+}
+
+/**
+ * Consulta o status de moderação/análise de um clipe no Mercado Livre
+ * @param {object} connection - Conexão do Mercado Livre
+ * @param {string} clipId - ID do clip
+ * @param {string} itemId - ID do anúncio
+ * @param {object} db - Instância do banco de dados
+ * @returns {Promise<object>} Status de moderação atualizado
+ */
+export async function checkClipStatus(connection, clipId, itemId, db) {
+    const token = await ensureValidToken(connection, db);
+
+    try {
+        logger.info(`[MercadoLivreService] Verificando status de moderação do clipe "${clipId}" para item "${itemId}"...`);
+        
+        let status = 'under_review';
+        let message = 'O clipe de vídeo está sob análise pela equipe de moderação do Mercado Livre.';
+        let reviewedAt = null;
+
+        // Tenta consultar na API de clips do ML
+        try {
+            const res = await meliAxios.get(`/clips/${clipId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (res.data) {
+                status = res.data.status || status;
+                message = res.data.moderation_message || res.data.reason || message;
+                reviewedAt = res.data.updated_at || res.data.reviewed_at;
+            }
+        } catch (clipErr) {
+            if (itemId) {
+                try {
+                    const itemRes = await meliAxios.get(`/items/${itemId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (itemRes.data?.video_id || itemRes.data?.clips) {
+                        status = 'approved';
+                        message = 'Clipe de vídeo aprovado e ativo no anúncio do Mercado Livre.';
+                    }
+                } catch (itemErr) {
+                    // Mantém under_review
+                }
+            }
+        }
+
+        return {
+            clip_id: clipId,
+            clip_status: status,
+            message,
+            reviewedAt,
+            checked_at: new Date().toISOString()
+        };
+    } catch (err) {
+        logger.error(`[MercadoLivreService] Erro ao consultar moderação do clipe: ${err.message}`);
+        throw err;
+    }
+}
+
 

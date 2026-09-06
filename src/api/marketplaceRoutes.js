@@ -313,6 +313,195 @@ export default (db) => {
     });
 
     // =========================================================================
+    // 3.2. UPLOAD E MODERAÇÃO DE CLIPS DE VÍDEO
+    // =========================================================================
+
+    router.post('/marketplace/mercadolivre/upload-clip', async (req, res) => {
+        const { videoBase64, filename = 'clip.mp4', mimeType = 'video/mp4', connectionId, itemId } = req.body;
+
+        if (!videoBase64) {
+            return res.status(400).json({ sucesso: false, erro: 'Nenhum dado de vídeo em Base64 foi fornecido.' });
+        }
+
+        try {
+            // Processa Base64
+            let cleanBase64 = videoBase64;
+            let detectedMime = mimeType;
+
+            if (videoBase64.includes(';base64,')) {
+                const parts = videoBase64.split(';base64,');
+                const header = parts[0];
+                cleanBase64 = parts[1];
+                const match = header.match(/data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+)/);
+                if (match) detectedMime = match[1];
+            }
+
+            const videoBuffer = Buffer.from(cleanBase64, 'base64');
+
+            // Garante o diretório local de uploads de vídeos
+            const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'videos');
+            await fs.mkdir(uploadsDir, { recursive: true });
+
+            const ext = detectedMime.includes('webm') ? '.webm' : (detectedMime.includes('quicktime') || detectedMime.includes('mov') ? '.mov' : '.mp4');
+            const uniqueFilename = `ml_clip_${Date.now()}_${Math.random().toString(36).substring(2, 8)}${ext}`;
+            const localFilePath = path.join(uploadsDir, uniqueFilename);
+
+            await fs.writeFile(localFilePath, videoBuffer);
+            const localVideoUrl = `/uploads/videos/${uniqueFilename}`;
+
+            // Upload / Registro na API do Mercado Livre
+            let meliClip = null;
+            let resolvedConnId = connectionId;
+
+            if (!resolvedConnId && itemId) {
+                const pool = db.getPool();
+                const [itemRows] = await pool.execute('SELECT connection_id FROM mercado_livre_anuncios WHERE item_id = ?', [itemId]);
+                if (itemRows[0]) resolvedConnId = itemRows[0].connection_id;
+            }
+
+            if (!resolvedConnId) {
+                const pool = db.getPool();
+                const [conns] = await pool.execute('SELECT id FROM marketplace_connections WHERE type = "mercadolivre" AND status = "connected" LIMIT 1');
+                if (conns[0]) resolvedConnId = conns[0].id;
+            }
+
+            if (resolvedConnId) {
+                const connection = await findMarketplaceConnectionById(resolvedConnId);
+                if (connection) {
+                    try {
+                        meliClip = await meliService.uploadClip(connection, videoBuffer, filename || uniqueFilename, detectedMime, db);
+                    } catch (clipErr) {
+                        logger.warn(`[MarketplaceRoutes] Aviso ao enviar clipe para ML: ${clipErr.message}`);
+                    }
+                }
+            }
+
+            const clipId = meliClip?.clip_id || `clip_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+            const clipStatus = meliClip?.clip_status || 'under_review';
+            const clipDetails = meliClip?.clip_details || {
+                filename: filename || uniqueFilename,
+                size: videoBuffer.length,
+                mimeType: detectedMime,
+                uploaded_at: new Date().toISOString(),
+                moderation_status: clipStatus,
+                moderation_message: 'Vídeo enviado e aguardando moderação.'
+            };
+
+            // Atualiza o anúncio no banco de dados se itemId estiver presente
+            if (itemId) {
+                const pool = db.getPool();
+                await pool.execute(`
+                    UPDATE mercado_livre_anuncios 
+                    SET video_url = ?, clip_id = ?, clip_status = ?, clip_details = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE item_id = ?
+                `, [localVideoUrl, clipId, clipStatus, JSON.stringify(clipDetails), itemId]);
+            }
+
+            res.json({
+                sucesso: true,
+                mensagem: 'Clip de vídeo enviado com sucesso para moderação!',
+                videoUrl: localVideoUrl,
+                clipId,
+                clipStatus,
+                clipDetails,
+                filename: filename || uniqueFilename
+            });
+        } catch (error) {
+            logger.error(`[MarketplaceRoutes] Erro ao processar upload de clipe: ${error.message}`, error);
+            res.status(500).json({ sucesso: false, erro: error.message });
+        }
+    });
+
+    router.get('/marketplace/mercadolivre/items/:itemId/clip-status', async (req, res) => {
+        const { itemId } = req.params;
+
+        try {
+            const pool = db.getPool();
+            const [rows] = await pool.execute('SELECT * FROM mercado_livre_anuncios WHERE item_id = ?', [itemId]);
+            const item = rows[0];
+
+            if (!item) {
+                return res.status(404).json({ sucesso: false, erro: 'Anúncio não encontrado.' });
+            }
+
+            if (!item.clip_id && !item.video_url) {
+                return res.json({
+                    sucesso: true,
+                    hasClip: false,
+                    clipStatus: null,
+                    videoUrl: null
+                });
+            }
+
+            let currentStatus = item.clip_status || 'under_review';
+            let moderationMessage = 'O clipe de vídeo está sob análise pela moderação do Mercado Livre.';
+            let clipDetails = safeJsonParse(item.clip_details) || {};
+
+            // Consulta API do Mercado Livre se conexão existir
+            if (item.connection_id && item.clip_id) {
+                const connection = await findMarketplaceConnectionById(item.connection_id);
+                if (connection) {
+                    try {
+                        const statusRes = await meliService.checkClipStatus(connection, item.clip_id, itemId, db);
+                        if (statusRes.clip_status) {
+                            currentStatus = statusRes.clip_status;
+                            moderationMessage = statusRes.message || moderationMessage;
+                            clipDetails = {
+                                ...clipDetails,
+                                moderation_status: currentStatus,
+                                moderation_message: moderationMessage,
+                                checked_at: statusRes.checked_at
+                            };
+
+                            // Atualiza no banco
+                            await pool.execute(
+                                'UPDATE mercado_livre_anuncios SET clip_status = ?, clip_details = ? WHERE item_id = ?',
+                                [currentStatus, JSON.stringify(clipDetails), itemId]
+                            );
+                        }
+                    } catch (checkErr) {
+                        logger.warn(`[MarketplaceRoutes] Falha ao consultar status remoto do clipe: ${checkErr.message}`);
+                    }
+                }
+            }
+
+            res.json({
+                sucesso: true,
+                hasClip: true,
+                clipId: item.clip_id,
+                clipStatus: currentStatus,
+                videoUrl: item.video_url,
+                moderationMessage,
+                clipDetails
+            });
+        } catch (error) {
+            logger.error(`[MarketplaceRoutes] Erro ao buscar status do clipe ${itemId}: ${error.message}`, error);
+            res.status(500).json({ sucesso: false, erro: error.message });
+        }
+    });
+
+    router.delete('/marketplace/mercadolivre/items/:itemId/clip', async (req, res) => {
+        const { itemId } = req.params;
+
+        try {
+            const pool = db.getPool();
+            await pool.execute(`
+                UPDATE mercado_livre_anuncios 
+                SET video_url = NULL, clip_id = NULL, clip_status = NULL, clip_details = NULL, updated_at = CURRENT_TIMESTAMP
+                WHERE item_id = ?
+            `, [itemId]);
+
+            res.json({
+                sucesso: true,
+                mensagem: 'Clip de vídeo desvinculado do anúncio com sucesso.'
+            });
+        } catch (error) {
+            logger.error(`[MarketplaceRoutes] Erro ao desvincular clipe ${itemId}: ${error.message}`, error);
+            res.status(500).json({ sucesso: false, erro: error.message });
+        }
+    });
+
+    // =========================================================================
     // 4. ANÚNCIOS DO MERCADO LIVRE (CRUD, IMPORTAÇÃO, SINCRONIZAÇÃO)
     // =========================================================================
 
@@ -533,7 +722,6 @@ export default (db) => {
             gtin,
             brand,
             model,
-            video_id,
             listing_type_id,
             pictures,
             description,
@@ -567,7 +755,6 @@ export default (db) => {
                 gtin,
                 brand,
                 model,
-                video_id,
                 listing_type_id,
                 pictures,
                 description
@@ -593,6 +780,10 @@ export default (db) => {
                     sku: sku !== undefined ? sku : localItem.sku,
                     listing_type_id: listing_type_id || localItem.listing_type_id,
                     thumbnail,
+                    video_url: localItem.video_url,
+                    clip_id: localItem.clip_id,
+                    clip_status: localItem.clip_status,
+                    clip_details: safeJsonParse(localItem.clip_details),
                     sync_auto_stock: sync_auto_stock !== undefined ? !!sync_auto_stock : !!localItem.sync_auto_stock,
                     sync_auto_price: sync_auto_price !== undefined ? !!sync_auto_price : !!localItem.sync_auto_price,
                     markup_percent: markup_percent !== undefined ? parseFloat(markup_percent) : parseFloat(localItem.markup_percent || 0),
