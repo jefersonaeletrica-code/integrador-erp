@@ -455,55 +455,59 @@ export async function getItem(connection, itemId, db) {
  * @param {object} db - Instância do banco de dados
  * @returns {Promise<object>} Lista de anúncios detalhados e paginação
  */
-export async function getUserItems(connection, status = null, offset = 0, limit = 50, db) {
+export async function getUserItems(connection, status = null, db) {
     const token = await ensureValidToken(connection, db);
     const userId = connection.credentials?.user_id || 'me';
+    const allItems = [];
+    let offset = 0;
+    const limit = 50; // Limite da API por página
+    let total = -1;
+
+    logger.info(`[MercadoLivreService] Iniciando importação de todos os anúncios do usuário ${userId}...`);
 
     try {
-        const params = {
-            offset,
-            limit,
-            search_type: 'scan'
-        };
-        if (status) params.status = status;
+        do {
+            const params = { offset, limit, search_type: 'scan' };
+            if (status) params.status = status;
 
-        logger.info(`[MercadoLivreService] Buscando anúncios do usuário ${userId}...`);
-        const searchRes = await meliAxios.get(`/users/${userId}/items/search`, {
-            params,
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-
-        const itemIds = searchRes.data.results || [];
-        const paging = searchRes.data.paging || { total: itemIds.length, offset, limit };
-
-        if (itemIds.length === 0) {
-            return { items: [], paging };
-        }
-
-        // Multi-get dos detalhes dos anúncios (até 20 por lote na API Meli)
-        const batchSize = 20;
-        const detailedItems = [];
-
-        for (let i = 0; i < itemIds.length; i += batchSize) {
-            const batchIds = itemIds.slice(i, i + batchSize);
-            const multigetRes = await meliAxios.get('/items', {
-                params: { ids: batchIds.join(',') },
+            logger.info(`[MercadoLivreService] Buscando página de anúncios... Offset: ${offset}, Limite: ${limit}`);
+            const searchRes = await meliAxios.get(`/users/${userId}/items/search`, {
+                params,
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
-            const rawItems = multigetRes.data || [];
-            rawItems.forEach(entry => {
-                if (entry.code === 200 && entry.body) {
-                    detailedItems.push(entry.body);
-                }
-            });
-        }
+            const itemIds = searchRes.data.results || [];
+            if (total === -1) {
+                total = searchRes.data.paging.total;
+                logger.info(`[MercadoLivreService] Total de anúncios a serem importados: ${total}`);
+            }
 
-        return { items: detailedItems, paging };
+            if (itemIds.length > 0) {
+                // Multi-get dos detalhes dos anúncios (até 20 por lote na API Meli)
+                const batchSize = 20;
+                for (let i = 0; i < itemIds.length; i += batchSize) {
+                    const batchIds = itemIds.slice(i, i + batchSize);
+                    const multigetRes = await meliAxios.get('/items', {
+                        params: { ids: batchIds.join(',') },
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+
+                    const rawItems = multigetRes.data || [];
+                    rawItems.forEach(entry => {
+                        if (entry.code === 200 && entry.body) {
+                            allItems.push(entry.body);
+                        }
+                    });
+                }
+            }
+            offset += limit;
+        } while (offset < total);
+
+        logger.info(`[MercadoLivreService] Importação finalizada. Total de itens detalhados obtidos: ${allItems.length}`);
+        return { items: allItems, paging: { total: allItems.length } };
     } catch (error) {
         const errorMsg = error.response?.data?.message || error.message;
         logger.error(`[MercadoLivreService] Erro ao listar anúncios do vendedor: ${errorMsg}`);
         throw new Error(`Falha ao listar anúncios: ${errorMsg}`);
     }
 }
-

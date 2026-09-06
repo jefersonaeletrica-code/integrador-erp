@@ -583,7 +583,7 @@ export default (db) => {
         }
 
         try {
-            const { items } = await meliService.getUserItems(connection, null, 0, 50, db);
+            const { items } = await meliService.getUserItems(connection, null, db);
             let importedCount = 0;
 
             for (const item of items) {
@@ -631,4 +631,3 @@ export default (db) => {
 
     return router;
 };
-
