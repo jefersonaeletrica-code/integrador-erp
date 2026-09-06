@@ -342,7 +342,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 const picUrl = res.url || res.localUrl;
-                targetArray.push(picUrl);
+                const picObj = res.id ? { id: res.id, url: picUrl } : picUrl;
+                targetArray.push(picObj);
                 renderCallback();
             } catch (err) {
                 console.error('Erro no upload de foto:', err);
@@ -773,7 +774,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (Array.isArray(fullItem.pictures) && fullItem.pictures.length > 0) {
                     fullItem.pictures.forEach(p => {
                         const u = p.secure_url || p.url || p.source;
-                        if (u) meliEditImagesArray.push(u);
+                        if (p.id) {
+                            meliEditImagesArray.push({ id: p.id, url: u });
+                        } else if (u) {
+                            meliEditImagesArray.push(u);
+                        }
                     });
                 } else if (item.thumbnail && item.thumbnail.startsWith('http')) {
                     meliEditImagesArray.push(item.thumbnail);
@@ -1355,7 +1360,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         if (item.startsWith('http') || item.startsWith('/')) return { source: item };
                         return { id: item };
                     }
-                    if (item.id && !item.source) return { id: item.id };
+                    if (item.id) return { id: String(item.id), url: item.url || item.source };
                     if (item.source) return { source: item.source };
                     if (item.url) return { source: item.url };
                     return item;

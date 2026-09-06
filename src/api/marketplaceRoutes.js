@@ -283,7 +283,7 @@ export default (db) => {
 
             if (!resolvedConnId) {
                 const pool = db.getPool();
-                const [conns] = await pool.execute('SELECT id FROM marketplace_connections WHERE type = "mercadolivre" AND status = "connected" LIMIT 1');
+                const [conns] = await pool.execute('SELECT id FROM marketplace_connections WHERE type = "mercadolivre" ORDER BY id ASC LIMIT 1');
                 if (conns[0]) resolvedConnId = conns[0].id;
             }
 
@@ -361,7 +361,7 @@ export default (db) => {
 
             if (!resolvedConnId) {
                 const pool = db.getPool();
-                const [conns] = await pool.execute('SELECT id FROM marketplace_connections WHERE type = "mercadolivre" AND status = "connected" LIMIT 1');
+                const [conns] = await pool.execute('SELECT id FROM marketplace_connections WHERE type = "mercadolivre" ORDER BY id ASC LIMIT 1');
                 if (conns[0]) resolvedConnId = conns[0].id;
             }
 

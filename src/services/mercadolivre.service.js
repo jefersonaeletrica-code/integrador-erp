@@ -1,4 +1,6 @@
 import axios from 'axios';
+import fs from 'fs/promises';
+import path from 'path';
 import { getLogger } from '../core/logger.js';
 
 const logger = getLogger();
@@ -463,18 +465,50 @@ export async function updateItem(connection, itemId, updateData, db) {
     if (updateData.status && ['active', 'paused', 'closed'].includes(updateData.status)) {
         payload.status = updateData.status;
     }
-    if (updateData.listing_type_id) {
-        payload.listing_type_id = updateData.listing_type_id;
-    }
 
-    // Galeria de fotos
+    // Galeria de fotos: garante que toda imagem seja um ID oficial do ML ou URL externa pública
     if (Array.isArray(updateData.pictures) && updateData.pictures.length > 0) {
-        payload.pictures = updateData.pictures.map(p => {
-            if (typeof p === 'string') return { source: p };
-            if (p.id && !p.source) return { id: p.id };
-            if (p.source) return { source: p.source };
-            return p;
-        });
+        const processedPictures = [];
+
+        for (const p of updateData.pictures) {
+            const picId = typeof p === 'object' && p !== null ? p.id : null;
+            const picUrl = typeof p === 'string' ? p : (p.source || p.url || p.secure_url);
+
+            if (picId) {
+                processedPictures.push({ id: String(picId) });
+                continue;
+            }
+
+            if (picUrl) {
+                // Se for arquivo local (ex: /uploads/pictures/...), faz upload direto para o ML para obter Picture ID
+                if (picUrl.startsWith('/uploads/') || (!picUrl.startsWith('http://') && !picUrl.startsWith('https://'))) {
+                    try {
+                        const localPath = path.join(process.cwd(), 'public', picUrl.replace(/^\//, ''));
+                        const fileBuf = await fs.readFile(localPath);
+                        const mime = picUrl.endsWith('.png') ? 'image/png' : (picUrl.endsWith('.webp') ? 'image/webp' : 'image/jpeg');
+                        const uploaded = await uploadPicture(connection, fileBuf, path.basename(localPath), mime, db);
+                        if (uploaded && uploaded.id) {
+                            processedPictures.push({ id: String(uploaded.id) });
+                            continue;
+                        }
+                    } catch (uploadErr) {
+                        logger.warn(`[MercadoLivreService] Falha ao enviar foto local (${picUrl}) para o ML: ${uploadErr.message}`);
+                    }
+                } else {
+                    // Se for URL externa válida (http/https)
+                    processedPictures.push({ source: picUrl });
+                    continue;
+                }
+            }
+
+            if (typeof p === 'object' && p !== null && p.id) {
+                processedPictures.push({ id: String(p.id) });
+            }
+        }
+
+        if (processedPictures.length > 0) {
+            payload.pictures = processedPictures;
+        }
     }
 
     // Atributos e SKU
@@ -530,12 +564,31 @@ export async function updateItem(connection, itemId, updateData, db) {
 
         return updatedItem;
     } catch (error) {
-        const errorDetails = error.response?.data?.cause || error.response?.data?.message || error.response?.data?.error || error.message;
-        const formattedCause = Array.isArray(errorDetails) 
-            ? errorDetails.map(c => c.message || c.code || JSON.stringify(c)).join('; ')
-            : (typeof errorDetails === 'object' ? JSON.stringify(errorDetails) : errorDetails);
+        const errorData = error.response?.data;
+        let formattedCause = '';
 
-        logger.error(`[MercadoLivreService] Falha ao atualizar anúncio ${itemId}: ${formattedCause}`, error);
+        if (errorData) {
+            const mainMsg = errorData.message || errorData.error || '';
+            let causeMsgs = [];
+            if (Array.isArray(errorData.cause)) {
+                causeMsgs = errorData.cause.map(c => {
+                    if (typeof c === 'string') return c;
+                    return c.message ? `${c.message}${c.code ? ` (${c.code})` : ''}` : (c.code || JSON.stringify(c));
+                });
+            } else if (errorData.cause) {
+                causeMsgs = [typeof errorData.cause === 'object' ? JSON.stringify(errorData.cause) : String(errorData.cause)];
+            }
+            formattedCause = [mainMsg, ...causeMsgs].filter(Boolean).join(' | ');
+        }
+
+        if (!formattedCause) {
+            formattedCause = error.message;
+        }
+
+        logger.error(`[MercadoLivreService] Falha ao atualizar anúncio ${itemId}: ${formattedCause}`, {
+            data: error.response?.data,
+            payload
+        });
         throw new Error(`Erro ao atualizar anúncio no Mercado Livre: ${formattedCause}`);
     }
 }
