@@ -461,32 +461,59 @@ export async function getUserItems(connection, status = null, db) {
     const allItems = [];
     let offset = 0;
     const limit = 50; // Limite da API por página
+    let scrollId = null;
     let total = -1;
+    let pageCount = 0;
+    const seenItemIds = new Set();
 
     logger.info(`[MercadoLivreService] Iniciando importação de todos os anúncios do usuário ${userId}...`);
 
     try {
-        do {
-            const params = { offset, limit, search_type: 'scan' };
+        while (true) {
+            pageCount++;
+            const params = { limit };
             if (status) params.status = status;
 
-            logger.info(`[MercadoLivreService] Buscando página de anúncios... Offset: ${offset}, Limite: ${limit}`);
+            if (scrollId) {
+                // Paginação via scan cursor (scroll_id) do Mercado Livre
+                params.search_type = 'scan';
+                params.scroll_id = scrollId;
+            } else if (pageCount === 1) {
+                // Primeira página: inicia o scan
+                params.search_type = 'scan';
+            } else {
+                // Fallback caso a API não retorne scroll_id
+                params.offset = offset;
+            }
+
+            logger.info(`[MercadoLivreService] Buscando página ${pageCount} de anúncios... (Itens acumulados: ${allItems.length}${total !== -1 ? ` de ${total}` : ''})`);
             const searchRes = await meliAxios.get(`/users/${userId}/items/search`, {
                 params,
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
-            const itemIds = searchRes.data.results || []; // Array de IDs da página atual
-            if (total === -1) {
+            const itemIds = searchRes.data.results || [];
+            scrollId = searchRes.data.scroll_id || null;
+
+            if (total === -1 && searchRes.data.paging?.total !== undefined) {
                 total = searchRes.data.paging.total;
                 logger.info(`[MercadoLivreService] Total de anúncios a serem importados: ${total}`);
             }
 
-            if (itemIds.length > 0) {
+            if (itemIds.length === 0) {
+                logger.info(`[MercadoLivreService] Página ${pageCount} retornou 0 itens. Varredura concluída.`);
+                break;
+            }
+
+            // Filtra IDs duplicados para garantir integridade
+            const newItemIds = itemIds.filter(id => !seenItemIds.has(id));
+            newItemIds.forEach(id => seenItemIds.add(id));
+
+            if (newItemIds.length > 0) {
                 // Multi-get dos detalhes dos anúncios (até 20 por lote na API Meli)
                 const batchSize = 20;
-                for (let i = 0; i < itemIds.length; i += batchSize) {
-                    const batchIds = itemIds.slice(i, i + batchSize);
+                for (let i = 0; i < newItemIds.length; i += batchSize) {
+                    const batchIds = newItemIds.slice(i, i + batchSize);
                     const multigetRes = await meliAxios.get('/items', {
                         params: { ids: batchIds.join(',') },
                         headers: { 'Authorization': `Bearer ${token}` }
@@ -501,17 +528,18 @@ export async function getUserItems(connection, status = null, db) {
                 }
             }
 
-            // Condição de parada definitiva: o loop para apenas quando a API retorna
-            // uma página com menos itens que o limite, indicando que é a última página.
-            // Isso evita problemas com o `paging.total` inconsistente da API do ML.
-            if (itemIds.length < limit) {
+            // Condições de parada definitiva:
+            // 1. A página retornou menos itens que o limite (última página)
+            // 2. Já coletamos todos os itens conforme o total reportado
+            // 3. Nenhum novo item foi encontrado nesta página
+            if (itemIds.length < limit || (total > 0 && allItems.length >= total) || newItemIds.length === 0) {
                 break;
             }
 
             offset += limit;
-        } while (true); // O loop agora é quebrado internamente
+        }
 
-        logger.info(`[MercadoLivreService] Importação finalizada. Total de itens detalhados obtidos: ${allItems.length}`);
+        logger.info(`[MercadoLivreService] Importação finalizada com sucesso. Total de itens detalhados obtidos: ${allItems.length}`);
         return { items: allItems, paging: { total: allItems.length } };
     } catch (error) {
         const errorMsg = error.response?.data?.message || error.message;
