@@ -158,7 +158,26 @@ export async function ensureValidToken(connection, db) {
 }
 
 /**
- * Executa uma chamada à API do Mercado Livre com renovação automática de token em caso de erro 401
+ * Verifica se um erro retornado pela API do Mercado Livre é decorrente de token inválido ou expirado
+ * @param {object} error - Objeto de erro capturado
+ * @returns {boolean}
+ */
+export function isMeliTokenError(error) {
+    if (!error) return false;
+    const status = error.response?.status;
+    const msg = String(error.response?.data?.message || error.response?.data?.error_description || error.response?.data?.error || error.message || '').toLowerCase();
+
+    if (status === 401) return true;
+    if (status === 400 || status === 403) {
+        if (msg.includes('token') || msg.includes('unauthorized') || msg.includes('access_token') || msg.includes('invalid access token') || msg.includes('expired')) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * Executa uma chamada à API do Mercado Livre com renovação automática de token em caso de erro 401 ou token inválido
  * @param {object} connection - Conexão do Mercado Livre
  * @param {object} db - Instância do banco de dados
  * @param {Function} requestFn - Função que recebe o token atual e executa a requisição
@@ -169,14 +188,19 @@ export async function executeMeliRequest(connection, db, requestFn) {
     try {
         return await requestFn(token);
     } catch (error) {
-        if (error.response?.status === 401 && connection.credentials?.refresh_token) {
-            logger.warn(`[MercadoLivreService] Token 401 (não autorizado) para conexão ID ${connection.id}. Renovando token automaticamente...`);
-            try {
-                token = await refreshToken(connection, db);
-                return await requestFn(token);
-            } catch (refreshErr) {
-                logger.error(`[MercadoLivreService] Falha ao renovar token após erro 401: ${refreshErr.message}`);
-                throw error;
+        if (isMeliTokenError(error)) {
+            const hasRefreshToken = !!connection.credentials?.refresh_token;
+            if (hasRefreshToken) {
+                logger.warn(`[MercadoLivreService] Token expirado ou inválido ("${error.response?.data?.message || error.message}") para conexão ID ${connection.id}. Renovando token automaticamente...`);
+                try {
+                    token = await refreshToken(connection, db);
+                    return await requestFn(token);
+                } catch (refreshErr) {
+                    logger.error(`[MercadoLivreService] Falha ao renovar token após erro de autenticação: ${refreshErr.message}`);
+                    throw error;
+                }
+            } else {
+                logger.warn(`[MercadoLivreService] Conexão ID ${connection.id} sem refresh_token configurado. Re-autorização necessária.`);
             }
         }
         throw error;
@@ -1072,7 +1096,7 @@ export async function getItemPriceToWin(connection, itemId, db) {
                     });
                     return res.data;
                 } catch (v2Err) {
-                    if (v2Err.response?.status === 401) throw v2Err;
+                    if (isMeliTokenError(v2Err)) throw v2Err;
                     const fallbackRes = await meliAxios.get(`/items/${itemId}/price_to_win`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
@@ -1080,7 +1104,10 @@ export async function getItemPriceToWin(connection, itemId, db) {
                 }
             });
         } catch (apiErr) {
-            if (apiErr.response?.status === 404 || apiErr.response?.status === 400) {
+            if (isMeliTokenError(apiErr)) {
+                logger.warn(`[MercadoLivreService] Falha de autenticação ao consultar price_to_win de ${itemId}: ${apiErr.response?.data?.message || apiErr.message}`);
+                return null;
+            } else if (apiErr.response?.status === 404 || (apiErr.response?.status === 400 && !isMeliTokenError(apiErr))) {
                 logger.info(`[MercadoLivreService] Anúncio ${itemId} sem concorrência direta ativa na Buy Box.`);
             } else {
                 logger.warn(`[MercadoLivreService] Anúncio ${itemId} sem dados de price_to_win: ${apiErr.response?.data?.message || apiErr.message}`);
@@ -1088,16 +1115,7 @@ export async function getItemPriceToWin(connection, itemId, db) {
         }
 
         if (!ptwData) {
-            return {
-                is_catalog: true,
-                status: 'competing',
-                status_label: 'Em Concorrência',
-                price_to_win: null,
-                current_price: null,
-                winner: null,
-                is_winner: false,
-                details: null
-            };
+            return null;
         }
 
         const rawStatus = String(ptwData.status || '').toLowerCase();
