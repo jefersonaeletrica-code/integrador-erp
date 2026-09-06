@@ -283,20 +283,22 @@ export default (db) => {
                 credentials: undefined // omite credenciais
             }));
 
-            // Paginação em memória para flexibilidade
+            // Paginação flexível (suporta limit=all, 0 ou números)
+            const isAll = limit === 'all' || limit === '0' || limit === 0;
             const pageNum = parseInt(page, 10) || 1;
-            const limitNum = parseInt(limit, 10) || 50;
+            const limitNum = isAll ? (parsedItems.length || 1) : (parseInt(limit, 10) || 50);
             const totalItems = parsedItems.length;
-            const totalPages = Math.ceil(totalItems / limitNum) || 1;
-            const paginated = parsedItems.slice((pageNum - 1) * limitNum, pageNum * limitNum);
+            const totalPages = isAll ? 1 : (Math.ceil(totalItems / limitNum) || 1);
+            const paginated = isAll ? parsedItems : parsedItems.slice((pageNum - 1) * limitNum, pageNum * limitNum);
 
             res.json({
                 sucesso: true,
                 items: paginated,
                 pagination: {
-                    currentPage: pageNum,
+                    currentPage: isAll ? 1 : pageNum,
                     totalPages,
-                    totalItems
+                    totalItems,
+                    limit: isAll ? totalItems : limitNum
                 }
             });
         } catch (e) {

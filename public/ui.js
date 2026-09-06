@@ -1757,11 +1757,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const [itemsRes, connRes] = await Promise.all([
-                api('/api/marketplace/mercadolivre/items'),
+                api('/api/marketplace/mercadolivre/items?limit=all'),
                 api('/api/marketplace-connections').catch(() => ({ connections: [] }))
             ]);
 
-            const items = itemsRes.items || [];
+            const allItems = itemsRes.items || [];
             const connections = (connRes.connections || []).filter(c => c.type === 'mercadolivre');
 
             if (connections.length === 0) {
@@ -1784,9 +1784,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 <option value="${c.id}">${c.name} (${c.credentials?.nickname ? '@' + c.credentials.nickname : '#' + c.id})</option>
             `).join('');
 
+            // Estado de paginação e filtros
+            let currentPage = 1;
+            let pageSize = 25; // 25 itens por página por padrão
+            let currentFilteredItems = [...allItems];
+
             let html = `
                 <div class="search-filter-card">
-                    <div class="filter-form-grid" style="grid-template-columns: 2fr 1.2fr 1.2fr auto;">
+                    <div class="meli-filter-grid">
                         <div class="form-group" style="margin: 0;">
                             <label for="meli-filter-search"><i class="fas fa-magnifying-glass"></i> Buscar por Título, SKU ou MLB ID</label>
                             <input type="search" id="meli-filter-search" class="form-control" placeholder="Digite para filtrar instantaneamente...">
@@ -1811,16 +1816,11 @@ document.addEventListener('DOMContentLoaded', () => {
                             <button type="button" class="btn btn-secondary" id="meli-filter-refresh-btn" style="height: 42px;" title="Atualizar listagem">
                                 <i class="fas fa-rotate"></i>
                             </button>
-                            <div id="meli-visible-count-container" class="total-count-badge" style="display: none;">
-                                <i class="fas fa-eye"></i>
-                                <span id="meli-visible-count">0</span>
-                                <span>visíveis</span>
+                            <div id="meli-visible-count-container" class="total-count-badge">
+                                <i class="fas fa-box"></i>
+                                <span id="meli-visible-count">${allItems.length}</span>
+                                <span>anúncios</span>
                             </div>
-                        </div>
-                        <div class="form-group" style="margin: 0; align-self: flex-end;">
-                            <button type="button" class="btn btn-secondary" id="meli-filter-refresh-btn" style="height: 42px;" title="Atualizar listagem">
-                                <i class="fas fa-rotate"></i>
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -1835,12 +1835,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
 
-                <div id="meli-listings-container" class="results-container">
+                <div id="meli-listings-container" class="results-container"></div>
             `;
 
-            const renderTable = (listings) => {
-                if (listings.length === 0) {
-                    return `
+            pageContent.innerHTML = html;
+
+            const listingsContainer = document.getElementById('meli-listings-container');
+            const searchInput = document.getElementById('meli-filter-search');
+            const statusSelect = document.getElementById('meli-filter-status');
+            const accountSelect = document.getElementById('meli-filter-account');
+            const refreshBtn = document.getElementById('meli-filter-refresh-btn');
+            const visibleCountEl = document.getElementById('meli-visible-count');
+
+            const renderView = () => {
+                if (!listingsContainer) return;
+
+                const totalItems = currentFilteredItems.length;
+                if (totalItems === 0) {
+                    listingsContainer.innerHTML = `
                         <div class="empty-state">
                             <div class="empty-state-icon" style="color: var(--color-warning); background-color: var(--color-warning-light);">
                                 <i class="fas fa-box-open"></i>
@@ -1852,9 +1864,21 @@ document.addEventListener('DOMContentLoaded', () => {
                             </button>
                         </div>
                     `;
+                    return;
                 }
 
-                const rows = listings.map(item => {
+                const isAll = pageSize === 'all';
+                const limitPerPage = isAll ? totalItems : parseInt(pageSize, 10);
+                const totalPages = isAll ? 1 : Math.ceil(totalItems / limitPerPage);
+
+                if (currentPage > totalPages) currentPage = totalPages;
+                if (currentPage < 1) currentPage = 1;
+
+                const startIdx = isAll ? 0 : (currentPage - 1) * limitPerPage;
+                const endIdx = isAll ? totalItems : Math.min(startIdx + limitPerPage, totalItems);
+                const pageListings = currentFilteredItems.slice(startIdx, endIdx);
+
+                const rows = pageListings.map(item => {
                     const thumb = item.thumbnail || '/assets/logos/default-erp.svg';
                     const isPaused = item.status === 'paused';
                     const isActive = item.status === 'active';
@@ -1874,18 +1898,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     return `
                         <tr data-item-id="${item.item_id}">
-                            <td>
+                            <td style="width: 32px;">
                                 <input type="checkbox" class="meli-item-checkbox" data-item-id="${item.item_id}">
                             </td>
                             <td style="width: 54px; text-align: center;">
                                 <img src="${thumb}" alt="${item.title}" class="meli-table-img" onerror="this.src='/assets/logos/default-erp.svg'">
                             </td>
                             <td>
-                                <div style="display: flex; flex-direction: column; gap: 0.2rem;">
-                                    <div style="font-weight: 600; color: var(--color-text); font-size: 0.92rem;">
+                                <div style="display: flex; flex-direction: column; gap: 0.2rem; min-width: 220px;">
+                                    <div style="font-weight: 600; color: var(--color-text); font-size: 0.92rem; word-break: break-word;">
                                         ${item.permalink ? `<a href="${item.permalink}" target="_blank" style="text-decoration: none; color: inherit;" title="Abrir no Mercado Livre">${item.title} <i class="fas fa-arrow-up-right-from-square" style="font-size: 0.72rem; color: var(--color-text-offset);"></i></a>` : item.title}
                                     </div>
-                                    <div style="display: flex; gap: 0.5rem; align-items: center; font-size: 0.78rem;">
+                                    <div style="display: flex; gap: 0.5rem; align-items: center; font-size: 0.78rem; flex-wrap: wrap;">
                                         <span style="color: var(--color-text-offset);">MLB: <code>${item.item_id}</code></span>
                                         ${item.connection_name ? `<span style="color: var(--color-text-muted);">| Conta: ${item.connection_name}</span>` : ''}
                                         ${sourceTag}
@@ -1935,13 +1959,53 @@ document.addEventListener('DOMContentLoaded', () => {
                     `;
                 }).join('');
 
-                return `
+                // Gerar botões de paginação numérica
+                let paginationNavHtml = '';
+                if (totalPages > 1) {
+                    const maxButtons = 5;
+                    let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+                    let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+
+                    if (endPage - startPage + 1 < maxButtons) {
+                        startPage = Math.max(1, endPage - maxButtons + 1);
+                    }
+
+                    paginationNavHtml = `
+                        <div class="pagination-nav">
+                            <button type="button" class="pagination-nav-btn" data-page="1" ${currentPage === 1 ? 'disabled' : ''} title="Primeira Página">
+                                <i class="fas fa-angles-left"></i>
+                            </button>
+                            <button type="button" class="pagination-nav-btn" data-page="${currentPage - 1}" ${currentPage === 1 ? 'disabled' : ''} title="Página Anterior">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                    `;
+
+                    for (let p = startPage; p <= endPage; p++) {
+                        paginationNavHtml += `
+                            <button type="button" class="pagination-nav-btn ${p === currentPage ? 'active' : ''}" data-page="${p}">
+                                ${p}
+                            </button>
+                        `;
+                    }
+
+                    paginationNavHtml += `
+                            <button type="button" class="pagination-nav-btn" data-page="${currentPage + 1}" ${currentPage === totalPages ? 'disabled' : ''} title="Próxima Página">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                            <button type="button" class="pagination-nav-btn" data-page="${totalPages}" ${currentPage === totalPages ? 'disabled' : ''} title="Última Página">
+                                <i class="fas fa-angles-right"></i>
+                            </button>
+                        </div>
+                    `;
+                }
+
+                listingsContainer.innerHTML = `
                     <div class="results-card">
                         <div class="table-responsive">
                             <table class="data-table">
                                 <thead>
                                     <tr>
-                                        <th style="width: 20px;"><input type="checkbox" id="meli-select-all-checkbox" title="Selecionar todos os anúncios visíveis"></th>
+                                        <th style="width: 32px;"><input type="checkbox" id="meli-select-all-checkbox" title="Selecionar todos os anúncios visíveis nesta página"></th>
                                         <th>Foto</th>
                                         <th>Título e Identificação</th>
                                         <th>SKU</th>
@@ -1957,30 +2021,66 @@ document.addEventListener('DOMContentLoaded', () => {
                                 </tbody>
                             </table>
                         </div>
+                        <div class="pagination-footer">
+                            <div class="pagination-info">
+                                <span>Mostrando <strong>${totalItems > 0 ? startIdx + 1 : 0} - ${endIdx}</strong> de <strong>${totalItems}</strong> anúncios</span>
+                                <div style="display: flex; align-items: center; gap: 0.4rem; margin-left: 0.5rem;">
+                                    <label for="meli-page-size-select" style="font-size: 0.8rem; color: var(--color-text-offset);">Exibir:</label>
+                                    <select id="meli-page-size-select" class="meli-page-size-select">
+                                        <option value="25" ${pageSize == 25 ? 'selected' : ''}>25 por pág.</option>
+                                        <option value="50" ${pageSize == 50 ? 'selected' : ''}>50 por pág.</option>
+                                        <option value="100" ${pageSize == 100 ? 'selected' : ''}>100 por pág.</option>
+                                        <option value="all" ${pageSize === 'all' ? 'selected' : ''}>Todos (${totalItems})</option>
+                                    </select>
+                                </div>
+                            </div>
+                            ${paginationNavHtml}
+                        </div>
                     </div>
                 `;
+
+                // Event Listeners de Paginação
+                document.querySelectorAll('.pagination-nav-btn[data-page]').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const targetPage = parseInt(btn.dataset.page, 10);
+                        if (targetPage && targetPage >= 1 && targetPage <= totalPages && targetPage !== currentPage) {
+                            currentPage = targetPage;
+                            renderView();
+                            listingsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                        }
+                    });
+                });
+
+                const pageSizeSelect = document.getElementById('meli-page-size-select');
+                if (pageSizeSelect) {
+                    pageSizeSelect.addEventListener('change', (e) => {
+                        pageSize = e.target.value === 'all' ? 'all' : parseInt(e.target.value, 10);
+                        currentPage = 1;
+                        renderView();
+                    });
+                }
+
+                // Sincronizar checkboxes
+                const selectAllCheckbox = document.getElementById('meli-select-all-checkbox');
+                if (selectAllCheckbox) {
+                    selectAllCheckbox.addEventListener('change', (e) => {
+                        const isChecked = e.target.checked;
+                        document.querySelectorAll('.meli-item-checkbox').forEach(checkbox => {
+                            checkbox.checked = isChecked;
+                        });
+                        updateBulkActionsVisibility();
+                    });
+                }
+
+                updateBulkActionsVisibility();
             };
-
-            html += renderTable(items);
-            html += '</div>';
-
-            pageContent.innerHTML = html;
-
-            // Filtros dinâmicos no frontend
-            const searchInput = document.getElementById('meli-filter-search');
-            const statusSelect = document.getElementById('meli-filter-status');
-            const accountSelect = document.getElementById('meli-filter-account');
-            const listingsContainer = document.getElementById('meli-listings-container');
-            const refreshBtn = document.getElementById('meli-filter-refresh-btn');
-            const visibleCountEl = document.getElementById('meli-visible-count');
-            const visibleCountContainer = document.getElementById('meli-visible-count-container');
 
             const applyFilters = () => {
                 const term = (searchInput?.value || '').toLowerCase().trim();
                 const status = statusSelect?.value || '';
                 const account = accountSelect?.value || '';
 
-                const filtered = items.filter(i => {
+                currentFilteredItems = allItems.filter(i => {
                     const matchTerm = !term || 
                         (i.title && i.title.toLowerCase().includes(term)) || 
                         (i.sku && i.sku.toLowerCase().includes(term)) || 
@@ -1990,14 +2090,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     return matchTerm && matchStatus && matchAccount;
                 });
 
-                if (listingsContainer) listingsContainer.innerHTML = renderTable(filtered);
-                if (visibleCountEl) visibleCountEl.textContent = filtered.length;
-                if (visibleCountContainer) visibleCountContainer.style.display = 'flex';
-
-                // Resetar seleção em massa ao filtrar
-                const selectAllCheckbox = document.getElementById('meli-select-all-checkbox');
-                if (selectAllCheckbox) selectAllCheckbox.checked = false;
-                updateBulkActionsVisibility();
+                currentPage = 1;
+                if (visibleCountEl) visibleCountEl.textContent = currentFilteredItems.length;
+                renderView();
             };
 
             if (searchInput) searchInput.addEventListener('input', applyFilters);
@@ -2020,15 +2115,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                 }
 
-                // Sincronizar o checkbox "selecionar todos"
                 const selectAllCheckbox = document.getElementById('meli-select-all-checkbox');
                 const allVisibleCheckboxes = document.querySelectorAll('.meli-item-checkbox');
                 if (selectAllCheckbox) {
-                    if (allVisibleCheckboxes.length > 0 && selectedCheckboxes.length === allVisibleCheckboxes.length) {
-                        selectAllCheckbox.checked = true;
-                    } else {
-                        selectAllCheckbox.checked = false;
-                    }
+                    selectAllCheckbox.checked = (allVisibleCheckboxes.length > 0 && selectedCheckboxes.length === allVisibleCheckboxes.length);
                 }
             };
 
@@ -2038,20 +2128,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            const selectAllCheckbox = document.getElementById('meli-select-all-checkbox');
-            if (selectAllCheckbox) {
-                selectAllCheckbox.addEventListener('change', (e) => {
-                    const isChecked = e.target.checked;
-                    document.querySelectorAll('.meli-item-checkbox').forEach(checkbox => {
-                        checkbox.checked = isChecked;
-                    });
-                    updateBulkActionsVisibility();
-                });
-            }
-
-            // Inicializa a contagem de visíveis
-            if (visibleCountEl) visibleCountEl.textContent = items.length;
-            if (visibleCountContainer) visibleCountContainer.style.display = 'flex';
+            // Renderização inicial
+            renderView();
 
         } catch (error) {
             renderError(error);
