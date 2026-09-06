@@ -501,9 +501,10 @@ export async function getUserItems(connection, status = null, db) {
                 }
             }
 
-            // Condição de parada: quebra o loop se a página atual não estiver cheia (é a última)
-            // ou se já atingimos o total de itens reportado pela API.
-            if (itemIds.length < limit || allItems.length >= total) {
+            // Condição de parada definitiva: o loop para apenas quando a API retorna
+            // uma página com menos itens que o limite, indicando que é a última página.
+            // Isso evita problemas com o `paging.total` inconsistente da API do ML.
+            if (itemIds.length < limit) {
                 break;
             }
 
