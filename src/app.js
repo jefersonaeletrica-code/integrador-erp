@@ -23,8 +23,9 @@ export async function createApp(db) {
         next(); // Passa a requisição para o próximo middleware na cadeia.
     });
 
-    // Middlewares
-    app.use(express.json());
+    // Middlewares com suporte a upload de fotos/imagens em Base64 até 50MB
+    app.use(express.json({ limit: '50mb' }));
+    app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
     // Configuração das Rotas de API
     // API routes MUST be declared before the static middleware and the catch-all route.

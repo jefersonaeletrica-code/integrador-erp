@@ -681,3 +681,50 @@ export async function getUserItems(connection, status = null, db) {
         throw new Error(`Falha ao listar anúncios: ${errorMsg}`);
     }
 }
+
+/**
+ * Faz o upload de um arquivo de imagem binário diretamente para a API do Mercado Livre
+ * @param {object} connection - Conexão do Mercado Livre
+ * @param {Buffer} imageBuffer - Buffer binário da imagem
+ * @param {string} filename - Nome original do arquivo
+ * @param {string} mimeType - Tipo MIME da imagem (ex: 'image/jpeg', 'image/png')
+ * @param {object} db - Instância do banco de dados
+ * @returns {Promise<object>} Resposta da API contendo picture ID e variações de URL
+ */
+export async function uploadPicture(connection, imageBuffer, filename = 'picture.jpg', mimeType = 'image/jpeg', db) {
+    const token = await ensureValidToken(connection, db);
+
+    try {
+        logger.info(`[MercadoLivreService] Enviando foto "${filename}" (${imageBuffer.length} bytes) para API do Mercado Livre...`);
+        const formData = new FormData();
+        const blob = new Blob([imageBuffer], { type: mimeType });
+        formData.append('file', blob, filename);
+
+        const response = await fetch('https://api.mercadolibre.com/pictures/items/upload', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            },
+            body: formData
+        });
+
+        if (!response.ok) {
+            const errBody = await response.text();
+            logger.warn(`[MercadoLivreService] Erro no upload direto de foto no ML (${response.status}): ${errBody}`);
+            throw new Error(`Upload ML recusado (${response.status}): ${errBody}`);
+        }
+
+        const data = await response.json();
+        logger.info(`[MercadoLivreService] Foto enviada com sucesso ao Mercado Livre! Picture ID: ${data.id}`);
+        return {
+            id: data.id,
+            url: data.variations && data.variations[0] ? data.variations[0].url : null,
+            max_size: data.max_size,
+            variations: data.variations || []
+        };
+    } catch (err) {
+        logger.error(`[MercadoLivreService] Falha ao enviar imagem para Mercado Livre: ${err.message}`);
+        throw err;
+    }
+}
+

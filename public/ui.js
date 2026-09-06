@@ -53,6 +53,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const meliImagesPreviewList = document.getElementById('meli-images-preview-list');
     const meliCreateNewImage = document.getElementById('meli-create-new-image');
     const meliAddImageBtn = document.getElementById('meli-add-image-btn');
+    const meliCreateFileInput = document.getElementById('meli-create-file-input');
+    const meliCreateBrowseFilesBtn = document.getElementById('meli-create-browse-files-btn');
+    const meliCreateDropzone = document.getElementById('meli-create-dropzone');
     const meliCreateSyncStock = document.getElementById('meli-create-sync-stock');
     const meliCreateSyncPrice = document.getElementById('meli-create-sync-price');
     const meliCreateSourceType = document.getElementById('meli-create-source-type');
@@ -70,6 +73,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const meliEditConnectionId = document.getElementById('meli-edit-connection-id');
     const meliEditTitle = document.getElementById('meli-edit-title');
     const meliEditTitleCounter = document.getElementById('meli-edit-title-counter');
+    const meliEditTitleWarning = document.getElementById('meli-edit-title-warning');
     const meliEditSku = document.getElementById('meli-edit-sku');
     const meliEditGtin = document.getElementById('meli-edit-gtin');
     const meliEditBrand = document.getElementById('meli-edit-brand');
@@ -80,6 +84,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const meliEditStatus = document.getElementById('meli-edit-status');
     const meliEditNewImage = document.getElementById('meli-edit-new-image');
     const meliEditAddImageBtn = document.getElementById('meli-edit-add-image-btn');
+    const meliEditFileInput = document.getElementById('meli-edit-file-input');
+    const meliEditBrowseFilesBtn = document.getElementById('meli-edit-browse-files-btn');
+    const meliEditDropzone = document.getElementById('meli-edit-dropzone');
     const meliEditImagesList = document.getElementById('meli-edit-images-list');
     const meliEditVideo = document.getElementById('meli-edit-video');
     const meliEditDescription = document.getElementById('meli-edit-description');
@@ -273,31 +280,210 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     /**
-     * Controle do Modal de Criação no Mercado Livre
+     * Helpers para Gerenciamento de Fotos, Upload de Arquivos e Drag & Drop
      */
+    const updateTitleCounter = (inputEl, counterEl, warningEl) => {
+        if (!inputEl || !counterEl) return;
+        const len = inputEl.value.length;
+        counterEl.textContent = `${len}/60 caracteres`;
+        counterEl.classList.remove('ok', 'warning', 'danger');
+        inputEl.classList.remove('input-danger');
+
+        if (len <= 45) {
+            counterEl.classList.add('ok');
+            if (warningEl) warningEl.style.display = 'none';
+        } else if (len <= 60) {
+            counterEl.classList.add('warning');
+            if (warningEl) warningEl.style.display = 'none';
+        } else {
+            counterEl.classList.add('danger');
+            inputEl.classList.add('input-danger');
+            if (warningEl) warningEl.style.display = 'block';
+        }
+    };
+
+    const uploadImageFilesToMeli = async (files, targetArray, renderCallback, connectionId) => {
+        if (!files || files.length === 0) return;
+        const validFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+        if (validFiles.length === 0) {
+            showToast('Por favor, selecione apenas arquivos de imagem (JPG, PNG, WEBP).', 'warning');
+            return;
+        }
+
+        showToast(`Carregando ${validFiles.length} foto(s)...`, 'info');
+
+        for (const file of validFiles) {
+            try {
+                const base64 = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+
+                const res = await api('/api/marketplace/mercadolivre/upload-picture', 'POST', {
+                    imageBase64: base64,
+                    filename: file.name,
+                    mimeType: file.type,
+                    connectionId
+                });
+
+                const picUrl = res.url || res.localUrl;
+                targetArray.push(picUrl);
+                renderCallback();
+            } catch (err) {
+                console.error('Erro no upload de foto:', err);
+                showToast(`Falha ao carregar "${file.name}": ${err.message}`, 'error');
+            }
+        }
+        showToast('Fotos adicionadas à galeria com sucesso!', 'success');
+    };
+
+    const setupGalleryDragAndDrop = (containerEl, targetArray, renderCallback) => {
+        if (!containerEl) return;
+
+        let draggedIdx = null;
+
+        containerEl.querySelectorAll('.meli-image-card[draggable="true"]').forEach(card => {
+            card.addEventListener('dragstart', (e) => {
+                draggedIdx = parseInt(card.dataset.idx, 10);
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', draggedIdx);
+                card.classList.add('dragging');
+            });
+
+            card.addEventListener('dragend', () => {
+                card.classList.remove('dragging');
+                containerEl.querySelectorAll('.meli-image-card').forEach(c => c.classList.remove('drag-over-card'));
+            });
+
+            card.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                card.classList.add('drag-over-card');
+            });
+
+            card.addEventListener('dragleave', () => {
+                card.classList.remove('drag-over-card');
+            });
+
+            card.addEventListener('drop', (e) => {
+                e.preventDefault();
+                card.classList.remove('drag-over-card');
+                const targetIdx = parseInt(card.dataset.idx, 10);
+                if (!isNaN(draggedIdx) && !isNaN(targetIdx) && draggedIdx !== targetIdx) {
+                    const [movedItem] = targetArray.splice(draggedIdx, 1);
+                    targetArray.splice(targetIdx, 0, movedItem);
+                    renderCallback();
+                    showToast(targetIdx === 0 ? 'Foto definida como Capa Principal!' : 'Sequência das fotos atualizada!', 'info');
+                }
+            });
+        });
+    };
+
     const renderMeliImagesPreview = () => {
         if (!meliImagesPreviewList) return;
         if (meliImagesList.length === 0) {
             meliImagesPreviewList.innerHTML = `
-                <div style="grid-column: 1/-1; text-align: center; color: var(--color-text-offset); font-size: 0.82rem; padding: 1.2rem;">
-                    <i class="fas fa-image" style="font-size: 1.5rem; margin-bottom: 0.35rem; display: block;"></i>
-                    Nenhuma foto adicionada. Cole a URL pública da foto acima e clique em "Adicionar Foto".
+                <div style="grid-column: 1/-1; text-align: center; color: var(--color-text-offset); font-size: 0.84rem; padding: 1.5rem;">
+                    <i class="fas fa-image" style="font-size: 1.75rem; margin-bottom: 0.45rem; display: block; color: var(--color-text-muted);"></i>
+                    Nenhuma foto adicionada. Arraste fotos acima ou cole a URL.
                 </div>
             `;
             return;
         }
 
         let html = '';
-        meliImagesList.forEach((url, idx) => {
+        meliImagesList.forEach((item, idx) => {
+            const url = typeof item === 'string' ? item : (item.url || item.source || item.secure_url || '');
+            const isCover = idx === 0;
+
             html += `
-                <div class="meli-image-card" data-idx="${idx}">
-                    <img src="${url}" alt="Foto ${idx + 1}" onerror="this.src='/assets/logos/default-erp.svg'">
-                    ${idx === 0 ? '<span class="meli-image-cover-badge">Capa</span>' : ''}
-                    <button type="button" class="meli-image-remove" data-action="remove-meli-image" data-idx="${idx}" title="Remover imagem">&times;</button>
+                <div class="meli-image-card ${isCover ? 'is-cover' : ''}" data-idx="${idx}" draggable="true" title="Arraste para reordenar a sequência">
+                    <div class="meli-image-wrapper">
+                        <img src="${url}" alt="Foto ${idx + 1}" onerror="this.src='/assets/logos/default-erp.svg'">
+                        ${isCover ? `
+                            <span class="meli-cover-badge">
+                                <i class="fas fa-star"></i> Capa
+                            </span>
+                        ` : ''}
+                        <button type="button" class="meli-image-remove" data-action="remove-meli-image" data-idx="${idx}" title="Excluir esta foto">&times;</button>
+                    </div>
+                    <div class="meli-image-actions-bar">
+                        <button type="button" class="btn-order-move" data-action="move-meli-create-left" data-idx="${idx}" ${idx === 0 ? 'disabled' : ''} title="Mover para esquerda">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        ${!isCover ? `
+                            <button type="button" class="btn-set-cover" data-action="set-meli-create-cover" data-idx="${idx}" title="Tornar esta a Foto Principal (Capa)">
+                                <i class="fas fa-star"></i> Capa
+                            </button>
+                        ` : `
+                            <span class="image-index-indicator" style="color: #b45309; font-weight: 800;">Principal</span>
+                        `}
+                        <button type="button" class="btn-order-move" data-action="move-meli-create-right" data-idx="${idx}" ${idx === meliImagesList.length - 1 ? 'disabled' : ''} title="Mover para direita">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
                 </div>
             `;
         });
         meliImagesPreviewList.innerHTML = html;
+        setupGalleryDragAndDrop(meliImagesPreviewList, meliImagesList, renderMeliImagesPreview);
+    };
+
+    const renderMeliEditImages = () => {
+        if (!meliEditImagesList) return;
+        const countEl = document.getElementById('meli-edit-images-counter');
+        if (countEl) {
+            countEl.textContent = `(${meliEditImagesArray.length} ${meliEditImagesArray.length === 1 ? 'foto' : 'fotos'})`;
+        }
+
+        if (meliEditImagesArray.length === 0) {
+            meliEditImagesList.innerHTML = `
+                <div style="grid-column: 1/-1; text-align: center; color: var(--color-text-offset); font-size: 0.84rem; padding: 1.5rem;">
+                    <i class="fas fa-image" style="font-size: 1.75rem; margin-bottom: 0.45rem; display: block; color: var(--color-text-muted);"></i>
+                    Nenhuma foto cadastrada. Arraste fotos acima ou selecione arquivos do computador.
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+        meliEditImagesArray.forEach((item, idx) => {
+            const url = typeof item === 'string' ? item : (item.url || item.source || item.secure_url || '');
+            const isCover = idx === 0;
+
+            html += `
+                <div class="meli-image-card ${isCover ? 'is-cover' : ''}" data-idx="${idx}" draggable="true" title="Arraste para reordenar a sequência">
+                    <div class="meli-image-wrapper">
+                        <img src="${url}" alt="Foto ${idx + 1}" onerror="this.src='/assets/logos/default-erp.svg'">
+                        ${isCover ? `
+                            <span class="meli-cover-badge">
+                                <i class="fas fa-star"></i> Capa
+                            </span>
+                        ` : ''}
+                        <button type="button" class="meli-image-remove" data-action="remove-meli-edit-image" data-idx="${idx}" title="Excluir esta foto">&times;</button>
+                    </div>
+                    <div class="meli-image-actions-bar">
+                        <button type="button" class="btn-order-move" data-action="move-meli-edit-left" data-idx="${idx}" ${idx === 0 ? 'disabled' : ''} title="Mover para esquerda">
+                            <i class="fas fa-chevron-left"></i>
+                        </button>
+                        ${!isCover ? `
+                            <button type="button" class="btn-set-cover" data-action="set-meli-edit-cover" data-idx="${idx}" title="Tornar esta a Foto Principal (Capa)">
+                                <i class="fas fa-star"></i> Capa
+                            </button>
+                        ` : `
+                            <span class="image-index-indicator" style="color: #b45309; font-weight: 800;">Principal</span>
+                        `}
+                        <button type="button" class="btn-order-move" data-action="move-meli-edit-right" data-idx="${idx}" ${idx === meliEditImagesArray.length - 1 ? 'disabled' : ''} title="Mover para direita">
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+        meliEditImagesList.innerHTML = html;
+        setupGalleryDragAndDrop(meliEditImagesList, meliEditImagesArray, renderMeliEditImages);
     };
 
     const openMeliCreateModal = async (initialData = {}) => {
@@ -396,31 +582,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (meliCreateModal) meliCreateModal.style.display = 'none';
     };
 
-    const renderMeliEditImages = () => {
-        if (!meliEditImagesList) return;
-        if (meliEditImagesArray.length === 0) {
-            meliEditImagesList.innerHTML = `
-                <div style="grid-column: 1/-1; text-align: center; color: var(--color-text-offset); font-size: 0.82rem; padding: 1.2rem;">
-                    <i class="fas fa-image" style="font-size: 1.5rem; margin-bottom: 0.35rem; display: block;"></i>
-                    Nenhuma foto cadastrada. Cole a URL pública da foto e clique em "Adicionar Foto".
-                </div>
-            `;
-            return;
-        }
-
-        let html = '';
-        meliEditImagesArray.forEach((url, idx) => {
-            html += `
-                <div class="meli-image-card" data-idx="${idx}">
-                    <img src="${url}" alt="Foto ${idx + 1}" onerror="this.src='/assets/logos/default-erp.svg'">
-                    ${idx === 0 ? '<span class="meli-image-cover-badge">Capa</span>' : ''}
-                    <button type="button" class="meli-image-remove" data-action="remove-meli-edit-image" data-idx="${idx}" title="Remover imagem">&times;</button>
-                </div>
-            `;
-        });
-        meliEditImagesList.innerHTML = html;
-    };
-
     const openMeliEditModal = async (item) => {
         if (!meliEditModal) return;
         if (meliEditForm) meliEditForm.reset();
@@ -433,7 +594,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (meliEditConnectionId) meliEditConnectionId.value = connectionId;
         if (meliEditTitle) {
             meliEditTitle.value = item.title || '';
-            if (meliEditTitleCounter) meliEditTitleCounter.textContent = `${meliEditTitle.value.length}/60 caracteres`;
+            updateTitleCounter(meliEditTitle, meliEditTitleCounter, meliEditTitleWarning);
         }
         if (meliEditSku) meliEditSku.value = item.sku || '';
         if (meliEditPrice) meliEditPrice.value = (typeof item.price === 'number' ? item.price : parseFloat(item.price || 0)).toFixed(2);
@@ -669,7 +830,32 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Gerenciador de Imagens
+    // Gerenciador de Upload de Fotos e Drag & Drop no Modal de Criação
+    if (meliCreateBrowseFilesBtn && meliCreateFileInput) {
+        meliCreateBrowseFilesBtn.addEventListener('click', () => meliCreateFileInput.click());
+        meliCreateFileInput.addEventListener('change', () => {
+            const connId = meliCreateAccount ? meliCreateAccount.value : '';
+            uploadImageFilesToMeli(meliCreateFileInput.files, meliImagesList, renderMeliImagesPreview, connId);
+            meliCreateFileInput.value = '';
+        });
+    }
+
+    if (meliCreateDropzone) {
+        meliCreateDropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            meliCreateDropzone.classList.add('drag-over');
+        });
+        meliCreateDropzone.addEventListener('dragleave', () => {
+            meliCreateDropzone.classList.remove('drag-over');
+        });
+        meliCreateDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            meliCreateDropzone.classList.remove('drag-over');
+            const connId = meliCreateAccount ? meliCreateAccount.value : '';
+            uploadImageFilesToMeli(e.dataTransfer.files, meliImagesList, renderMeliImagesPreview, connId);
+        });
+    }
+
     if (meliAddImageBtn) {
         meliAddImageBtn.addEventListener('click', () => {
             const url = meliCreateNewImage ? meliCreateNewImage.value.trim() : '';
@@ -680,18 +866,56 @@ document.addEventListener('DOMContentLoaded', () => {
             meliImagesList.push(url);
             if (meliCreateNewImage) meliCreateNewImage.value = '';
             renderMeliImagesPreview();
-            showToast('Imagem adicionada ao anúncio!', 'info');
+            showToast('Foto adicionada!', 'info');
         });
     }
 
     if (meliImagesPreviewList) {
         meliImagesPreviewList.addEventListener('click', (e) => {
             const removeBtn = e.target.closest('[data-action="remove-meli-image"]');
-            if (!removeBtn) return;
-            const idx = parseInt(removeBtn.dataset.idx, 10);
-            if (!isNaN(idx)) {
-                meliImagesList.splice(idx, 1);
-                renderMeliImagesPreview();
+            if (removeBtn) {
+                const idx = parseInt(removeBtn.dataset.idx, 10);
+                if (!isNaN(idx)) {
+                    meliImagesList.splice(idx, 1);
+                    renderMeliImagesPreview();
+                }
+                return;
+            }
+
+            const coverBtn = e.target.closest('[data-action="set-meli-create-cover"]');
+            if (coverBtn) {
+                const idx = parseInt(coverBtn.dataset.idx, 10);
+                if (!isNaN(idx) && idx > 0) {
+                    const [item] = meliImagesList.splice(idx, 1);
+                    meliImagesList.unshift(item);
+                    renderMeliImagesPreview();
+                    showToast('Foto definida como Capa Principal!', 'success');
+                }
+                return;
+            }
+
+            const moveLeftBtn = e.target.closest('[data-action="move-meli-create-left"]');
+            if (moveLeftBtn) {
+                const idx = parseInt(moveLeftBtn.dataset.idx, 10);
+                if (!isNaN(idx) && idx > 0) {
+                    const temp = meliImagesList[idx - 1];
+                    meliImagesList[idx - 1] = meliImagesList[idx];
+                    meliImagesList[idx] = temp;
+                    renderMeliImagesPreview();
+                }
+                return;
+            }
+
+            const moveRightBtn = e.target.closest('[data-action="move-meli-create-right"]');
+            if (moveRightBtn) {
+                const idx = parseInt(moveRightBtn.dataset.idx, 10);
+                if (!isNaN(idx) && idx < meliImagesList.length - 1) {
+                    const temp = meliImagesList[idx + 1];
+                    meliImagesList[idx + 1] = meliImagesList[idx];
+                    meliImagesList[idx] = temp;
+                    renderMeliImagesPreview();
+                }
+                return;
             }
         });
     }
@@ -734,7 +958,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             if (meliImagesList.length === 0) {
-                showToast('Adicione pelo menos uma URL de imagem para o anúncio.', 'warning');
+                showToast('Adicione pelo menos uma foto para o anúncio.', 'warning');
                 return;
             }
 
@@ -755,7 +979,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     condition,
                     sku,
                     description,
-                    pictures: meliImagesList.map(u => ({ source: u })),
+                    pictures: meliImagesList.map(u => ({ source: typeof u === 'string' ? u : (u.url || u.source) })),
                     source_type: sourceType,
                     source_id: sourceId,
                     markup_percent: markupPercent,
@@ -767,7 +991,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 showToast(`Anúncio publicado com sucesso no Mercado Livre! (ID: ${res.item?.id || ''})`, 'success');
                 closeMeliCreateModal();
 
-                // Se estiver na tela de anúncios, recarrega
                 const activeNav = document.querySelector('.menu-links a.active');
                 if (activeNav && activeNav.id === 'nav-meli-anuncios') {
                     renderMercadoLivreListings();
@@ -786,9 +1009,32 @@ document.addEventListener('DOMContentLoaded', () => {
     // Gerenciador de Título e Fotos no Modal de Edição
     if (meliEditTitle) {
         meliEditTitle.addEventListener('input', () => {
-            if (meliEditTitleCounter) {
-                meliEditTitleCounter.textContent = `${meliEditTitle.value.length}/60 caracteres`;
-            }
+            updateTitleCounter(meliEditTitle, meliEditTitleCounter, meliEditTitleWarning);
+        });
+    }
+
+    if (meliEditBrowseFilesBtn && meliEditFileInput) {
+        meliEditBrowseFilesBtn.addEventListener('click', () => meliEditFileInput.click());
+        meliEditFileInput.addEventListener('change', () => {
+            const connId = meliEditConnectionId ? meliEditConnectionId.value : '';
+            uploadImageFilesToMeli(meliEditFileInput.files, meliEditImagesArray, renderMeliEditImages, connId);
+            meliEditFileInput.value = '';
+        });
+    }
+
+    if (meliEditDropzone) {
+        meliEditDropzone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            meliEditDropzone.classList.add('drag-over');
+        });
+        meliEditDropzone.addEventListener('dragleave', () => {
+            meliEditDropzone.classList.remove('drag-over');
+        });
+        meliEditDropzone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            meliEditDropzone.classList.remove('drag-over');
+            const connId = meliEditConnectionId ? meliEditConnectionId.value : '';
+            uploadImageFilesToMeli(e.dataTransfer.files, meliEditImagesArray, renderMeliEditImages, connId);
         });
     }
 
@@ -809,11 +1055,49 @@ document.addEventListener('DOMContentLoaded', () => {
     if (meliEditImagesList) {
         meliEditImagesList.addEventListener('click', (e) => {
             const removeBtn = e.target.closest('[data-action="remove-meli-edit-image"]');
-            if (!removeBtn) return;
-            const idx = parseInt(removeBtn.dataset.idx, 10);
-            if (!isNaN(idx)) {
-                meliEditImagesArray.splice(idx, 1);
-                renderMeliEditImages();
+            if (removeBtn) {
+                const idx = parseInt(removeBtn.dataset.idx, 10);
+                if (!isNaN(idx)) {
+                    meliEditImagesArray.splice(idx, 1);
+                    renderMeliEditImages();
+                }
+                return;
+            }
+
+            const coverBtn = e.target.closest('[data-action="set-meli-edit-cover"]');
+            if (coverBtn) {
+                const idx = parseInt(coverBtn.dataset.idx, 10);
+                if (!isNaN(idx) && idx > 0) {
+                    const [item] = meliEditImagesArray.splice(idx, 1);
+                    meliEditImagesArray.unshift(item);
+                    renderMeliEditImages();
+                    showToast('Foto definida como Capa Principal!', 'success');
+                }
+                return;
+            }
+
+            const moveLeftBtn = e.target.closest('[data-action="move-meli-edit-left"]');
+            if (moveLeftBtn) {
+                const idx = parseInt(moveLeftBtn.dataset.idx, 10);
+                if (!isNaN(idx) && idx > 0) {
+                    const temp = meliEditImagesArray[idx - 1];
+                    meliEditImagesArray[idx - 1] = meliEditImagesArray[idx];
+                    meliEditImagesArray[idx] = temp;
+                    renderMeliEditImages();
+                }
+                return;
+            }
+
+            const moveRightBtn = e.target.closest('[data-action="move-meli-edit-right"]');
+            if (moveRightBtn) {
+                const idx = parseInt(moveRightBtn.dataset.idx, 10);
+                if (!isNaN(idx) && idx < meliEditImagesArray.length - 1) {
+                    const temp = meliEditImagesArray[idx + 1];
+                    meliEditImagesArray[idx + 1] = meliEditImagesArray[idx];
+                    meliEditImagesArray[idx] = temp;
+                    renderMeliEditImages();
+                }
+                return;
             }
         });
     }
@@ -862,6 +1146,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             try {
+                const formattedPictures = meliEditImagesArray.map(item => {
+                    if (typeof item === 'string') {
+                        if (item.startsWith('http') || item.startsWith('/')) return { source: item };
+                        return { id: item };
+                    }
+                    if (item.id && !item.source) return { id: item.id };
+                    if (item.source) return { source: item.source };
+                    if (item.url) return { source: item.url };
+                    return item;
+                });
+
                 const payload = {
                     connectionId,
                     title,
@@ -875,7 +1170,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     model,
                     video_id: videoId,
                     description,
-                    pictures: meliEditImagesArray.map(u => ({ source: u })),
+                    pictures: formattedPictures,
                     sync_auto_stock: syncAutoStock,
                     sync_auto_price: syncAutoPrice,
                     markup_percent: markupPercent

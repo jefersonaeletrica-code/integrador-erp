@@ -1,4 +1,6 @@
 import express from 'express';
+import fs from 'fs/promises';
+import path from 'path';
 import * as meliService from '../services/mercadolivre.service.js';
 import * as erpService from '../services/erpService.js';
 import { DismatalScraper } from '../scrapers/dismatal.scraper.js';
@@ -235,6 +237,78 @@ export default (db) => {
             res.json({ sucesso: true, ...data });
         } catch (err) {
             res.status(500).json({ sucesso: false, erro: err.message });
+        }
+    });
+
+    // =========================================================================
+    // 3.1. UPLOAD DE FOTOS / IMAGENS
+    // =========================================================================
+
+    router.post('/marketplace/mercadolivre/upload-picture', async (req, res) => {
+        const { imageBase64, filename = 'picture.jpg', mimeType = 'image/jpeg', connectionId } = req.body;
+
+        if (!imageBase64) {
+            return res.status(400).json({ sucesso: false, erro: 'Nenhum dado de imagem em Base64 foi fornecido.' });
+        }
+
+        try {
+            // Processa o Base64
+            let cleanBase64 = imageBase64;
+            let detectedMime = mimeType;
+
+            if (imageBase64.includes(';base64,')) {
+                const parts = imageBase64.split(';base64,');
+                const header = parts[0];
+                cleanBase64 = parts[1];
+                const match = header.match(/data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+)/);
+                if (match) detectedMime = match[1];
+            }
+
+            const imageBuffer = Buffer.from(cleanBase64, 'base64');
+
+            // Garante o diretório local de uploads
+            const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'pictures');
+            await fs.mkdir(uploadsDir, { recursive: true });
+
+            const safeExt = detectedMime.includes('png') ? '.png' : (detectedMime.includes('webp') ? '.webp' : '.jpg');
+            const uniqueFilename = `ml_pic_${Date.now()}_${Math.random().toString(36).substring(2, 8)}${safeExt}`;
+            const localFilePath = path.join(uploadsDir, uniqueFilename);
+
+            await fs.writeFile(localFilePath, imageBuffer);
+            const localUrl = `/uploads/pictures/${uniqueFilename}`;
+
+            // Tenta upload na API oficial do Mercado Livre se conexão estiver disponível
+            let meliPicture = null;
+            let resolvedConnId = connectionId;
+
+            if (!resolvedConnId) {
+                const pool = db.getPool();
+                const [conns] = await pool.execute('SELECT id FROM marketplace_connections WHERE type = "mercadolivre" AND status = "connected" LIMIT 1');
+                if (conns[0]) resolvedConnId = conns[0].id;
+            }
+
+            if (resolvedConnId) {
+                const connection = await findMarketplaceConnectionById(resolvedConnId);
+                if (connection) {
+                    try {
+                        meliPicture = await meliService.uploadPicture(connection, imageBuffer, filename || uniqueFilename, detectedMime, db);
+                    } catch (mlUploadErr) {
+                        logger.warn(`[MarketplaceRoutes] Upload direto no ML não pôde ser completado: ${mlUploadErr.message}. Usando armazenamento local.`);
+                    }
+                }
+            }
+
+            res.json({
+                sucesso: true,
+                mensagem: 'Imagem carregada com sucesso!',
+                url: meliPicture?.url || localUrl,
+                localUrl,
+                id: meliPicture?.id || null,
+                filename: filename || uniqueFilename
+            });
+        } catch (error) {
+            logger.error(`[MarketplaceRoutes] Erro ao processar upload de imagem: ${error.message}`, error);
+            res.status(500).json({ sucesso: false, erro: error.message });
         }
     });
 
