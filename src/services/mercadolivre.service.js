@@ -476,7 +476,7 @@ export async function getUserItems(connection, status = null, db) {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
-            const itemIds = searchRes.data.results || [];
+            const itemIds = searchRes.data.results || []; // Array de IDs da página atual
             if (total === -1) {
                 total = searchRes.data.paging.total;
                 logger.info(`[MercadoLivreService] Total de anúncios a serem importados: ${total}`);
@@ -500,8 +500,13 @@ export async function getUserItems(connection, status = null, db) {
                     });
                 }
             }
+
+            // Se a API retornar menos de `limit` itens, é a última página.
+            if (itemIds.length < limit) {
+                break;
+            }
             offset += limit;
-        } while (offset < total);
+        } while (total > 0 && allItems.length < total);
 
         logger.info(`[MercadoLivreService] Importação finalizada. Total de itens detalhados obtidos: ${allItems.length}`);
         return { items: allItems, paging: { total: allItems.length } };
