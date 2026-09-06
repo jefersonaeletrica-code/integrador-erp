@@ -158,6 +158,32 @@ export async function ensureValidToken(connection, db) {
 }
 
 /**
+ * Executa uma chamada à API do Mercado Livre com renovação automática de token em caso de erro 401
+ * @param {object} connection - Conexão do Mercado Livre
+ * @param {object} db - Instância do banco de dados
+ * @param {Function} requestFn - Função que recebe o token atual e executa a requisição
+ * @returns {Promise<any>}
+ */
+export async function executeMeliRequest(connection, db, requestFn) {
+    let token = await ensureValidToken(connection, db);
+    try {
+        return await requestFn(token);
+    } catch (error) {
+        if (error.response?.status === 401 && connection.credentials?.refresh_token) {
+            logger.warn(`[MercadoLivreService] Token 401 (não autorizado) para conexão ID ${connection.id}. Renovando token automaticamente...`);
+            try {
+                token = await refreshToken(connection, db);
+                return await requestFn(token);
+            } catch (refreshErr) {
+                logger.error(`[MercadoLivreService] Falha ao renovar token após erro 401: ${refreshErr.message}`);
+                throw error;
+            }
+        }
+        throw error;
+    }
+}
+
+/**
  * Obtém o status da conexão com o Mercado Livre
  * @param {object} connection - Objeto de conexão
  * @param {object} db - Instância do banco de dados
@@ -383,12 +409,13 @@ export async function createItem(connection, itemData, db) {
  * @returns {Promise<string>} Texto da descrição
  */
 export async function getItemDescription(connection, itemId, db) {
-    const token = await ensureValidToken(connection, db);
     try {
-        const response = await meliAxios.get(`/items/${itemId}/description`, {
-            headers: { 'Authorization': `Bearer ${token}` }
+        return await executeMeliRequest(connection, db, async (token) => {
+            const response = await meliAxios.get(`/items/${itemId}/description`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            return response.data?.plain_text || response.data?.text || '';
         });
-        return response.data?.plain_text || response.data?.text || '';
     } catch (error) {
         logger.warn(`[MercadoLivreService] Anúncio ${itemId} sem descrição ou erro na consulta: ${error.message}`);
         return '';
@@ -404,15 +431,16 @@ export async function getItemDescription(connection, itemId, db) {
  * @returns {Promise<boolean>}
  */
 export async function updateItemDescription(connection, itemId, plainText, db) {
-    const token = await ensureValidToken(connection, db);
     const body = { plain_text: plainText || '' };
 
     try {
-        await meliAxios.put(`/items/${itemId}/description`, body, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
+        await executeMeliRequest(connection, db, async (token) => {
+            await meliAxios.put(`/items/${itemId}/description`, body, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
         });
         logger.info(`[MercadoLivreService] Descrição atualizada com sucesso no anúncio ${itemId}.`);
         return true;
@@ -428,11 +456,13 @@ export async function updateItemDescription(connection, itemId, plainText, db) {
         // Se a descrição ainda não existia, a API do ML retorna 404 para PUT; neste caso tentamos POST
         if (error.response?.status === 404) {
             try {
-                await meliAxios.post(`/items/${itemId}/description`, body, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    }
+                await executeMeliRequest(connection, db, async (token) => {
+                    await meliAxios.post(`/items/${itemId}/description`, body, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
                 });
                 logger.info(`[MercadoLivreService] Descrição criada com sucesso no anúncio ${itemId}.`);
                 return true;
@@ -741,17 +771,19 @@ export async function updateItemStatus(connection, itemId, status, db) {
  * @returns {Promise<object>} Detalhes do item
  */
 export async function getItem(connection, itemId, db) {
-    const token = await ensureValidToken(connection, db);
-    try {
-        const response = await meliAxios.get(`/items/${itemId}`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        return response.data;
-    } catch (error) {
-        const errorMsg = error.response?.data?.message || error.message;
-        logger.error(`[MercadoLivreService] Erro ao buscar item ${itemId}: ${errorMsg}`);
-        throw new Error(`Falha ao buscar anúncio: ${errorMsg}`);
-    }
+    return await executeMeliRequest(connection, db, async (token) => {
+        try {
+            const response = await meliAxios.get(`/items/${itemId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            return response.data;
+        } catch (error) {
+            if (error.response?.status === 401) throw error;
+            const errorMsg = error.response?.data?.message || error.message;
+            logger.error(`[MercadoLivreService] Erro ao buscar item ${itemId}: ${errorMsg}`);
+            throw new Error(`Falha ao buscar anúncio: ${errorMsg}`);
+        }
+    });
 }
 
 /**
@@ -1027,26 +1059,31 @@ export async function checkClipStatus(connection, clipId, itemId, db) {
  * @returns {Promise<object>} Status de competição, preço sugerido e vencedor da Buy Box
  */
 export async function getItemPriceToWin(connection, itemId, db) {
-    const token = await ensureValidToken(connection, db);
-
     try {
         logger.info(`[MercadoLivreService] Consultando price_to_win para o anúncio ${itemId}...`);
         
         let ptwData = null;
         try {
-            const res = await meliAxios.get(`/items/${itemId}/price_to_win`, {
-                params: { version: 'v2' },
-                headers: { 'Authorization': `Bearer ${token}` }
+            ptwData = await executeMeliRequest(connection, db, async (token) => {
+                try {
+                    const res = await meliAxios.get(`/items/${itemId}/price_to_win`, {
+                        params: { version: 'v2' },
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    return res.data;
+                } catch (v2Err) {
+                    if (v2Err.response?.status === 401) throw v2Err;
+                    const fallbackRes = await meliAxios.get(`/items/${itemId}/price_to_win`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    return fallbackRes.data;
+                }
             });
-            ptwData = res.data;
-        } catch (v2Err) {
-            try {
-                const fallbackRes = await meliAxios.get(`/items/${itemId}/price_to_win`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                ptwData = fallbackRes.data;
-            } catch (fbErr) {
-                logger.warn(`[MercadoLivreService] Anúncio ${itemId} sem dados de price_to_win: ${fbErr.message}`);
+        } catch (apiErr) {
+            if (apiErr.response?.status === 404 || apiErr.response?.status === 400) {
+                logger.info(`[MercadoLivreService] Anúncio ${itemId} sem concorrência direta ativa na Buy Box.`);
+            } else {
+                logger.warn(`[MercadoLivreService] Anúncio ${itemId} sem dados de price_to_win: ${apiErr.response?.data?.message || apiErr.message}`);
             }
         }
 
