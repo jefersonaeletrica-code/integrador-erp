@@ -473,6 +473,49 @@ export default (db) => {
         }
     });
 
+    router.put('/marketplace/mercadolivre/items/bulk-status', async (req, res) => {
+        const { itemIds, newStatus } = req.body;
+
+        if (!Array.isArray(itemIds) || itemIds.length === 0) {
+            return res.status(400).json({ sucesso: false, erro: 'Nenhum ID de anúncio fornecido.' });
+        }
+        if (!['active', 'paused'].includes(newStatus)) {
+            return res.status(400).json({ sucesso: false, erro: 'Status inválido. Use "active" ou "paused".' });
+        }
+
+        logger.info(`[MarketplaceRoutes] Iniciando ação em massa para alterar status para "${newStatus}" em ${itemIds.length} anúncios.`);
+
+        let successCount = 0;
+        let failureCount = 0;
+        const pool = db.getPool();
+
+        // A API do ML não tem um endpoint de bulk status real, então iteramos.
+        for (const itemId of itemIds) {
+            try {
+                const [rows] = await pool.execute('SELECT connection_id FROM mercado_livre_anuncios WHERE item_id = ?', [itemId]);
+                if (!rows[0]) {
+                    logger.warn(`[MarketplaceRoutes] Bulk-status: Anúncio ${itemId} não encontrado no DB local. Pulando.`);
+                    failureCount++;
+                    continue;
+                }
+                const connection = await findMarketplaceConnectionById(rows[0].connection_id);
+                if (!connection) {
+                    logger.warn(`[MarketplaceRoutes] Bulk-status: Conexão para o anúncio ${itemId} não encontrada. Pulando.`);
+                    failureCount++;
+                    continue;
+                }
+                await meliService.updateItemStatus(connection, itemId, newStatus, db);
+                successCount++;
+            } catch (error) {
+                logger.error(`[MarketplaceRoutes] Bulk-status: Falha ao atualizar o anúncio ${itemId}.`, error);
+                failureCount++;
+            }
+        }
+
+        const message = `Ação em massa concluída. ${successCount} anúncio(s) atualizado(s) com sucesso, ${failureCount} falha(s).`;
+        res.json({ sucesso: true, mensagem: message, successCount, failureCount });
+    });
+
     router.post('/marketplace/mercadolivre/items/:itemId/sync-from-source', async (req, res) => {
         const { itemId } = req.params;
 
