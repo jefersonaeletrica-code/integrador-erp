@@ -2747,6 +2747,9 @@ document.addEventListener('DOMContentLoaded', () => {
             <button class="btn btn-meli" data-action="open-create-ad-modal">
                 <i class="fas fa-plus"></i> Novo Anúncio
             </button>
+            <button class="btn btn-secondary" data-action="sync-all-catalog-items" title="Atualizar status da Buy Box e sugestão de preço de todos os anúncios de catálogo">
+                <i class="fas fa-trophy"></i> Atualizar Buy Box
+            </button>
             <button class="btn btn-secondary" data-action="import-meli-items" title="Importar anúncios existentes diretamente da conta ML">
                 <i class="fas fa-cloud-arrow-down"></i> Importar do ML
             </button>
@@ -3758,6 +3761,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 renderMercadoLivreListings();
             } catch (err) {
                 showToast(`Falha na importação: ${err.message}`, 'error');
+            } finally {
+                actionButton.classList.remove('loading');
+                actionButton.disabled = false;
+            }
+            return;
+        }
+
+        if (action === 'sync-all-catalog-items') {
+            actionButton.classList.add('loading');
+            actionButton.disabled = true;
+            showToast('Consultando e sincronizando status da Buy Box para todos os anúncios de catálogo...', 'info');
+
+            try {
+                const res = await api('/api/marketplace/mercadolivre/sync-all-catalog-status', 'POST');
+                if (res.sucesso) {
+                    showToast(res.mensagem || 'Buy Box de catálogo atualizada com sucesso!', 'success');
+                    renderMercadoLivreListings();
+                } else {
+                    showToast(`Erro ao sincronizar Buy Box: ${res.erro || 'Falha desconhecida'}`, 'error');
+                }
+            } catch (err) {
+                showToast(`Erro na sincronização da Buy Box: ${err.message}`, 'error');
             } finally {
                 actionButton.classList.remove('loading');
                 actionButton.disabled = false;

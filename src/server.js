@@ -8,6 +8,7 @@ import { WebSocketServer } from 'ws';
 import { createApp } from './app.js'; // app.js depende de variáveis de ambiente
 import * as db from './database/db.mysql.js';
 import { getLogger } from './core/logger.js';
+import * as meliService from './services/mercadolivre.service.js';
 
 const logger = getLogger();
 const PORT = process.env.PORT || 3000;
@@ -15,6 +16,13 @@ const PORT = process.env.PORT || 3000;
 async function startServer() {
     // Agora que dotenv.config() foi executado primeiro, a inicialização do DB funcionará.
     await db.initializeDatabase(); 
+
+    // Inicializa o job periódico de sincronização de status de Catálogo / Buy Box a cada 10 minutos
+    try {
+        meliService.startCatalogStatusSyncJob(db, 10);
+    } catch (jobErr) {
+        logger.warn(`[Server] Falha ao agendar job de sincronização de catálogo: ${jobErr.message}`);
+    }
 
     // Inicializa o banco de dados e carrega os dados iniciais
     const { app } = await createApp(db);

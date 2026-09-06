@@ -1101,5 +1101,148 @@ export async function getItemPriceToWin(connection, itemId, db) {
     }
 }
 
+/**
+ * Sincroniza o status do catálogo e concorrência na Buy Box para todos os anúncios de catálogo
+ * @param {object} db - Instância do banco de dados
+ * @param {number|null} connectionId - ID opcional de uma conexão específica (ou null para todas)
+ * @returns {Promise<object>} Resumo da sincronização { total, updated, winners, losers, competing }
+ */
+export async function syncAllCatalogItemsStatus(db, connectionId = null) {
+    if (!db) return { total: 0, updated: 0, winners: 0, losers: 0, competing: 0 };
+
+    try {
+        const pool = db.getPool();
+        let query = `
+            SELECT item_id, connection_id, catalog_product_id, catalog_status, catalog_price_to_win, price
+            FROM mercado_livre_anuncios
+            WHERE (catalog_listing = 1 OR catalog_product_id IS NOT NULL)
+        `;
+        const params = [];
+        if (connectionId) {
+            query += ' AND connection_id = ?';
+            params.push(connectionId);
+        }
+
+        const [items] = await pool.execute(query, params);
+
+        if (!items || items.length === 0) {
+            logger.info('[MercadoLivreService] Nenhum anúncio de catálogo encontrado para sincronizar Buy Box.');
+            return { total: 0, updated: 0, winners: 0, losers: 0, competing: 0 };
+        }
+
+        logger.info(`[MercadoLivreService] Iniciando sincronização em lote de Buy Box para ${items.length} anúncio(s) de catálogo...`);
+
+        // Cache de conexões de marketplace para evitar queries repetitivas
+        const connectionsCache = new Map();
+        const safeJsonParse = (d) => {
+            if (typeof d === 'string') {
+                try { return JSON.parse(d); } catch (e) { return null; }
+            }
+            return d;
+        };
+
+        const getCachedConnection = async (connId) => {
+            if (connectionsCache.has(connId)) return connectionsCache.get(connId);
+            const [rows] = await pool.execute('SELECT * FROM marketplace_connections WHERE id = ?', [connId]);
+            if (!rows[0]) return null;
+            const conn = { ...rows[0], credentials: safeJsonParse(rows[0].credentials) };
+            connectionsCache.set(connId, conn);
+            return conn;
+        };
+
+        let updated = 0;
+        let winners = 0;
+        let losers = 0;
+        let competing = 0;
+
+        for (const item of items) {
+            try {
+                const connection = await getCachedConnection(item.connection_id);
+                if (!connection) {
+                    logger.warn(`[MercadoLivreService] Conexão ID ${item.connection_id} não encontrada para o anúncio ${item.item_id}.`);
+                    continue;
+                }
+
+                const catalog = await getItemPriceToWin(connection, item.item_id, db);
+                if (catalog) {
+                    await pool.execute(
+                        `UPDATE mercado_livre_anuncios 
+                         SET catalog_listing = 1,
+                             catalog_product_id = ?,
+                             catalog_status = ?,
+                             catalog_price_to_win = ?,
+                             catalog_details = ?,
+                             updated_at = CURRENT_TIMESTAMP
+                         WHERE item_id = ?`,
+                        [
+                            catalog.catalog_product_id || item.catalog_product_id || null,
+                            catalog.status || null,
+                            catalog.price_to_win !== null && catalog.price_to_win !== undefined ? parseFloat(catalog.price_to_win) : null,
+                            catalog.details ? JSON.stringify(catalog.details) : null,
+                            item.item_id
+                        ]
+                    );
+
+                    updated++;
+                    if (catalog.status === 'winner') winners++;
+                    else if (catalog.status === 'losing') losers++;
+                    else competing++;
+                }
+
+                // Pausa de 80ms entre chamadas para respeitar taxa de requisições da API
+                await new Promise(resolve => setTimeout(resolve, 80));
+            } catch (itemErr) {
+                logger.warn(`[MercadoLivreService] Falha ao sincronizar Buy Box do item ${item.item_id}: ${itemErr.message}`);
+            }
+        }
+
+        logger.info(`[MercadoLivreService] Sincronização de catálogo concluída: ${updated}/${items.length} atualizados (${winners} vencendo, ${losers} perdendo).`);
+        return { total: items.length, updated, winners, losers, competing };
+    } catch (error) {
+        logger.error(`[MercadoLivreService] Erro na sincronização geral de catálogo: ${error.message}`, error);
+        return { total: 0, updated: 0, winners: 0, losers: 0, competing: 0, erro: error.message };
+    }
+}
+
+let catalogSyncTimer = null;
+
+/**
+ * Inicia o job periódico de sincronização de status de catálogo/Buy Box
+ * @param {object} db - Instância do banco de dados
+ * @param {number} intervalMinutes - Intervalo em minutos (padrão 10)
+ */
+export function startCatalogStatusSyncJob(db, intervalMinutes = 10) {
+    if (catalogSyncTimer) {
+        clearInterval(catalogSyncTimer);
+        catalogSyncTimer = null;
+    }
+
+    const intervalMs = Math.max(1, intervalMinutes) * 60 * 1000;
+    logger.info(`[MercadoLivreService] Job periódico de sincronização da Buy Box configurado para rodar a cada ${intervalMinutes} minuto(s).`);
+
+    // Executa uma sincronização inicial em background após 20 segundos da inicialização do servidor
+    setTimeout(async () => {
+        try {
+            logger.info('[MercadoLivreService] Executando sincronização inicial de status de catálogo...');
+            await syncAllCatalogItemsStatus(db);
+        } catch (initErr) {
+            logger.warn(`[MercadoLivreService] Aviso na sincronização inicial de catálogo: ${initErr.message}`);
+        }
+    }, 20000);
+
+    // Agenda execuções periódicas a cada intervalMinutes
+    catalogSyncTimer = setInterval(async () => {
+        try {
+            logger.info('[MercadoLivreService] Executando ciclo periódico de sincronização de catálogo (Buy Box)...');
+            await syncAllCatalogItemsStatus(db);
+        } catch (periodicErr) {
+            logger.error(`[MercadoLivreService] Erro no ciclo periódico de catálogo: ${periodicErr.message}`);
+        }
+    }, intervalMs);
+
+    return catalogSyncTimer;
+}
+
+
 
 

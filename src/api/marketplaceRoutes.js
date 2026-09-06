@@ -705,7 +705,7 @@ export default (db) => {
             }
 
             // Se for item de catálogo, busca status da Buy Box e preço sugerido para ganhar
-            const isCatalog = !!(meliItem?.catalog_listing || localItem?.catalog_listing || meliItem?.catalog_product_id);
+            const isCatalog = !!(meliItem?.catalog_listing || localItem?.catalog_listing || meliItem?.catalog_product_id || localItem?.catalog_product_id);
             if (isCatalog) {
                 try {
                     catalog = await meliService.getItemPriceToWin(connection, itemId, db);
@@ -1107,6 +1107,13 @@ export default (db) => {
                 importedCount++;
             }
 
+            // Sincroniza automaticamente a Buy Box / status de catálogo para os anúncios importados
+            try {
+                await meliService.syncAllCatalogItemsStatus(db, connection.id);
+            } catch (catSyncErr) {
+                logger.warn(`[MarketplaceRoutes] Aviso na sincronização de catálogo pós-importação: ${catSyncErr.message}`);
+            }
+
             res.json({
                 sucesso: true,
                 mensagem: `${importedCount} anúncios importados/atualizados da conta do Mercado Livre com sucesso!`,
@@ -1114,6 +1121,21 @@ export default (db) => {
             });
         } catch (error) {
             logger.error(`[MarketplaceRoutes] Erro ao importar anúncios do Mercado Livre: ${error.message}`, error);
+            res.status(500).json({ sucesso: false, erro: error.message });
+        }
+    });
+
+    router.post('/marketplace/mercadolivre/sync-all-catalog-status', async (req, res) => {
+        const { connectionId } = req.body;
+        try {
+            const result = await meliService.syncAllCatalogItemsStatus(db, connectionId || null);
+            res.json({
+                sucesso: true,
+                mensagem: `Status da Buy Box atualizado! ${result.updated} de ${result.total} anúncio(s) de catálogo sincronizados (${result.winners} vencendo, ${result.losers} perdendo).`,
+                ...result
+            });
+        } catch (error) {
+            logger.error(`[MarketplaceRoutes] Erro ao sincronizar Buy Box em lote: ${error.message}`, error);
             res.status(500).json({ sucesso: false, erro: error.message });
         }
     });
