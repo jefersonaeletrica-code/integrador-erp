@@ -377,6 +377,77 @@ export async function createItem(connection, itemData, db) {
  * @param {object} connection - Conexão do Mercado Livre
  * @param {string} itemId - ID do anúncio (MLB...)
  * @param {object} updateData - Dados para atualizar
+/**
+ * Obtém a descrição em texto simples de um anúncio
+ * @param {object} connection - Conexão do Mercado Livre
+ * @param {string} itemId - ID do anúncio
+ * @param {object} db - Instância do banco de dados
+ * @returns {Promise<string>} Texto da descrição
+ */
+export async function getItemDescription(connection, itemId, db) {
+    const token = await ensureValidToken(connection, db);
+    try {
+        const response = await meliAxios.get(`/items/${itemId}/description`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        return response.data?.plain_text || response.data?.text || '';
+    } catch (error) {
+        logger.warn(`[MercadoLivreService] Anúncio ${itemId} sem descrição ou erro na consulta: ${error.message}`);
+        return '';
+    }
+}
+
+/**
+ * Atualiza ou cria a descrição de um anúncio
+ * @param {object} connection - Conexão do Mercado Livre
+ * @param {string} itemId - ID do anúncio
+ * @param {string} plainText - Novo texto de descrição
+ * @param {object} db - Instância do banco de dados
+ * @returns {Promise<boolean>}
+ */
+export async function updateItemDescription(connection, itemId, plainText, db) {
+    const token = await ensureValidToken(connection, db);
+    const body = { plain_text: plainText || '' };
+
+    try {
+        await meliAxios.put(`/items/${itemId}/description`, body, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        logger.info(`[MercadoLivreService] Descrição atualizada com sucesso no anúncio ${itemId}.`);
+        return true;
+    } catch (error) {
+        // Se a descrição ainda não existia, a API do ML retorna 404 para PUT; neste caso tentamos POST
+        if (error.response?.status === 404) {
+            try {
+                await meliAxios.post(`/items/${itemId}/description`, body, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                logger.info(`[MercadoLivreService] Descrição criada com sucesso no anúncio ${itemId}.`);
+                return true;
+            } catch (postErr) {
+                const postMsg = postErr.response?.data?.message || postErr.message;
+                logger.error(`[MercadoLivreService] Falha ao criar descrição no anúncio ${itemId}: ${postMsg}`);
+                throw new Error(`Erro ao salvar descrição: ${postMsg}`);
+            }
+        }
+
+        const errorMsg = error.response?.data?.message || error.message;
+        logger.error(`[MercadoLivreService] Falha ao atualizar descrição no anúncio ${itemId}: ${errorMsg}`);
+        throw new Error(`Erro ao salvar descrição: ${errorMsg}`);
+    }
+}
+
+/**
+ * Atualiza campos de um anúncio (Preço, Estoque, Título, Fotos, SKU, Descrição, Vídeo, etc.)
+ * @param {object} connection - Conexão do Mercado Livre
+ * @param {string} itemId - ID do anúncio (MLB...)
+ * @param {object} updateData - Dados para atualizar
  * @param {object} db - Instância do banco de dados
  * @returns {Promise<object>} Anúncio atualizado
  */
@@ -384,32 +455,95 @@ export async function updateItem(connection, itemId, updateData, db) {
     const token = await ensureValidToken(connection, db);
     const payload = {};
 
-    if (updateData.price !== undefined) {
+    if (updateData.price !== undefined && updateData.price !== null && updateData.price !== '') {
         payload.price = parseFloat(updateData.price);
     }
-    if (updateData.available_quantity !== undefined) {
+    if (updateData.available_quantity !== undefined && updateData.available_quantity !== null && updateData.available_quantity !== '') {
         payload.available_quantity = parseInt(updateData.available_quantity, 10);
     }
-    if (updateData.title) {
+    if (updateData.title && updateData.title.trim()) {
         payload.title = updateData.title.trim().substring(0, 60);
     }
-    if (updateData.status) {
-        payload.status = updateData.status; // 'active', 'paused', 'closed'
+    if (updateData.status && ['active', 'paused', 'closed'].includes(updateData.status)) {
+        payload.status = updateData.status;
+    }
+    if (updateData.video_id !== undefined) {
+        payload.video_id = updateData.video_id ? updateData.video_id.trim() : null;
+    }
+    if (updateData.listing_type_id) {
+        payload.listing_type_id = updateData.listing_type_id;
+    }
+
+    // Galeria de fotos
+    if (Array.isArray(updateData.pictures) && updateData.pictures.length > 0) {
+        payload.pictures = updateData.pictures.map(p => {
+            if (typeof p === 'string') return { source: p };
+            if (p.id && !p.source) return { id: p.id };
+            if (p.source) return { source: p.source };
+            return p;
+        });
+    }
+
+    // Atributos e SKU
+    const attributes = [];
+    if (updateData.sku !== undefined && updateData.sku !== null) {
+        const skuVal = updateData.sku.trim();
+        payload.seller_custom_field = skuVal || null;
+        if (skuVal) {
+            attributes.push({ id: 'SELLER_SKU', value_name: skuVal });
+        }
+    }
+    if (updateData.gtin !== undefined && updateData.gtin !== null && updateData.gtin !== '') {
+        attributes.push({ id: 'GTIN', value_name: updateData.gtin.trim() });
+    }
+    if (updateData.brand !== undefined && updateData.brand !== null && updateData.brand !== '') {
+        attributes.push({ id: 'BRAND', value_name: updateData.brand.trim() });
+    }
+    if (updateData.model !== undefined && updateData.model !== null && updateData.model !== '') {
+        attributes.push({ id: 'MODEL', value_name: updateData.model.trim() });
+    }
+    if (Array.isArray(updateData.attributes) && updateData.attributes.length > 0) {
+        updateData.attributes.forEach(attr => {
+            if (attr.id && attr.value_name) {
+                const idx = attributes.findIndex(a => a.id === attr.id);
+                if (idx >= 0) attributes[idx] = attr;
+                else attributes.push(attr);
+            }
+        });
+    }
+    if (attributes.length > 0) {
+        payload.attributes = attributes;
     }
 
     try {
-        logger.info(`[MercadoLivreService] Atualizando anúncio ${itemId}...`);
+        logger.info(`[MercadoLivreService] Atualizando anúncio ${itemId} com ${Object.keys(payload).length} campos...`);
         const response = await meliAxios.put(`/items/${itemId}`, payload, {
             headers: {
                 'Authorization': `Bearer ${token}`,
                 'Content-Type': 'application/json'
             }
         });
-        return response.data;
+
+        const updatedItem = response.data;
+
+        // Se veio descrição para atualizar, salva separadamente no endpoint específico
+        if (updateData.description !== undefined && updateData.description !== null) {
+            try {
+                await updateItemDescription(connection, itemId, updateData.description, db);
+            } catch (descErr) {
+                logger.warn(`[MercadoLivreService] Aviso: Dados do item atualizados, mas houve falha na descrição: ${descErr.message}`);
+            }
+        }
+
+        return updatedItem;
     } catch (error) {
-        const errorMsg = error.response?.data?.message || error.response?.data?.error || error.message;
-        logger.error(`[MercadoLivreService] Falha ao atualizar anúncio ${itemId}: ${errorMsg}`, error);
-        throw new Error(`Erro ao atualizar anúncio no Mercado Livre: ${errorMsg}`);
+        const errorDetails = error.response?.data?.cause || error.response?.data?.message || error.response?.data?.error || error.message;
+        const formattedCause = Array.isArray(errorDetails) 
+            ? errorDetails.map(c => c.message || c.code || JSON.stringify(c)).join('; ')
+            : (typeof errorDetails === 'object' ? JSON.stringify(errorDetails) : errorDetails);
+
+        logger.error(`[MercadoLivreService] Falha ao atualizar anúncio ${itemId}: ${formattedCause}`, error);
+        throw new Error(`Erro ao atualizar anúncio no Mercado Livre: ${formattedCause}`);
     }
 }
 

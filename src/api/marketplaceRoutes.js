@@ -393,9 +393,80 @@ export default (db) => {
         }
     });
 
+    router.get('/marketplace/mercadolivre/items/:itemId/details', async (req, res) => {
+        const { itemId } = req.params;
+        const { connectionId } = req.query;
+
+        try {
+            const pool = db.getPool();
+            const [rows] = await pool.execute('SELECT * FROM mercado_livre_anuncios WHERE item_id = ?', [itemId]);
+            const localItem = rows[0] ? {
+                ...rows[0],
+                price: parseFloat(rows[0].price),
+                markup_percent: parseFloat(rows[0].markup_percent || 0),
+                sync_auto_stock: !!rows[0].sync_auto_stock,
+                sync_auto_price: !!rows[0].sync_auto_price,
+                source_data: safeJsonParse(rows[0].source_data)
+            } : null;
+
+            const resolvedConnId = connectionId || localItem?.connection_id;
+            if (!resolvedConnId) {
+                return res.status(400).json({ sucesso: false, erro: 'Conexão do anúncio não identificada.' });
+            }
+
+            const connection = await findMarketplaceConnectionById(resolvedConnId);
+            if (!connection) {
+                return res.status(404).json({ sucesso: false, erro: 'Conexão do Mercado Livre não encontrada.' });
+            }
+
+            // Busca os dados diretamente do Mercado Livre (fotos, atributos, etc.)
+            let meliItem = null;
+            let description = '';
+
+            try {
+                meliItem = await meliService.getItem(connection, itemId, db);
+            } catch (err) {
+                logger.warn(`[MarketplaceRoutes] Falha ao buscar item ${itemId} da API ML: ${err.message}`);
+            }
+
+            try {
+                description = await meliService.getItemDescription(connection, itemId, db);
+            } catch (err) {
+                logger.warn(`[MarketplaceRoutes] Falha ao buscar descrição do item ${itemId}: ${err.message}`);
+            }
+
+            res.json({
+                sucesso: true,
+                item: meliItem || localItem,
+                localItem,
+                description
+            });
+        } catch (error) {
+            logger.error(`[MarketplaceRoutes] Erro ao buscar detalhes do anúncio ${itemId}: ${error.message}`, error);
+            res.status(500).json({ sucesso: false, erro: error.message });
+        }
+    });
+
     router.put('/marketplace/mercadolivre/items/:itemId/update', async (req, res) => {
         const { itemId } = req.params;
-        const { price, available_quantity, title, status, connectionId } = req.body;
+        const {
+            connectionId,
+            title,
+            price,
+            available_quantity,
+            status,
+            sku,
+            gtin,
+            brand,
+            model,
+            video_id,
+            listing_type_id,
+            pictures,
+            description,
+            sync_auto_stock,
+            sync_auto_price,
+            markup_percent
+        } = req.body;
 
         try {
             const pool = db.getPool();
@@ -412,28 +483,57 @@ export default (db) => {
                 return res.status(404).json({ sucesso: false, erro: 'Conexão do Mercado Livre não encontrada.' });
             }
 
+            // Atualiza no Mercado Livre via API
             const updatedMeli = await meliService.updateItem(connection, itemId, {
+                title,
                 price,
                 available_quantity,
-                title,
-                status
+                status,
+                sku,
+                gtin,
+                brand,
+                model,
+                video_id,
+                listing_type_id,
+                pictures,
+                description
             }, db);
+
+            // Determina thumbnail principal
+            let thumbnail = localItem?.thumbnail || null;
+            if (Array.isArray(pictures) && pictures.length > 0) {
+                const firstPic = pictures[0];
+                thumbnail = typeof firstPic === 'string' ? firstPic : (firstPic.secure_url || firstPic.url || firstPic.source || thumbnail);
+            } else if (updatedMeli?.pictures && updatedMeli.pictures[0]) {
+                thumbnail = updatedMeli.pictures[0].secure_url || updatedMeli.pictures[0].url || thumbnail;
+            }
 
             // Atualiza no DB local
             if (localItem) {
                 const updatedDb = {
                     ...localItem,
+                    title: title || localItem.title,
                     price: price !== undefined ? parseFloat(price) : localItem.price,
                     available_quantity: available_quantity !== undefined ? parseInt(available_quantity, 10) : localItem.available_quantity,
-                    title: title || localItem.title,
                     status: status || localItem.status,
+                    sku: sku !== undefined ? sku : localItem.sku,
+                    listing_type_id: listing_type_id || localItem.listing_type_id,
+                    thumbnail,
+                    sync_auto_stock: sync_auto_stock !== undefined ? !!sync_auto_stock : !!localItem.sync_auto_stock,
+                    sync_auto_price: sync_auto_price !== undefined ? !!sync_auto_price : !!localItem.sync_auto_price,
+                    markup_percent: markup_percent !== undefined ? parseFloat(markup_percent) : parseFloat(localItem.markup_percent || 0),
                     source_data: safeJsonParse(localItem.source_data)
                 };
                 await db.saveOrUpdateMercadoLivreAnuncio(updatedDb);
             }
 
-            res.json({ sucesso: true, mensagem: 'Anúncio atualizado com sucesso!', item: updatedMeli });
+            res.json({
+                sucesso: true,
+                mensagem: 'Anúncio atualizado com sucesso no Mercado Livre!',
+                item: updatedMeli
+            });
         } catch (error) {
+            logger.error(`[MarketplaceRoutes] Erro ao atualizar anúncio ${itemId}: ${error.message}`, error);
             res.status(500).json({ sucesso: false, erro: error.message });
         }
     });

@@ -325,10 +325,10 @@
         </div>
     </div>
 
-    <!-- Modal para Edição Rápida de Anúncio Mercado Livre -->
+    <!-- Modal para Edição Completa de Anúncio Mercado Livre -->
     <div id="meli-edit-modal" class="modal" style="display: none;">
         <div class="modal-backdrop"></div>
-        <div class="modal-content">
+        <div class="modal-content modal-content-large">
             <div class="modal-header">
                 <div class="modal-title-wrapper">
                     <div class="modal-icon-badge" style="background-color: rgba(255, 230, 0, 0.2); color: #2D3277;">
@@ -336,7 +336,7 @@
                     </div>
                     <div>
                         <h2 class="modal-title">Editar Anúncio Mercado Livre</h2>
-                        <p class="modal-subtitle" id="meli-edit-modal-subtitle">Atualize preço, estoque ou status do anúncio</p>
+                        <p class="modal-subtitle" id="meli-edit-modal-subtitle">Atualize título, preço, estoque, fotos, descrição e atributos</p>
                     </div>
                 </div>
                 <button class="modal-close meli-edit-modal-close" title="Fechar">&times;</button>
@@ -346,29 +346,108 @@
                     <input type="hidden" id="meli-edit-item-id" value="">
                     <input type="hidden" id="meli-edit-connection-id" value="">
 
+                    <!-- Título -->
                     <div class="form-group">
-                        <label for="meli-edit-title"><i class="fas fa-heading"></i> Título</label>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                            <label for="meli-edit-title" style="margin: 0;"><i class="fas fa-heading"></i> Título do Anúncio *</label>
+                            <span id="meli-edit-title-counter" style="font-size: 0.75rem; color: var(--color-text-offset);">0/60 caracteres</span>
+                        </div>
                         <input type="text" id="meli-edit-title" class="form-control" maxlength="60" required>
                     </div>
 
-                    <div class="form-row-2">
+                    <!-- Identificação & Atributos -->
+                    <div class="form-row-4">
                         <div class="form-group">
-                            <label for="meli-edit-price"><i class="fas fa-tag"></i> Preço de Venda (R$) *</label>
+                            <label for="meli-edit-sku"><i class="fas fa-barcode"></i> SKU / Código Vendedor</label>
+                            <input type="text" id="meli-edit-sku" class="form-control" placeholder="Ex: SKU-102030">
+                        </div>
+                        <div class="form-group">
+                            <label for="meli-edit-gtin"><i class="fas fa-fingerprint"></i> EAN / Código Universal</label>
+                            <input type="text" id="meli-edit-gtin" class="form-control" placeholder="Ex: 7891234567890">
+                        </div>
+                        <div class="form-group">
+                            <label for="meli-edit-brand"><i class="fas fa-tag"></i> Marca</label>
+                            <input type="text" id="meli-edit-brand" class="form-control" placeholder="Ex: Tramontina, Bosch...">
+                        </div>
+                        <div class="form-group">
+                            <label for="meli-edit-model"><i class="fas fa-cube"></i> Modelo</label>
+                            <input type="text" id="meli-edit-model" class="form-control" placeholder="Ex: Profissional, G5...">
+                        </div>
+                    </div>
+
+                    <!-- Preço, Estoque, Tipo e Status -->
+                    <div class="form-row-4">
+                        <div class="form-group">
+                            <label for="meli-edit-price"><i class="fas fa-dollar-sign"></i> Preço de Venda (R$) *</label>
                             <input type="number" step="0.01" min="0.01" id="meli-edit-price" class="form-control" required>
                         </div>
                         <div class="form-group">
                             <label for="meli-edit-stock"><i class="fas fa-cubes"></i> Estoque Disponível *</label>
                             <input type="number" min="0" id="meli-edit-stock" class="form-control" required>
                         </div>
+                        <div class="form-group">
+                            <label for="meli-edit-listing-type"><i class="fas fa-layer-group"></i> Tipo de Anúncio</label>
+                            <select id="meli-edit-listing-type" class="form-control">
+                                <option value="gold_special">Clássico (gold_special)</option>
+                                <option value="gold_pro">Premium (gold_pro)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="meli-edit-status"><i class="fas fa-toggle-on"></i> Status do Anúncio *</label>
+                            <select id="meli-edit-status" class="form-control" required>
+                                <option value="active">🟢 Ativo (Em venda)</option>
+                                <option value="paused">🟠 Pausado</option>
+                                <option value="closed">🔴 Finalizado / Fechado</option>
+                            </select>
+                        </div>
                     </div>
 
+                    <!-- Galeria de Imagens -->
                     <div class="form-group">
-                        <label for="meli-edit-status"><i class="fas fa-toggle-on"></i> Status do Anúncio *</label>
-                        <select id="meli-edit-status" class="form-control" required>
-                            <option value="active">Ativo (Em venda)</option>
-                            <option value="paused">Pausado</option>
-                            <option value="closed">Finalizado / Encerrado</option>
-                        </select>
+                        <label><i class="fas fa-images"></i> Galeria de Fotos do Anúncio</label>
+                        <div style="display: flex; gap: 0.65rem; margin-bottom: 0.75rem;">
+                            <input type="url" id="meli-edit-new-image" class="form-control" placeholder="Cole a URL de uma nova foto (Ex: https://dominio.com/foto.jpg)">
+                            <button type="button" class="btn btn-secondary" id="meli-edit-add-image-btn" style="min-width: 140px;">
+                                <i class="fas fa-plus"></i> Adicionar Foto
+                            </button>
+                        </div>
+                        <div id="meli-edit-images-list" class="meli-images-grid">
+                            <!-- Miniaturas das imagens do anúncio serão exibidas aqui -->
+                        </div>
+                    </div>
+
+                    <!-- Vídeo -->
+                    <div class="form-group">
+                        <label for="meli-edit-video"><i class="fab fa-youtube" style="color: #ef4444;"></i> Vídeo do YouTube (Link ou ID)</label>
+                        <input type="text" id="meli-edit-video" class="form-control" placeholder="Ex: https://www.youtube.com/watch?v=dQw4w9WgXcQ ou dQw4w9WgXcQ">
+                    </div>
+
+                    <!-- Descrição -->
+                    <div class="form-group">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                            <label for="meli-edit-description" style="margin: 0;"><i class="fas fa-align-left"></i> Descrição do Anúncio (Texto Simples)</label>
+                            <span id="meli-edit-desc-status" style="font-size: 0.75rem; color: var(--color-text-offset);">Carregando descrição...</span>
+                        </div>
+                        <textarea id="meli-edit-description" class="form-control" rows="5" placeholder="Detalhes, especificações técnicas, compatibilidade do produto..."></textarea>
+                    </div>
+
+                    <!-- Sincronização & Markup -->
+                    <div class="meli-sync-options-box">
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                            <h4 style="font-size: 0.9rem; font-weight: 600; margin: 0;"><i class="fas fa-rotate"></i> Automação de Sincronização</h4>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <label for="meli-edit-markup" style="font-size: 0.82rem; color: var(--color-text-offset); margin: 0;">Markup (%):</label>
+                                <input type="number" step="0.1" min="0" id="meli-edit-markup" class="form-control" style="width: 90px; height: 32px; padding: 0.2rem 0.5rem; font-size: 0.85rem;" placeholder="0.0">
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 1.5rem; flex-wrap: wrap; margin-top: 0.75rem;">
+                            <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
+                                <input type="checkbox" id="meli-edit-sync-stock"> Sincronizar estoque automaticamente com a fonte
+                            </label>
+                            <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
+                                <input type="checkbox" id="meli-edit-sync-price"> Sincronizar preço quando houver alteração de custo
+                            </label>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -377,7 +456,7 @@
                     <i class="fas fa-times"></i> Cancelar
                 </button>
                 <button type="submit" form="meli-edit-form" class="btn btn-primary" id="meli-edit-save-btn">
-                    <i class="fas fa-check"></i> Salvar Alterações
+                    <i class="fas fa-check"></i> Salvar Todas as Alterações
                 </button>
             </div>
         </div>

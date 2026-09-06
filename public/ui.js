@@ -63,19 +63,35 @@ document.addEventListener('DOMContentLoaded', () => {
     const meliSubmitPublishBtn = document.getElementById('meli-submit-publish-btn');
     const meliCreateModalCloseBtns = document.querySelectorAll('.meli-create-modal-close');
 
-    // Modal de Edição do Mercado Livre
+    // Modal de Edição Completa do Mercado Livre
     const meliEditModal = document.getElementById('meli-edit-modal');
     const meliEditForm = document.getElementById('meli-edit-form');
     const meliEditItemId = document.getElementById('meli-edit-item-id');
     const meliEditConnectionId = document.getElementById('meli-edit-connection-id');
     const meliEditTitle = document.getElementById('meli-edit-title');
+    const meliEditTitleCounter = document.getElementById('meli-edit-title-counter');
+    const meliEditSku = document.getElementById('meli-edit-sku');
+    const meliEditGtin = document.getElementById('meli-edit-gtin');
+    const meliEditBrand = document.getElementById('meli-edit-brand');
+    const meliEditModel = document.getElementById('meli-edit-model');
     const meliEditPrice = document.getElementById('meli-edit-price');
     const meliEditStock = document.getElementById('meli-edit-stock');
+    const meliEditListingType = document.getElementById('meli-edit-listing-type');
     const meliEditStatus = document.getElementById('meli-edit-status');
+    const meliEditNewImage = document.getElementById('meli-edit-new-image');
+    const meliEditAddImageBtn = document.getElementById('meli-edit-add-image-btn');
+    const meliEditImagesList = document.getElementById('meli-edit-images-list');
+    const meliEditVideo = document.getElementById('meli-edit-video');
+    const meliEditDescription = document.getElementById('meli-edit-description');
+    const meliEditDescStatus = document.getElementById('meli-edit-desc-status');
+    const meliEditMarkup = document.getElementById('meli-edit-markup');
+    const meliEditSyncStock = document.getElementById('meli-edit-sync-stock');
+    const meliEditSyncPrice = document.getElementById('meli-edit-sync-price');
     const meliEditSaveBtn = document.getElementById('meli-edit-save-btn');
     const meliEditModalCloseBtns = document.querySelectorAll('.meli-edit-modal-close');
 
     let meliImagesList = [];
+    let meliEditImagesArray = [];
 
     /**
      * Inicializa a lógica do seletor de tema (Dark Mode).
@@ -380,19 +396,134 @@ document.addEventListener('DOMContentLoaded', () => {
         if (meliCreateModal) meliCreateModal.style.display = 'none';
     };
 
-    const openMeliEditModal = (item) => {
+    const renderMeliEditImages = () => {
+        if (!meliEditImagesList) return;
+        if (meliEditImagesArray.length === 0) {
+            meliEditImagesList.innerHTML = `
+                <div style="grid-column: 1/-1; text-align: center; color: var(--color-text-offset); font-size: 0.82rem; padding: 1.2rem;">
+                    <i class="fas fa-image" style="font-size: 1.5rem; margin-bottom: 0.35rem; display: block;"></i>
+                    Nenhuma foto cadastrada. Cole a URL pública da foto e clique em "Adicionar Foto".
+                </div>
+            `;
+            return;
+        }
+
+        let html = '';
+        meliEditImagesArray.forEach((url, idx) => {
+            html += `
+                <div class="meli-image-card" data-idx="${idx}">
+                    <img src="${url}" alt="Foto ${idx + 1}" onerror="this.src='/assets/logos/default-erp.svg'">
+                    ${idx === 0 ? '<span class="meli-image-cover-badge">Capa</span>' : ''}
+                    <button type="button" class="meli-image-remove" data-action="remove-meli-edit-image" data-idx="${idx}" title="Remover imagem">&times;</button>
+                </div>
+            `;
+        });
+        meliEditImagesList.innerHTML = html;
+    };
+
+    const openMeliEditModal = async (item) => {
         if (!meliEditModal) return;
-        if (meliEditItemId) meliEditItemId.value = item.item_id || item.id;
-        if (meliEditConnectionId) meliEditConnectionId.value = item.connection_id;
-        if (meliEditTitle) meliEditTitle.value = item.title || '';
-        if (meliEditPrice) meliEditPrice.value = (typeof item.price === 'number' ? item.price : parseFloat(item.price)).toFixed(2);
-        if (meliEditStock) meliEditStock.value = item.available_quantity || 0;
+        if (meliEditForm) meliEditForm.reset();
+        meliEditImagesArray = [];
+
+        const itemId = item.item_id || item.id;
+        const connectionId = item.connection_id;
+
+        if (meliEditItemId) meliEditItemId.value = itemId;
+        if (meliEditConnectionId) meliEditConnectionId.value = connectionId;
+        if (meliEditTitle) {
+            meliEditTitle.value = item.title || '';
+            if (meliEditTitleCounter) meliEditTitleCounter.textContent = `${meliEditTitle.value.length}/60 caracteres`;
+        }
+        if (meliEditSku) meliEditSku.value = item.sku || '';
+        if (meliEditPrice) meliEditPrice.value = (typeof item.price === 'number' ? item.price : parseFloat(item.price || 0)).toFixed(2);
+        if (meliEditStock) meliEditStock.value = item.available_quantity !== undefined ? item.available_quantity : 0;
+        if (meliEditListingType) meliEditListingType.value = item.listing_type_id || 'gold_special';
         if (meliEditStatus) meliEditStatus.value = item.status || 'active';
+        if (meliEditMarkup) meliEditMarkup.value = item.markup_percent !== undefined ? item.markup_percent : 0;
+        if (meliEditSyncStock) meliEditSyncStock.checked = !!item.sync_auto_stock;
+        if (meliEditSyncPrice) meliEditSyncPrice.checked = !!item.sync_auto_price;
+
+        if (meliEditDescStatus) meliEditDescStatus.textContent = 'Carregando detalhes e fotos da API...';
+        if (meliEditDescription) meliEditDescription.value = '';
+
+        // Se tem thumbnail imediata, coloca temporariamente
+        if (item.thumbnail && item.thumbnail.startsWith('http')) {
+            meliEditImagesArray.push(item.thumbnail);
+        }
+        renderMeliEditImages();
 
         const subTitle = document.getElementById('meli-edit-modal-subtitle');
-        if (subTitle) subTitle.textContent = `Anúncio: ${item.item_id || item.id} | SKU: ${item.sku || 'N/D'}`;
+        if (subTitle) subTitle.textContent = `MLB: ${itemId} | SKU: ${item.sku || 'N/D'}`;
 
         meliEditModal.style.display = 'flex';
+
+        // Carrega dados completos em segundo plano da API do Mercado Livre
+        try {
+            const res = await api(`/api/marketplace/mercadolivre/items/${itemId}/details?connectionId=${connectionId}`);
+            if (res.sucesso) {
+                const fullItem = res.item || {};
+                const local = res.localItem || {};
+
+                // Descrição
+                if (meliEditDescription) {
+                    meliEditDescription.value = res.description || '';
+                }
+                if (meliEditDescStatus) {
+                    meliEditDescStatus.textContent = res.description ? 'Descrição sincronizada' : 'Sem descrição cadastrada';
+                }
+
+                // Fotos completas
+                meliEditImagesArray = [];
+                if (Array.isArray(fullItem.pictures) && fullItem.pictures.length > 0) {
+                    fullItem.pictures.forEach(p => {
+                        const u = p.secure_url || p.url || p.source;
+                        if (u) meliEditImagesArray.push(u);
+                    });
+                } else if (item.thumbnail && item.thumbnail.startsWith('http')) {
+                    meliEditImagesArray.push(item.thumbnail);
+                }
+                renderMeliEditImages();
+
+                // Atributos (EAN / GTIN, Marca, Modelo)
+                if (Array.isArray(fullItem.attributes)) {
+                    const gtinAttr = fullItem.attributes.find(a => a.id === 'GTIN' || a.id === 'EAN');
+                    if (gtinAttr && meliEditGtin) meliEditGtin.value = gtinAttr.value_name || '';
+
+                    const brandAttr = fullItem.attributes.find(a => a.id === 'BRAND');
+                    if (brandAttr && meliEditBrand) meliEditBrand.value = brandAttr.value_name || '';
+
+                    const modelAttr = fullItem.attributes.find(a => a.id === 'MODEL');
+                    if (modelAttr && meliEditModel) meliEditModel.value = modelAttr.value_name || '';
+
+                    const skuAttr = fullItem.attributes.find(a => a.id === 'SELLER_SKU');
+                    if (skuAttr && meliEditSku && !meliEditSku.value) meliEditSku.value = skuAttr.value_name || '';
+                }
+
+                // Vídeo
+                if (meliEditVideo && fullItem.video_id) {
+                    meliEditVideo.value = fullItem.video_id;
+                }
+
+                // Tipo de listagem
+                if (meliEditListingType && fullItem.listing_type_id) {
+                    meliEditListingType.value = fullItem.listing_type_id;
+                }
+
+                // Sincronizações locais
+                if (local.sync_auto_stock !== undefined && meliEditSyncStock) {
+                    meliEditSyncStock.checked = !!local.sync_auto_stock;
+                }
+                if (local.sync_auto_price !== undefined && meliEditSyncPrice) {
+                    meliEditSyncPrice.checked = !!local.sync_auto_price;
+                }
+                if (local.markup_percent !== undefined && meliEditMarkup) {
+                    meliEditMarkup.value = local.markup_percent;
+                }
+            }
+        } catch (err) {
+            if (meliEditDescStatus) meliEditDescStatus.textContent = 'Não foi possível carregar descrição remota.';
+        }
     };
 
     const closeMeliEditModal = () => {
@@ -652,18 +783,78 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Submissão do Formulário de Edição Rápida
+    // Gerenciador de Título e Fotos no Modal de Edição
+    if (meliEditTitle) {
+        meliEditTitle.addEventListener('input', () => {
+            if (meliEditTitleCounter) {
+                meliEditTitleCounter.textContent = `${meliEditTitle.value.length}/60 caracteres`;
+            }
+        });
+    }
+
+    if (meliEditAddImageBtn) {
+        meliEditAddImageBtn.addEventListener('click', () => {
+            const url = meliEditNewImage ? meliEditNewImage.value.trim() : '';
+            if (!url || !url.startsWith('http')) {
+                showToast('Informe uma URL de imagem válida (iniciando com http:// ou https://).', 'warning');
+                return;
+            }
+            meliEditImagesArray.push(url);
+            if (meliEditNewImage) meliEditNewImage.value = '';
+            renderMeliEditImages();
+            showToast('Foto adicionada ao anúncio!', 'info');
+        });
+    }
+
+    if (meliEditImagesList) {
+        meliEditImagesList.addEventListener('click', (e) => {
+            const removeBtn = e.target.closest('[data-action="remove-meli-edit-image"]');
+            if (!removeBtn) return;
+            const idx = parseInt(removeBtn.dataset.idx, 10);
+            if (!isNaN(idx)) {
+                meliEditImagesArray.splice(idx, 1);
+                renderMeliEditImages();
+            }
+        });
+    }
+
+    // Submissão do Formulário de Edição Completa do Mercado Livre
     if (meliEditForm) {
         meliEditForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const itemId = meliEditItemId ? meliEditItemId.value : '';
             const connectionId = meliEditConnectionId ? meliEditConnectionId.value : '';
             const title = meliEditTitle ? meliEditTitle.value.trim() : '';
+            const sku = meliEditSku ? meliEditSku.value.trim() : '';
+            const gtin = meliEditGtin ? meliEditGtin.value.trim() : '';
+            const brand = meliEditBrand ? meliEditBrand.value.trim() : '';
+            const model = meliEditModel ? meliEditModel.value.trim() : '';
             const price = meliEditPrice ? parseFloat(meliEditPrice.value) : 0;
             const stock = meliEditStock ? parseInt(meliEditStock.value, 10) : 0;
+            const listingTypeId = meliEditListingType ? meliEditListingType.value : 'gold_special';
             const status = meliEditStatus ? meliEditStatus.value : 'active';
+            const videoId = meliEditVideo ? meliEditVideo.value.trim() : '';
+            const description = meliEditDescription ? meliEditDescription.value.trim() : '';
+            const markupPercent = meliEditMarkup ? parseFloat(meliEditMarkup.value) : 0;
+            const syncAutoStock = meliEditSyncStock ? meliEditSyncStock.checked : false;
+            const syncAutoPrice = meliEditSyncPrice ? meliEditSyncPrice.checked : false;
 
-            if (!itemId) return;
+            if (!itemId) {
+                showToast('ID do anúncio não identificado.', 'error');
+                return;
+            }
+            if (!title) {
+                showToast('O título do anúncio não pode ficar vazio.', 'warning');
+                return;
+            }
+            if (!price || price <= 0) {
+                showToast('Informe um preço de venda válido maior que zero.', 'warning');
+                return;
+            }
+            if (meliEditImagesArray.length === 0) {
+                showToast('O anúncio precisa ter pelo menos uma foto cadastrada.', 'warning');
+                return;
+            }
 
             if (meliEditSaveBtn) {
                 meliEditSaveBtn.classList.add('loading');
@@ -671,13 +862,26 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             try {
-                await api(`/api/marketplace/mercadolivre/items/${itemId}/update`, 'PUT', {
+                const payload = {
                     connectionId,
                     title,
                     price,
                     available_quantity: stock,
-                    status
-                });
+                    status,
+                    listing_type_id: listingTypeId,
+                    sku,
+                    gtin,
+                    brand,
+                    model,
+                    video_id: videoId,
+                    description,
+                    pictures: meliEditImagesArray.map(u => ({ source: u })),
+                    sync_auto_stock: syncAutoStock,
+                    sync_auto_price: syncAutoPrice,
+                    markup_percent: markupPercent
+                };
+
+                await api(`/api/marketplace/mercadolivre/items/${itemId}/update`, 'PUT', payload);
                 showToast('Anúncio atualizado com sucesso no Mercado Livre!', 'success');
                 closeMeliEditModal();
 
@@ -686,7 +890,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     renderMercadoLivreListings();
                 }
             } catch (editErr) {
-                showToast(`Erro ao atualizar: ${editErr.message}`, 'error');
+                showToast(`Erro ao atualizar anúncio: ${editErr.message}`, 'error');
             } finally {
                 if (meliEditSaveBtn) {
                     meliEditSaveBtn.classList.remove('loading');
@@ -1950,7 +2154,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                             <i class="fas fa-rotate"></i>
                                         </button>
                                     ` : ''}
-                                    <button class="card-action-btn" data-action="edit-meli-item" data-item="${encodeURIComponent(JSON.stringify(item))}" data-tooltip="Editar Preço / Estoque">
+                                    <button class="card-action-btn" data-action="edit-meli-item" data-item="${encodeURIComponent(JSON.stringify(item))}" data-tooltip="Editar Anúncio Completo (Preço, Estoque, Fotos, Descrição...)">
                                         <i class="fas fa-pencil"></i>
                                     </button>
                                 </div>
