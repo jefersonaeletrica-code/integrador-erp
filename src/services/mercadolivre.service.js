@@ -1012,4 +1012,87 @@ export async function checkClipStatus(connection, clipId, itemId, db) {
     }
 }
 
+/**
+ * Obtém informações de concorrência e preço sugerido para ganhar a Buy Box do Catálogo
+ * @param {object} connection - Conexão do Mercado Livre
+ * @param {string} itemId - ID do anúncio (MLB...)
+ * @param {object} db - Instância do banco de dados
+ * @returns {Promise<object>} Status de competição, preço sugerido e vencedor da Buy Box
+ */
+export async function getItemPriceToWin(connection, itemId, db) {
+    const token = await ensureValidToken(connection, db);
+
+    try {
+        logger.info(`[MercadoLivreService] Consultando price_to_win para o anúncio ${itemId}...`);
+        
+        let ptwData = null;
+        try {
+            const res = await meliAxios.get(`/items/${itemId}/price_to_win`, {
+                params: { version: 'v2' },
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            ptwData = res.data;
+        } catch (v2Err) {
+            try {
+                const fallbackRes = await meliAxios.get(`/items/${itemId}/price_to_win`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                ptwData = fallbackRes.data;
+            } catch (fbErr) {
+                logger.warn(`[MercadoLivreService] Anúncio ${itemId} sem dados de price_to_win: ${fbErr.message}`);
+            }
+        }
+
+        if (!ptwData) {
+            return {
+                is_catalog: true,
+                status: 'competing',
+                status_label: 'Em Concorrência',
+                price_to_win: null,
+                current_price: null,
+                winner: null,
+                is_winner: false,
+                details: null
+            };
+        }
+
+        const rawStatus = String(ptwData.status || '').toLowerCase();
+        const priceToWin = ptwData.price_to_win ?? ptwData.price ?? ptwData.suggested_price ?? null;
+        const currentPrice = ptwData.current_price ?? null;
+        const winner = ptwData.winner || null;
+        const isWinner = rawStatus === 'winner' || rawStatus === 'winning' || (winner && (winner.item_id === itemId || winner.is_winner));
+
+        let status = 'competing';
+        let statusLabel = 'Em Concorrência';
+
+        if (isWinner) {
+            status = 'winner';
+            statusLabel = 'Ganhando a Buy Box 🏆';
+        } else if (rawStatus === 'opportunity' || rawStatus === 'losing' || priceToWin !== null) {
+            status = 'losing';
+            statusLabel = 'Perdendo a Buy Box ⚡';
+        } else if (rawStatus === 'without_competition') {
+            status = 'without_competition';
+            statusLabel = 'Sem Concorrência Direta';
+        }
+
+        return {
+            is_catalog: true,
+            status,
+            status_label: statusLabel,
+            price_to_win: priceToWin !== null ? parseFloat(priceToWin) : null,
+            current_price: currentPrice !== null ? parseFloat(currentPrice) : null,
+            winner,
+            is_winner: isWinner,
+            catalog_product_id: ptwData.catalog_product_id || null,
+            details: ptwData,
+            checked_at: new Date().toISOString()
+        };
+    } catch (error) {
+        logger.error(`[MercadoLivreService] Erro ao consultar price_to_win de ${itemId}: ${error.message}`);
+        return null;
+    }
+}
+
+
 

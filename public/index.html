@@ -394,6 +394,47 @@
                         </div>
                     </div>
 
+                    <!-- Seção Especial: Anúncio de Catálogo & Concorrência na Buy Box -->
+                    <div class="meli-edit-section-card meli-catalog-competition-card" id="meli-edit-catalog-container" style="display: none;">
+                        <div class="meli-section-header">
+                            <h3 class="meli-section-title">
+                                <i class="fas fa-bookmark" style="color: #6366f1;"></i> Catálogo Mercado Livre & Concorrência Buy Box
+                                <span id="meli-edit-catalog-badge" class="catalog-badge-pill"><i class="fas fa-certificate"></i> Catálogo Ativo</span>
+                            </h3>
+                            <button type="button" class="btn btn-small btn-secondary" id="meli-edit-catalog-refresh-btn" title="Consultar status de competição na Buy Box em tempo real">
+                                <i class="fas fa-rotate"></i> Atualizar Concorrência
+                            </button>
+                        </div>
+                        
+                        <div class="meli-catalog-grid">
+                            <div class="meli-catalog-stat-box">
+                                <div class="stat-label"><i class="fas fa-trophy"></i> Status da Buy Box</div>
+                                <div class="stat-val" id="meli-edit-catalog-status">Carregando...</div>
+                                <small id="meli-edit-catalog-status-desc" class="stat-desc">-</small>
+                            </div>
+                            <div class="meli-catalog-stat-box">
+                                <div class="stat-label"><i class="fas fa-tag"></i> Seu Preço Atual</div>
+                                <div class="stat-val" id="meli-edit-catalog-current-price">R$ 0,00</div>
+                                <small class="stat-desc">Preço ativo no anúncio</small>
+                            </div>
+                            <div class="meli-catalog-stat-box highlight-stat">
+                                <div class="stat-label"><i class="fas fa-bolt"></i> Preço Sugerido p/ Ganhar</div>
+                                <div class="stat-val" id="meli-edit-catalog-price-to-win">R$ 0,00</div>
+                                <small id="meli-edit-catalog-diff-desc" class="stat-desc">Diferença de preço</small>
+                            </div>
+                        </div>
+
+                        <div class="meli-catalog-action-banner" id="meli-edit-catalog-action-banner" style="display: none;">
+                            <div class="banner-content">
+                                <i class="fas fa-lightbulb" style="color: #f59e0b; font-size: 1.1rem;"></i>
+                                <span id="meli-edit-catalog-banner-text">Você pode conquistar a posição de destaque (Buy Box) ajustando seu preço para o valor sugerido.</span>
+                            </div>
+                            <button type="button" class="btn btn-small btn-success" id="meli-edit-catalog-apply-price-btn">
+                                <i class="fas fa-bolt"></i> Aplicar Preço p/ Ganhar
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- 3. Preço, Estoque & Condições -->
                     <div class="meli-edit-section-card">
                         <div class="meli-section-header">

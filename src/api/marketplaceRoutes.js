@@ -542,6 +542,11 @@ export default (db) => {
                 markup_percent: parseFloat(r.markup_percent || 0),
                 sync_auto_stock: !!r.sync_auto_stock,
                 sync_auto_price: !!r.sync_auto_price,
+                catalog_listing: !!r.catalog_listing,
+                catalog_product_id: r.catalog_product_id || null,
+                catalog_status: r.catalog_status || null,
+                catalog_price_to_win: r.catalog_price_to_win !== null && r.catalog_price_to_win !== undefined ? parseFloat(r.catalog_price_to_win) : null,
+                catalog_details: safeJsonParse(r.catalog_details),
                 source_data: safeJsonParse(r.source_data),
                 credentials: undefined // omite credenciais
             }));
@@ -685,6 +690,7 @@ export default (db) => {
             // Busca os dados diretamente do Mercado Livre (fotos, atributos, etc.)
             let meliItem = null;
             let description = '';
+            let catalog = null;
 
             try {
                 meliItem = await meliService.getItem(connection, itemId, db);
@@ -698,14 +704,81 @@ export default (db) => {
                 logger.warn(`[MarketplaceRoutes] Falha ao buscar descrição do item ${itemId}: ${err.message}`);
             }
 
+            // Se for item de catálogo, busca status da Buy Box e preço sugerido para ganhar
+            const isCatalog = !!(meliItem?.catalog_listing || localItem?.catalog_listing || meliItem?.catalog_product_id);
+            if (isCatalog) {
+                try {
+                    catalog = await meliService.getItemPriceToWin(connection, itemId, db);
+                    if (catalog) {
+                        await pool.execute(
+                            'UPDATE mercado_livre_anuncios SET catalog_listing = 1, catalog_product_id = ?, catalog_status = ?, catalog_price_to_win = ?, catalog_details = ? WHERE item_id = ?',
+                            [
+                                catalog.catalog_product_id || meliItem?.catalog_product_id || localItem?.catalog_product_id || null,
+                                catalog.status || null,
+                                catalog.price_to_win !== null && catalog.price_to_win !== undefined ? parseFloat(catalog.price_to_win) : null,
+                                catalog.details ? JSON.stringify(catalog.details) : null,
+                                itemId
+                            ]
+                        );
+                    }
+                } catch (catErr) {
+                    logger.warn(`[MarketplaceRoutes] Falha ao buscar concorrência de catálogo do item ${itemId}: ${catErr.message}`);
+                }
+            }
+
             res.json({
                 sucesso: true,
                 item: meliItem || localItem,
                 localItem,
-                description
+                description,
+                catalog
             });
         } catch (error) {
             logger.error(`[MarketplaceRoutes] Erro ao buscar detalhes do anúncio ${itemId}: ${error.message}`, error);
+            res.status(500).json({ sucesso: false, erro: error.message });
+        }
+    });
+
+    router.get('/marketplace/mercadolivre/items/:itemId/price-to-win', async (req, res) => {
+        const { itemId } = req.params;
+        const { connectionId } = req.query;
+
+        try {
+            const pool = db.getPool();
+            const [rows] = await pool.execute('SELECT * FROM mercado_livre_anuncios WHERE item_id = ?', [itemId]);
+            const localItem = rows[0];
+
+            const resolvedConnId = connectionId || localItem?.connection_id;
+            if (!resolvedConnId) {
+                return res.status(400).json({ sucesso: false, erro: 'Conexão do anúncio não identificada.' });
+            }
+
+            const connection = await findMarketplaceConnectionById(resolvedConnId);
+            if (!connection) {
+                return res.status(404).json({ sucesso: false, erro: 'Conexão do Mercado Livre não encontrada.' });
+            }
+
+            const catalog = await meliService.getItemPriceToWin(connection, itemId, db);
+
+            if (catalog) {
+                await pool.execute(
+                    'UPDATE mercado_livre_anuncios SET catalog_listing = 1, catalog_product_id = ?, catalog_status = ?, catalog_price_to_win = ?, catalog_details = ? WHERE item_id = ?',
+                    [
+                        catalog.catalog_product_id || localItem?.catalog_product_id || null,
+                        catalog.status || null,
+                        catalog.price_to_win !== null && catalog.price_to_win !== undefined ? parseFloat(catalog.price_to_win) : null,
+                        catalog.details ? JSON.stringify(catalog.details) : null,
+                        itemId
+                    ]
+                );
+            }
+
+            res.json({
+                sucesso: true,
+                catalog
+            });
+        } catch (error) {
+            logger.error(`[MarketplaceRoutes] Erro ao consultar price_to_win do anúncio ${itemId}: ${error.message}`, error);
             res.status(500).json({ sucesso: false, erro: error.message });
         }
     });
@@ -1003,6 +1076,7 @@ export default (db) => {
                     ? (item.pictures[0].secure_url || item.pictures[0].url)
                     : (item.thumbnail || null);
 
+                const isCatalog = !!(item.catalog_listing || item.catalog_product_id);
                 const anuncio = {
                     connection_id: connection.id,
                     item_id: item.id,
@@ -1014,6 +1088,8 @@ export default (db) => {
                     listing_type_id: item.listing_type_id || 'gold_special',
                     permalink: item.permalink,
                     thumbnail,
+                    catalog_listing: isCatalog,
+                    catalog_product_id: item.catalog_product_id || null,
                     category_id: item.category_id,
                     category_name: null,
                     source_type: 'manual',

@@ -2343,3 +2343,172 @@ body.dark-mode .clip-status-badge.rejected {
     margin-top: 0.35rem;
     flex-wrap: wrap;
 }
+
+/* ==========================================================================
+   14. Mercado Livre Catalog & Buy Box Competition Styles
+   ========================================================================== */
+
+/* Badges para a Tabela de Listagem */
+.catalog-listing-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.22rem 0.6rem;
+    border-radius: var(--border-radius-full);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.15) 0%, rgba(79, 70, 229, 0.22) 100%);
+    color: #4f46e5;
+    border: 1px solid rgba(99, 102, 241, 0.35);
+}
+
+body.dark-mode .catalog-listing-badge {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(79, 70, 229, 0.35) 100%);
+    color: #a5b4fc;
+    border-color: rgba(99, 102, 241, 0.5);
+}
+
+.buybox-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.7rem;
+    font-weight: 700;
+}
+
+.buybox-badge.winning {
+    background-color: #ecfdf5;
+    color: #065f46;
+    border: 1px solid #a7f3d0;
+}
+
+body.dark-mode .buybox-badge.winning {
+    background-color: rgba(16, 185, 129, 0.18);
+    color: #34d399;
+    border-color: rgba(16, 185, 129, 0.35);
+}
+
+.buybox-badge.losing {
+    background-color: #fffbeb;
+    color: #92400e;
+    border: 1px solid #fde68a;
+}
+
+body.dark-mode .buybox-badge.losing {
+    background-color: rgba(245, 158, 11, 0.18);
+    color: #fbbf24;
+    border-color: rgba(245, 158, 11, 0.35);
+}
+
+.buybox-badge.competing {
+    background-color: #eff6ff;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+}
+
+body.dark-mode .buybox-badge.competing {
+    background-color: rgba(59, 130, 246, 0.18);
+    color: #93c5fd;
+    border-color: rgba(59, 130, 246, 0.35);
+}
+
+/* Card de Concorrência e Buy Box no Modal de Edição */
+.meli-catalog-competition-card {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.04) 0%, rgba(79, 70, 229, 0.08) 100%);
+    border: 1px solid rgba(99, 102, 241, 0.25) !important;
+}
+
+body.dark-mode .meli-catalog-competition-card {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(79, 70, 229, 0.14) 100%);
+    border-color: rgba(99, 102, 241, 0.35) !important;
+}
+
+.catalog-badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.65rem;
+    border-radius: var(--border-radius-full);
+    font-size: 0.74rem;
+    font-weight: 700;
+    background-color: #6366f1;
+    color: #ffffff;
+    letter-spacing: 0.02em;
+    margin-left: 0.5rem;
+}
+
+.meli-catalog-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.85rem;
+    margin-top: 0.85rem;
+}
+
+@media (max-width: 650px) {
+    .meli-catalog-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.meli-catalog-stat-box {
+    background-color: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-md);
+    padding: 0.85rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.meli-catalog-stat-box.highlight-stat {
+    border-color: #6366f1;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(79, 70, 229, 0.12) 100%);
+}
+
+.meli-catalog-stat-box .stat-label {
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: var(--color-text-offset);
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+}
+
+.meli-catalog-stat-box .stat-val {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--color-text);
+    font-family: var(--font-family-mono);
+}
+
+.meli-catalog-stat-box .stat-desc {
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+}
+
+.meli-catalog-action-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-top: 0.95rem;
+    padding: 0.85rem 1.1rem;
+    background-color: var(--color-card-bg);
+    border: 1px dashed rgba(99, 102, 241, 0.45);
+    border-radius: var(--border-radius-md);
+    flex-wrap: wrap;
+}
+
+.meli-catalog-action-banner .banner-content {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    font-size: 0.84rem;
+    font-weight: 600;
+    color: var(--color-text);
+    flex: 1;
+    min-width: 200px;
+}

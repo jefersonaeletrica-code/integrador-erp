@@ -109,9 +109,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const meliEditSaveBtn = document.getElementById('meli-edit-save-btn');
     const meliEditModalCloseBtns = document.querySelectorAll('.meli-edit-modal-close');
 
+    // Elementos de Catálogo & Concorrência na Buy Box
+    const meliEditCatalogContainer = document.getElementById('meli-edit-catalog-container');
+    const meliEditCatalogBadge = document.getElementById('meli-edit-catalog-badge');
+    const meliEditCatalogRefreshBtn = document.getElementById('meli-edit-catalog-refresh-btn');
+    const meliEditCatalogStatus = document.getElementById('meli-edit-catalog-status');
+    const meliEditCatalogStatusDesc = document.getElementById('meli-edit-catalog-status-desc');
+    const meliEditCatalogCurrentPrice = document.getElementById('meli-edit-catalog-current-price');
+    const meliEditCatalogPriceToWin = document.getElementById('meli-edit-catalog-price-to-win');
+    const meliEditCatalogDiffDesc = document.getElementById('meli-edit-catalog-diff-desc');
+    const meliEditCatalogActionBanner = document.getElementById('meli-edit-catalog-action-banner');
+    const meliEditCatalogBannerText = document.getElementById('meli-edit-catalog-banner-text');
+    const meliEditCatalogApplyPriceBtn = document.getElementById('meli-edit-catalog-apply-price-btn');
+
     let meliImagesList = [];
     let meliEditImagesArray = [];
     let meliCurrentClip = null;
+    let meliCurrentCatalog = null;
 
     /**
      * Inicializa a lógica do seletor de tema (Dark Mode).
@@ -610,6 +624,85 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const renderMeliCatalogState = (catalogData, currentPriceVal) => {
+        meliCurrentCatalog = catalogData;
+        if (!catalogData || !catalogData.is_catalog) {
+            if (meliEditCatalogContainer) meliEditCatalogContainer.style.display = 'none';
+            return;
+        }
+
+        if (meliEditCatalogContainer) meliEditCatalogContainer.style.display = 'block';
+
+        const numCurrentPrice = typeof currentPriceVal === 'number' ? currentPriceVal : parseFloat(String(currentPriceVal).replace(/[^\d.,]/g, '').replace(',', '.')) || 0;
+        if (meliEditCatalogCurrentPrice) {
+            meliEditCatalogCurrentPrice.textContent = numCurrentPrice > 0 ? `R$ ${numCurrentPrice.toFixed(2)}` : 'N/D';
+        }
+
+        const rawStatus = String(catalogData.status || '').toLowerCase();
+        const isWinner = !!catalogData.is_winner || rawStatus === 'winner' || rawStatus === 'winning';
+        const priceToWin = catalogData.price_to_win !== null && catalogData.price_to_win !== undefined ? parseFloat(catalogData.price_to_win) : null;
+
+        if (meliEditCatalogStatus) {
+            if (isWinner) {
+                meliEditCatalogStatus.innerHTML = '<span style="color: #10b981;"><i class="fas fa-trophy"></i> Ganhando a Buy Box</span>';
+            } else if (rawStatus === 'losing' || rawStatus === 'opportunity' || priceToWin !== null) {
+                meliEditCatalogStatus.innerHTML = '<span style="color: #f59e0b;"><i class="fas fa-bolt"></i> Perdendo a Buy Box</span>';
+            } else if (rawStatus === 'without_competition') {
+                meliEditCatalogStatus.innerHTML = '<span style="color: #6b7280;"><i class="fas fa-circle-check"></i> Sem Concorrência</span>';
+            } else {
+                meliEditCatalogStatus.innerHTML = '<span style="color: #6366f1;"><i class="fas fa-arrows-split-up-and-left"></i> Em Concorrência</span>';
+            }
+        }
+
+        if (meliEditCatalogStatusDesc) {
+            if (isWinner) {
+                meliEditCatalogStatusDesc.textContent = 'Seu anúncio é o vencedor da Buy Box e está em destaque no Mercado Livre.';
+            } else if (priceToWin !== null) {
+                meliEditCatalogStatusDesc.textContent = 'Outro vendedor está oferecendo condições mais competitivas no Catálogo.';
+            } else {
+                meliEditCatalogStatusDesc.textContent = 'Anúncio participando da disputa de visibilidade no Catálogo.';
+            }
+        }
+
+        if (meliEditCatalogPriceToWin) {
+            if (priceToWin !== null && priceToWin > 0) {
+                meliEditCatalogPriceToWin.textContent = `R$ ${priceToWin.toFixed(2)}`;
+                meliEditCatalogPriceToWin.style.color = '#10b981';
+            } else {
+                meliEditCatalogPriceToWin.textContent = isWinner ? 'Preço Vencedor' : 'Sem sugestão direta';
+                meliEditCatalogPriceToWin.style.color = 'var(--color-text)';
+            }
+        }
+
+        if (meliEditCatalogDiffDesc) {
+            if (priceToWin !== null && numCurrentPrice > 0) {
+                const diff = priceToWin - numCurrentPrice;
+                const diffPercent = ((diff / numCurrentPrice) * 100).toFixed(1);
+                if (diff < -0.01) {
+                    meliEditCatalogDiffDesc.innerHTML = `<span style="color: #ef4444; font-weight: 700;">R$ ${diff.toFixed(2)} (${diffPercent}%)</span> para vencer`;
+                } else if (diff > 0.01) {
+                    meliEditCatalogDiffDesc.innerHTML = `<span style="color: #10b981; font-weight: 700;">+R$ ${diff.toFixed(2)} (+${diffPercent}%)</span> margem disponível`;
+                } else {
+                    meliEditCatalogDiffDesc.textContent = 'Preço idêntico ao sugerido';
+                }
+            } else {
+                meliEditCatalogDiffDesc.textContent = isWinner ? 'Você já possui o melhor preço' : '-';
+            }
+        }
+
+        if (meliEditCatalogActionBanner && meliEditCatalogApplyPriceBtn) {
+            if (!isWinner && priceToWin !== null && priceToWin > 0 && Math.abs(priceToWin - numCurrentPrice) > 0.01) {
+                meliEditCatalogActionBanner.style.display = 'flex';
+                if (meliEditCatalogBannerText) {
+                    meliEditCatalogBannerText.innerHTML = `Aplique <strong>R$ ${priceToWin.toFixed(2)}</strong> para aumentar suas chances de ganhar a Buy Box do Catálogo!`;
+                }
+                meliEditCatalogApplyPriceBtn.dataset.suggestedPrice = priceToWin.toFixed(2);
+            } else {
+                meliEditCatalogActionBanner.style.display = 'none';
+            }
+        }
+    };
+
     const openMeliCreateModal = async (initialData = {}) => {
         if (!meliCreateModal) return;
         meliCreateForm.reset();
@@ -712,6 +805,19 @@ document.addEventListener('DOMContentLoaded', () => {
         meliEditImagesArray = [];
         renderMeliClipState(null);
 
+        // Inicializa estado de catálogo local imediato
+        if (item.catalog_listing || item.catalog_product_id) {
+            renderMeliCatalogState({
+                is_catalog: true,
+                catalog_product_id: item.catalog_product_id,
+                status: item.catalog_status || 'competing',
+                price_to_win: item.catalog_price_to_win,
+                details: item.catalog_details
+            }, item.price);
+        } else {
+            renderMeliCatalogState(null);
+        }
+
         const itemId = item.item_id || item.id;
         const connectionId = item.connection_id;
 
@@ -771,6 +877,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     } else {
                         meliEditDescStatus.textContent = res.description ? 'Descrição sincronizada' : 'Sem descrição cadastrada';
                     }
+                }
+
+                // Catálogo & Concorrência na Buy Box
+                if (res.catalog && res.catalog.is_catalog) {
+                    renderMeliCatalogState(res.catalog, fullItem.price || item.price);
+                } else if (fullItem.catalog_listing || fullItem.catalog_product_id || local.catalog_listing) {
+                    renderMeliCatalogState({
+                        is_catalog: true,
+                        catalog_product_id: fullItem.catalog_product_id || local.catalog_product_id,
+                        status: local.catalog_status || 'competing',
+                        price_to_win: local.catalog_price_to_win,
+                        details: local.catalog_details
+                    }, fullItem.price || item.price);
+                } else {
+                    renderMeliCatalogState(null);
                 }
 
                 // Fotos completas
@@ -1262,6 +1383,62 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } else {
                 renderMeliClipState(null);
+            }
+        });
+    }
+
+    // Ações de Catálogo & Concorrência na Buy Box
+    if (meliEditCatalogRefreshBtn) {
+        meliEditCatalogRefreshBtn.addEventListener('click', async () => {
+            const itemId = meliEditItemId ? meliEditItemId.value : '';
+            const connectionId = meliEditConnectionId ? meliEditConnectionId.value : '';
+            if (!itemId) {
+                showToast('ID do anúncio não identificado.', 'error');
+                return;
+            }
+            meliEditCatalogRefreshBtn.classList.add('loading');
+            meliEditCatalogRefreshBtn.disabled = true;
+            try {
+                const res = await api(`/api/marketplace/mercadolivre/items/${itemId}/price-to-win?connectionId=${connectionId}`);
+                if (res.sucesso) {
+                    renderMeliCatalogState(res.catalog, meliEditPrice?.value || 0);
+                    const statusLabel = res.catalog?.is_winner ? 'Ganhando a Buy Box 🏆' : (res.catalog?.price_to_win ? `Perdendo (Preço sugerido: R$ ${parseFloat(res.catalog.price_to_win).toFixed(2)}) ⚡` : 'Concorrendo 🔄');
+                    showToast(`Status do Catálogo atualizado: ${statusLabel}`, 'info');
+                } else {
+                    showToast('Não foi possível obter dados atualizados do Catálogo.', 'warning');
+                }
+            } catch (err) {
+                showToast(`Erro ao consultar concorrência do catálogo: ${err.message}`, 'error');
+            } finally {
+                meliEditCatalogRefreshBtn.classList.remove('loading');
+                meliEditCatalogRefreshBtn.disabled = false;
+            }
+        });
+    }
+
+    if (meliEditCatalogApplyPriceBtn) {
+        meliEditCatalogApplyPriceBtn.addEventListener('click', () => {
+            const suggested = meliEditCatalogApplyPriceBtn.dataset.suggestedPrice;
+            if (!suggested || isNaN(parseFloat(suggested))) {
+                showToast('Nenhum preço sugerido disponível para aplicação.', 'warning');
+                return;
+            }
+            const newPrice = parseFloat(suggested);
+            if (meliEditPrice) {
+                meliEditPrice.value = newPrice.toFixed(2);
+                meliEditPrice.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            if (meliCurrentCatalog) {
+                renderMeliCatalogState(meliCurrentCatalog, newPrice);
+            }
+            showToast(`Preço de R$ ${newPrice.toFixed(2)} aplicado! Clique em "Salvar Alterações" para sincronizar com o Mercado Livre.`, 'success');
+        });
+    }
+
+    if (meliEditPrice) {
+        meliEditPrice.addEventListener('input', () => {
+            if (meliCurrentCatalog && meliCurrentCatalog.is_catalog) {
+                renderMeliCatalogState(meliCurrentCatalog, meliEditPrice.value);
             }
         });
     }
@@ -2517,6 +2694,16 @@ document.addEventListener('DOMContentLoaded', () => {
                             </select>
                         </div>
                         <div class="form-group" style="margin: 0;">
+                            <label for="meli-filter-catalog"><i class="fas fa-certificate"></i> Catálogo / Buy Box</label>
+                            <select id="meli-filter-catalog" class="form-control">
+                                <option value="">Todos os Anúncios</option>
+                                <option value="catalog">🏷️ Anúncios de Catálogo</option>
+                                <option value="winning">🏆 Ganhando Buy Box</option>
+                                <option value="losing">⚡ Perdendo Buy Box</option>
+                                <option value="traditional">📦 Anúncios Tradicionais</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin: 0;">
                             <label for="meli-filter-account"><i class="fas fa-user-tag"></i> Conta ML</label>
                             <select id="meli-filter-account" class="form-control">
                                 <option value="">Todas as Contas</option>
@@ -2554,6 +2741,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const listingsContainer = document.getElementById('meli-listings-container');
             const searchInput = document.getElementById('meli-filter-search');
             const statusSelect = document.getElementById('meli-filter-status');
+            const catalogSelect = document.getElementById('meli-filter-catalog');
             const accountSelect = document.getElementById('meli-filter-account');
             const refreshBtn = document.getElementById('meli-filter-refresh-btn');
             const visibleCountEl = document.getElementById('meli-visible-count');
@@ -2607,6 +2795,33 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const inStock = item.available_quantity > 0;
 
+                    // Badges de Catálogo e Buy Box
+                    const isCatalog = !!(item.catalog_listing || item.catalog_product_id);
+                    let catalogBadges = '';
+                    if (isCatalog) {
+                        const rawCatStatus = String(item.catalog_status || '').toLowerCase();
+                        const isWinner = rawCatStatus === 'winner' || rawCatStatus === 'winning';
+                        const priceToWin = item.catalog_price_to_win !== null && item.catalog_price_to_win !== undefined ? parseFloat(item.catalog_price_to_win) : null;
+                        
+                        let buyboxBadge = '';
+                        if (isWinner) {
+                            buyboxBadge = `<span class="buybox-badge winning" title="Ganhando a Buy Box no Catálogo"><i class="fas fa-trophy"></i> Ganhando</span>`;
+                        } else if (rawCatStatus === 'losing' || rawCatStatus === 'opportunity' || priceToWin !== null) {
+                            buyboxBadge = `<span class="buybox-badge losing" title="Perdendo a Buy Box no Catálogo (Sugerido: R$ ${priceToWin ? priceToWin.toFixed(2) : '-'})"><i class="fas fa-bolt"></i> Perdendo</span>`;
+                        } else if (rawCatStatus === 'without_competition') {
+                            buyboxBadge = `<span class="buybox-badge competing" title="Sem Concorrência Direta no Catálogo"><i class="fas fa-circle-check"></i> Sem Concorrência</span>`;
+                        } else if (rawCatStatus) {
+                            buyboxBadge = `<span class="buybox-badge competing" title="Em Concorrência no Catálogo"><i class="fas fa-arrows-split-up-and-left"></i> Concorrendo</span>`;
+                        }
+
+                        catalogBadges = `
+                            <span class="catalog-listing-badge" title="Anúncio de Catálogo Mercado Livre (ID: ${item.catalog_product_id || 'Catálogo'})">
+                                <i class="fas fa-certificate"></i> Catálogo
+                            </span>
+                            ${buyboxBadge}
+                        `;
+                    }
+
                     return `
                         <tr data-item-id="${item.item_id}">
                             <td style="width: 28px; text-align: center;">
@@ -2616,13 +2831,14 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <img src="${thumb}" alt="${item.title}" class="meli-table-img" onerror="this.src='/assets/logos/default-erp.svg'">
                             </td>
                             <td>
-                                <div style="display: flex; flex-direction: column; gap: 0.15rem; min-width: 140px;">
+                                <div style="display: flex; flex-direction: column; gap: 0.2rem; min-width: 140px;">
                                     <div style="font-weight: 600; color: var(--color-text); font-size: 0.88rem; word-break: break-word; line-height: 1.3;">
                                         ${item.permalink ? `<a href="${item.permalink}" target="_blank" style="text-decoration: none; color: inherit;" title="Abrir no Mercado Livre">${item.title} <i class="fas fa-arrow-up-right-from-square" style="font-size: 0.68rem; color: var(--color-text-offset);"></i></a>` : item.title}
                                     </div>
                                     <div style="display: flex; gap: 0.4rem; align-items: center; font-size: 0.74rem; flex-wrap: wrap;">
                                         <span style="color: var(--color-text-offset);">MLB: <code>${item.item_id}</code></span>
                                         ${item.connection_name ? `<span style="color: var(--color-text-muted);">| Conta: ${item.connection_name}</span>` : ''}
+                                        ${catalogBadges}
                                         ${sourceTag}
                                     </div>
                                 </div>
@@ -2631,8 +2847,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <span class="sku-badge">${item.sku || 'N/A'}</span>
                             </td>
                             <td style="white-space: nowrap;">
-                                <div style="display: flex; flex-direction: column;">
+                                <div style="display: flex; flex-direction: column; gap: 0.1rem;">
                                     <span class="price-text" style="font-size: 0.92rem; font-weight: 700;">R$ ${parseFloat(item.price).toFixed(2)}</span>
+                                    ${item.catalog_price_to_win && item.catalog_price_to_win != item.price && (String(item.catalog_status).toLowerCase() === 'losing' || String(item.catalog_status).toLowerCase() === 'opportunity') ? `<small style="color: #f59e0b; font-weight: 600; font-size: 0.72rem;" title="Preço sugerido para ganhar a Buy Box"><i class="fas fa-bolt"></i> Ganhe: R$ ${parseFloat(item.catalog_price_to_win).toFixed(2)}</small>` : ''}
                                     ${item.markup_percent > 0 ? `<small style="color: var(--color-success); font-size: 0.7rem;">+${item.markup_percent}% markup</small>` : ''}
                                 </div>
                             </td>
@@ -2790,6 +3007,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const term = (searchInput?.value || '').toLowerCase().trim();
                 const status = statusSelect?.value || '';
                 const account = accountSelect?.value || '';
+                const catalogFilter = catalogSelect?.value || '';
 
                 currentFilteredItems = allItems.filter(i => {
                     const matchTerm = !term || 
@@ -2798,7 +3016,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         (i.item_id && i.item_id.toLowerCase().includes(term));
                     const matchStatus = !status || (i.status === status);
                     const matchAccount = !account || (String(i.connection_id) === String(account));
-                    return matchTerm && matchStatus && matchAccount;
+
+                    const isCat = !!(i.catalog_listing || i.catalog_product_id);
+                    const catStatus = String(i.catalog_status || '').toLowerCase();
+                    const isWin = isCat && (catStatus === 'winner' || catStatus === 'winning');
+                    const isLose = isCat && (catStatus === 'losing' || catStatus === 'opportunity' || (i.catalog_price_to_win !== null && i.catalog_price_to_win !== undefined));
+
+                    let matchCatalog = true;
+                    if (catalogFilter === 'catalog') {
+                        matchCatalog = isCat;
+                    } else if (catalogFilter === 'winning') {
+                        matchCatalog = isWin;
+                    } else if (catalogFilter === 'losing') {
+                        matchCatalog = isLose;
+                    } else if (catalogFilter === 'traditional') {
+                        matchCatalog = !isCat;
+                    }
+
+                    return matchTerm && matchStatus && matchAccount && matchCatalog;
                 });
 
                 currentPage = 1;
@@ -2808,6 +3043,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (searchInput) searchInput.addEventListener('input', applyFilters);
             if (statusSelect) statusSelect.addEventListener('change', applyFilters);
+            if (catalogSelect) catalogSelect.addEventListener('change', applyFilters);
             if (accountSelect) accountSelect.addEventListener('change', applyFilters);
             if (refreshBtn) refreshBtn.addEventListener('click', () => renderMercadoLivreListings());
 
