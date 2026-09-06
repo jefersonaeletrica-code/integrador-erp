@@ -501,8 +501,8 @@ export async function getUserItems(connection, status = null, db) {
                 }
             }
 
-            // Se a API retornar menos de `limit` itens, é a última página.
-            if (itemIds.length < limit) {
+            // Se a API retornar uma página vazia, encerramos a busca.
+            if (itemIds.length === 0) {
                 break;
             }
             offset += limit;
