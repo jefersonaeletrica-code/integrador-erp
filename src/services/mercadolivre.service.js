@@ -441,6 +441,35 @@ export async function updateItemDescription(connection, itemId, plainText, db) {
     }
 }
 
+function formatMeliError(error, itemId, payload) {
+    const errorData = error.response?.data;
+    let formattedCause = '';
+
+    if (errorData) {
+        const mainMsg = errorData.message || errorData.error || '';
+        let causeMsgs = [];
+        if (Array.isArray(errorData.cause)) {
+            causeMsgs = errorData.cause.map(c => {
+                if (typeof c === 'string') return c;
+                return c.message ? `${c.message}${c.code ? ` (${c.code})` : ''}` : (c.code || JSON.stringify(c));
+            });
+        } else if (errorData.cause) {
+            causeMsgs = [typeof errorData.cause === 'object' ? JSON.stringify(errorData.cause) : String(errorData.cause)];
+        }
+        formattedCause = [mainMsg, ...causeMsgs].filter(Boolean).join(' | ');
+    }
+
+    if (!formattedCause) {
+        formattedCause = error.message;
+    }
+
+    logger.error(`[MercadoLivreService] Falha ao atualizar anúncio ${itemId}: ${formattedCause}`, error, {
+        responseData: error.response?.data,
+        payload
+    });
+    return `Erro ao atualizar anúncio no Mercado Livre: ${formattedCause}`;
+}
+
 /**
  * Atualiza campos de um anúncio (Preço, Estoque, Título, Fotos, SKU, Descrição, Vídeo, etc.)
  * @param {object} connection - Conexão do Mercado Livre
@@ -451,22 +480,64 @@ export async function updateItemDescription(connection, itemId, plainText, db) {
  */
 export async function updateItem(connection, itemId, updateData, db) {
     const token = await ensureValidToken(connection, db);
+
+    // 1. Obtém dados atuais do anúncio no Mercado Livre para comparação seletiva
+    let currentItem = null;
+    try {
+        const getRes = await meliAxios.get(`/items/${itemId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        currentItem = getRes.data;
+    } catch (fetchErr) {
+        logger.warn(`[MercadoLivreService] Não foi possível obter item atual ${itemId}: ${fetchErr.message}`);
+    }
+
     const payload = {};
 
+    // Preço: só envia se foi modificado
     if (updateData.price !== undefined && updateData.price !== null && updateData.price !== '') {
-        payload.price = parseFloat(updateData.price);
-    }
-    if (updateData.available_quantity !== undefined && updateData.available_quantity !== null && updateData.available_quantity !== '') {
-        payload.available_quantity = parseInt(updateData.available_quantity, 10);
-    }
-    if (updateData.title && updateData.title.trim()) {
-        payload.title = updateData.title.trim().substring(0, 60);
-    }
-    if (updateData.status && ['active', 'paused', 'closed'].includes(updateData.status)) {
-        payload.status = updateData.status;
+        const newPrice = parseFloat(updateData.price);
+        if (!currentItem || parseFloat(currentItem.price) !== newPrice) {
+            payload.price = newPrice;
+        }
     }
 
-    // Galeria de fotos: garante que toda imagem seja um ID oficial do ML ou URL externa pública
+    // Estoque: só envia se foi modificado
+    if (updateData.available_quantity !== undefined && updateData.available_quantity !== null && updateData.available_quantity !== '') {
+        const newQty = parseInt(updateData.available_quantity, 10);
+        if (!currentItem || parseInt(currentItem.available_quantity, 10) !== newQty) {
+            payload.available_quantity = newQty;
+        }
+    }
+
+    // Status: só envia se mudou ('active', 'paused', 'closed')
+    if (updateData.status && ['active', 'paused', 'closed'].includes(updateData.status)) {
+        if (!currentItem || currentItem.status !== updateData.status) {
+            payload.status = updateData.status;
+        }
+    }
+
+    // Título: no ML, título só pode ser alterado se o anúncio nunca teve vendas (sold_quantity === 0)
+    if (updateData.title && updateData.title.trim()) {
+        const newTitle = updateData.title.trim().substring(0, 60);
+        if (!currentItem || currentItem.title !== newTitle) {
+            if (currentItem && (currentItem.sold_quantity || 0) > 0) {
+                logger.warn(`[MercadoLivreService] Anúncio ${itemId} possui ${currentItem.sold_quantity} venda(s) realizada(s). O título não pode ser modificado na API do Mercado Livre.`);
+            } else {
+                payload.title = newTitle;
+            }
+        }
+    }
+
+    // SKU / seller_custom_field
+    if (updateData.sku !== undefined && updateData.sku !== null) {
+        const skuVal = updateData.sku.trim();
+        if (!currentItem || (currentItem.seller_custom_field || '') !== skuVal) {
+            payload.seller_custom_field = skuVal || null;
+        }
+    }
+
+    // Galeria de fotos: processa e compara
     if (Array.isArray(updateData.pictures) && updateData.pictures.length > 0) {
         const processedPictures = [];
 
@@ -507,19 +578,18 @@ export async function updateItem(connection, itemId, updateData, db) {
         }
 
         if (processedPictures.length > 0) {
-            payload.pictures = processedPictures;
+            const currentPicIds = (currentItem?.pictures || []).map(p => String(p.id));
+            const newPicIds = processedPictures.map(p => String(p.id || p.source));
+            const picturesChanged = currentPicIds.length !== newPicIds.length || newPicIds.some((id, idx) => id !== currentPicIds[idx]);
+
+            if (!currentItem || picturesChanged) {
+                payload.pictures = processedPictures;
+            }
         }
     }
 
-    // Atributos e SKU
+    // Atributos adicionais
     const attributes = [];
-    if (updateData.sku !== undefined && updateData.sku !== null) {
-        const skuVal = updateData.sku.trim();
-        payload.seller_custom_field = skuVal || null;
-        if (skuVal) {
-            attributes.push({ id: 'SELLER_SKU', value_name: skuVal });
-        }
-    }
     if (updateData.gtin !== undefined && updateData.gtin !== null && updateData.gtin !== '') {
         attributes.push({ id: 'GTIN', value_name: updateData.gtin.trim() });
     }
@@ -538,59 +608,99 @@ export async function updateItem(connection, itemId, updateData, db) {
             }
         });
     }
-    if (attributes.length > 0) {
-        payload.attributes = attributes;
+
+    let updatedItem = currentItem || {};
+
+    if (Object.keys(payload).length > 0 || attributes.length > 0) {
+        const fullPayload = { ...payload };
+        if (attributes.length > 0) {
+            fullPayload.attributes = attributes;
+        }
+
+        try {
+            logger.info(`[MercadoLivreService] Atualizando anúncio ${itemId} com ${Object.keys(fullPayload).length} campos: ${Object.keys(fullPayload).join(', ')}...`);
+            const response = await meliAxios.put(`/items/${itemId}`, fullPayload, {
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            updatedItem = response.data;
+        } catch (firstErr) {
+            logger.warn(`[MercadoLivreService] Tentativa completa falhou (${firstErr.response?.data?.message || firstErr.message}). Tentando envio seletivo resiliente...`);
+
+            // Se falhou com attributes, tenta sem attributes
+            if (fullPayload.attributes && Object.keys(payload).length > 0) {
+                try {
+                    logger.info(`[MercadoLivreService] Tentando atualizar dados principais de ${itemId} sem attributes...`);
+                    const response = await meliAxios.put(`/items/${itemId}`, payload, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    updatedItem = response.data;
+                } catch (coreErr) {
+                    if (payload.title) {
+                        const noTitlePayload = { ...payload };
+                        delete noTitlePayload.title;
+                        if (Object.keys(noTitlePayload).length > 0) {
+                            try {
+                                logger.info(`[MercadoLivreService] Tentando atualizar ${itemId} sem title...`);
+                                const resNoTitle = await meliAxios.put(`/items/${itemId}`, noTitlePayload, {
+                                    headers: {
+                                        'Authorization': `Bearer ${token}`,
+                                        'Content-Type': 'application/json'
+                                    }
+                                });
+                                updatedItem = resNoTitle.data;
+                            } catch (noTitleErr) {
+                                throw new Error(formatMeliError(noTitleErr, itemId, noTitlePayload));
+                            }
+                        } else {
+                            throw new Error(formatMeliError(coreErr, itemId, payload));
+                        }
+                    } else {
+                        throw new Error(formatMeliError(coreErr, itemId, payload));
+                    }
+                }
+            } else if (fullPayload.title) {
+                const noTitlePayload = { ...fullPayload };
+                delete noTitlePayload.title;
+                if (Object.keys(noTitlePayload).length > 0) {
+                    try {
+                        logger.info(`[MercadoLivreService] Tentando atualizar ${itemId} sem title...`);
+                        const resNoTitle = await meliAxios.put(`/items/${itemId}`, noTitlePayload, {
+                            headers: {
+                                'Authorization': `Bearer ${token}`,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                        updatedItem = resNoTitle.data;
+                    } catch (noTitleErr) {
+                        throw new Error(formatMeliError(noTitleErr, itemId, noTitlePayload));
+                    }
+                } else {
+                    throw new Error(formatMeliError(firstErr, itemId, fullPayload));
+                }
+            } else {
+                throw new Error(formatMeliError(firstErr, itemId, fullPayload));
+            }
+        }
+    } else {
+        logger.info(`[MercadoLivreService] Nenhum campo principal foi alterado no anúncio ${itemId}.`);
     }
 
-    try {
-        logger.info(`[MercadoLivreService] Atualizando anúncio ${itemId} com ${Object.keys(payload).length} campos...`);
-        const response = await meliAxios.put(`/items/${itemId}`, payload, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
-        });
-
-        const updatedItem = response.data;
-
-        // Se veio descrição para atualizar, salva separadamente no endpoint específico
-        if (updateData.description !== undefined && updateData.description !== null) {
-            try {
-                await updateItemDescription(connection, itemId, updateData.description, db);
-            } catch (descErr) {
-                logger.warn(`[MercadoLivreService] Aviso: Dados do item atualizados, mas houve falha na descrição: ${descErr.message}`);
-            }
+    // Se veio descrição para atualizar, salva separadamente no endpoint específico
+    if (updateData.description !== undefined && updateData.description !== null) {
+        try {
+            await updateItemDescription(connection, itemId, updateData.description, db);
+        } catch (descErr) {
+            logger.warn(`[MercadoLivreService] Aviso: Dados do item atualizados, mas houve falha na descrição: ${descErr.message}`);
         }
-
-        return updatedItem;
-    } catch (error) {
-        const errorData = error.response?.data;
-        let formattedCause = '';
-
-        if (errorData) {
-            const mainMsg = errorData.message || errorData.error || '';
-            let causeMsgs = [];
-            if (Array.isArray(errorData.cause)) {
-                causeMsgs = errorData.cause.map(c => {
-                    if (typeof c === 'string') return c;
-                    return c.message ? `${c.message}${c.code ? ` (${c.code})` : ''}` : (c.code || JSON.stringify(c));
-                });
-            } else if (errorData.cause) {
-                causeMsgs = [typeof errorData.cause === 'object' ? JSON.stringify(errorData.cause) : String(errorData.cause)];
-            }
-            formattedCause = [mainMsg, ...causeMsgs].filter(Boolean).join(' | ');
-        }
-
-        if (!formattedCause) {
-            formattedCause = error.message;
-        }
-
-        logger.error(`[MercadoLivreService] Falha ao atualizar anúncio ${itemId}: ${formattedCause}`, {
-            data: error.response?.data,
-            payload
-        });
-        throw new Error(`Erro ao atualizar anúncio no Mercado Livre: ${formattedCause}`);
     }
+
+    return updatedItem;
 }
 
 /**
