@@ -1807,11 +1807,31 @@ document.addEventListener('DOMContentLoaded', () => {
                                 ${accountsOptions}
                             </select>
                         </div>
+                        <div class="form-group" style="margin: 0; align-self: flex-end; display: flex; align-items: center; gap: 0.5rem;">
+                            <button type="button" class="btn btn-secondary" id="meli-filter-refresh-btn" style="height: 42px;" title="Atualizar listagem">
+                                <i class="fas fa-rotate"></i>
+                            </button>
+                            <div id="meli-visible-count-container" class="total-count-badge" style="display: none;">
+                                <i class="fas fa-eye"></i>
+                                <span id="meli-visible-count">0</span>
+                                <span>visíveis</span>
+                            </div>
+                        </div>
                         <div class="form-group" style="margin: 0; align-self: flex-end;">
                             <button type="button" class="btn btn-secondary" id="meli-filter-refresh-btn" style="height: 42px;" title="Atualizar listagem">
                                 <i class="fas fa-rotate"></i>
                             </button>
                         </div>
+                    </div>
+                </div>
+
+                <div id="meli-bulk-actions-container" class="bulk-actions-container" style="display: none;">
+                    <div class="bulk-actions-info">
+                        <span id="meli-selected-count">0</span> anúncio(s) selecionado(s)
+                    </div>
+                    <div class="bulk-actions-buttons">
+                        <button class="btn btn-secondary" data-action="bulk-pause-meli-items"><i class="fas fa-pause"></i> Pausar Selecionados</button>
+                        <button class="btn btn-success" data-action="bulk-activate-meli-items"><i class="fas fa-play"></i> Ativar Selecionados</button>
                     </div>
                 </div>
 
@@ -1854,6 +1874,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     return `
                         <tr data-item-id="${item.item_id}">
+                            <td>
+                                <input type="checkbox" class="meli-item-checkbox" data-item-id="${item.item_id}">
+                            </td>
                             <td style="width: 54px; text-align: center;">
                                 <img src="${thumb}" alt="${item.title}" class="meli-table-img" onerror="this.src='/assets/logos/default-erp.svg'">
                             </td>
@@ -1918,6 +1941,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <table class="data-table">
                                 <thead>
                                     <tr>
+                                        <th style="width: 20px;"><input type="checkbox" id="meli-select-all-checkbox" title="Selecionar todos os anúncios visíveis"></th>
                                         <th>Foto</th>
                                         <th>Título e Identificação</th>
                                         <th>SKU</th>
@@ -1948,6 +1972,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const accountSelect = document.getElementById('meli-filter-account');
             const listingsContainer = document.getElementById('meli-listings-container');
             const refreshBtn = document.getElementById('meli-filter-refresh-btn');
+            const visibleCountEl = document.getElementById('meli-visible-count');
+            const visibleCountContainer = document.getElementById('meli-visible-count-container');
 
             const applyFilters = () => {
                 const term = (searchInput?.value || '').toLowerCase().trim();
@@ -1965,12 +1991,67 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 if (listingsContainer) listingsContainer.innerHTML = renderTable(filtered);
+                if (visibleCountEl) visibleCountEl.textContent = filtered.length;
+                if (visibleCountContainer) visibleCountContainer.style.display = 'flex';
+
+                // Resetar seleção em massa ao filtrar
+                const selectAllCheckbox = document.getElementById('meli-select-all-checkbox');
+                if (selectAllCheckbox) selectAllCheckbox.checked = false;
+                updateBulkActionsVisibility();
             };
 
             if (searchInput) searchInput.addEventListener('input', applyFilters);
             if (statusSelect) statusSelect.addEventListener('change', applyFilters);
             if (accountSelect) accountSelect.addEventListener('change', applyFilters);
             if (refreshBtn) refreshBtn.addEventListener('click', () => renderMercadoLivreListings());
+
+            // Lógica para seleção em massa
+            const updateBulkActionsVisibility = () => {
+                const container = document.getElementById('meli-bulk-actions-container');
+                const countEl = document.getElementById('meli-selected-count');
+                const selectedCheckboxes = document.querySelectorAll('.meli-item-checkbox:checked');
+                
+                if (container && countEl) {
+                    if (selectedCheckboxes.length > 0) {
+                        countEl.textContent = selectedCheckboxes.length;
+                        container.style.display = 'flex';
+                    } else {
+                        container.style.display = 'none';
+                    }
+                }
+
+                // Sincronizar o checkbox "selecionar todos"
+                const selectAllCheckbox = document.getElementById('meli-select-all-checkbox');
+                const allVisibleCheckboxes = document.querySelectorAll('.meli-item-checkbox');
+                if (selectAllCheckbox) {
+                    if (allVisibleCheckboxes.length > 0 && selectedCheckboxes.length === allVisibleCheckboxes.length) {
+                        selectAllCheckbox.checked = true;
+                    } else {
+                        selectAllCheckbox.checked = false;
+                    }
+                }
+            };
+
+            listingsContainer.addEventListener('change', (e) => {
+                if (e.target.matches('.meli-item-checkbox')) {
+                    updateBulkActionsVisibility();
+                }
+            });
+
+            const selectAllCheckbox = document.getElementById('meli-select-all-checkbox');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.addEventListener('change', (e) => {
+                    const isChecked = e.target.checked;
+                    document.querySelectorAll('.meli-item-checkbox').forEach(checkbox => {
+                        checkbox.checked = isChecked;
+                    });
+                    updateBulkActionsVisibility();
+                });
+            }
+
+            // Inicializa a contagem de visíveis
+            if (visibleCountEl) visibleCountEl.textContent = items.length;
+            if (visibleCountContainer) visibleCountContainer.style.display = 'flex';
 
         } catch (error) {
             renderError(error);
@@ -2541,6 +2622,40 @@ document.addEventListener('DOMContentLoaded', () => {
             } finally {
                 actionButton.classList.remove('loading');
                 actionButton.disabled = false;
+            }
+            return;
+        }
+
+        if (action === 'bulk-pause-meli-items' || action === 'bulk-activate-meli-items') {
+            const selectedCheckboxes = document.querySelectorAll('.meli-item-checkbox:checked');
+            if (selectedCheckboxes.length === 0) {
+                showToast('Nenhum anúncio selecionado para a ação em massa.', 'warning');
+                return;
+            }
+
+            const itemIds = Array.from(selectedCheckboxes).map(cb => cb.dataset.itemId);
+            const newStatus = action === 'bulk-pause-meli-items' ? 'paused' : 'active';
+            const actionLabel = newStatus === 'active' ? 'Ativando' : 'Pausando';
+
+            actionButton.classList.add('loading');
+            actionButton.disabled = true;
+
+            try {
+                // Assumindo que a API pode lidar com um array de IDs
+                // Se não, você precisará fazer um loop e chamar a API para cada um.
+                const res = await api(`/api/marketplace/mercadolivre/items/bulk-status`, 'PUT', {
+                    itemIds,
+                    newStatus
+                });
+                showToast(`${res.successCount || itemIds.length} anúncio(s) foram atualizados.`, 'success');
+                renderMercadoLivreListings();
+            } catch (err) {
+                showToast(`Erro na ação em massa: ${err.message}`, 'error');
+            } finally {
+                actionButton.classList.remove('loading');
+                actionButton.disabled = false;
+                const bulkContainer = document.getElementById('meli-bulk-actions-container');
+                if (bulkContainer) bulkContainer.style.display = 'none';
             }
             return;
         }
