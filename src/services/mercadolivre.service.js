@@ -417,6 +417,14 @@ export async function updateItemDescription(connection, itemId, plainText, db) {
         logger.info(`[MercadoLivreService] Descrição atualizada com sucesso no anúncio ${itemId}.`);
         return true;
     } catch (error) {
+        const errorMsg = error.response?.data?.message || error.message;
+
+        // Anúncios vinculados ao Catálogo do Mercado Livre não permitem editar descrição avulsa
+        if (errorMsg && errorMsg.toLowerCase().includes('catalog')) {
+            logger.info(`[MercadoLivreService] Anúncio ${itemId} pertence ao Catálogo do Mercado Livre. A descrição padrão do catálogo é preservada.`);
+            return true;
+        }
+
         // Se a descrição ainda não existia, a API do ML retorna 404 para PUT; neste caso tentamos POST
         if (error.response?.status === 404) {
             try {
@@ -430,13 +438,16 @@ export async function updateItemDescription(connection, itemId, plainText, db) {
                 return true;
             } catch (postErr) {
                 const postMsg = postErr.response?.data?.message || postErr.message;
-                logger.error(`[MercadoLivreService] Falha ao criar descrição no anúncio ${itemId}: ${postMsg}`);
+                if (postMsg && postMsg.toLowerCase().includes('catalog')) {
+                    logger.info(`[MercadoLivreService] Anúncio ${itemId} pertence ao Catálogo do Mercado Livre. Descrição padrão mantida.`);
+                    return true;
+                }
+                logger.warn(`[MercadoLivreService] Falha ao criar descrição no anúncio ${itemId}: ${postMsg}`);
                 throw new Error(`Erro ao salvar descrição: ${postMsg}`);
             }
         }
 
-        const errorMsg = error.response?.data?.message || error.message;
-        logger.error(`[MercadoLivreService] Falha ao atualizar descrição no anúncio ${itemId}: ${errorMsg}`);
+        logger.warn(`[MercadoLivreService] Falha ao atualizar descrição no anúncio ${itemId}: ${errorMsg}`);
         throw new Error(`Erro ao salvar descrição: ${errorMsg}`);
     }
 }

@@ -766,7 +766,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     meliEditDescription.value = res.description || '';
                 }
                 if (meliEditDescStatus) {
-                    meliEditDescStatus.textContent = res.description ? 'Descrição sincronizada' : 'Sem descrição cadastrada';
+                    if (fullItem.catalog_listing) {
+                        meliEditDescStatus.innerHTML = '<span style="color: #6366f1;"><i class="fas fa-bookmark"></i> Anúncio de Catálogo (descrição padrão gerenciada pelo Mercado Livre)</span>';
+                    } else {
+                        meliEditDescStatus.textContent = res.description ? 'Descrição sincronizada' : 'Sem descrição cadastrada';
+                    }
                 }
 
                 // Fotos completas
