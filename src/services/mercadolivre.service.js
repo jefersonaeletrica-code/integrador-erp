@@ -501,12 +501,13 @@ export async function getUserItems(connection, status = null, db) {
                 }
             }
 
-            // Se a API retornar uma página vazia, encerramos a busca.
-            if (itemIds.length === 0) {
+            // Condição de parada: se a API retornar menos itens que o limite,
+            // significa que esta é a última página.
+            if (itemIds.length < limit) {
                 break;
             }
             offset += limit;
-        } while (total > 0 && allItems.length < total);
+        } while (true); // O loop agora é quebrado internamente
 
         logger.info(`[MercadoLivreService] Importação finalizada. Total de itens detalhados obtidos: ${allItems.length}`);
         return { items: allItems, paging: { total: allItems.length } };
