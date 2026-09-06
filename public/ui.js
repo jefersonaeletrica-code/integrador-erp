@@ -1898,40 +1898,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     return `
                         <tr data-item-id="${item.item_id}">
-                            <td style="width: 32px;">
+                            <td style="width: 28px; text-align: center;">
                                 <input type="checkbox" class="meli-item-checkbox" data-item-id="${item.item_id}">
                             </td>
-                            <td style="width: 54px; text-align: center;">
+                            <td style="width: 44px; text-align: center;">
                                 <img src="${thumb}" alt="${item.title}" class="meli-table-img" onerror="this.src='/assets/logos/default-erp.svg'">
                             </td>
                             <td>
-                                <div style="display: flex; flex-direction: column; gap: 0.2rem; min-width: 220px;">
-                                    <div style="font-weight: 600; color: var(--color-text); font-size: 0.92rem; word-break: break-word;">
-                                        ${item.permalink ? `<a href="${item.permalink}" target="_blank" style="text-decoration: none; color: inherit;" title="Abrir no Mercado Livre">${item.title} <i class="fas fa-arrow-up-right-from-square" style="font-size: 0.72rem; color: var(--color-text-offset);"></i></a>` : item.title}
+                                <div style="display: flex; flex-direction: column; gap: 0.15rem; min-width: 140px;">
+                                    <div style="font-weight: 600; color: var(--color-text); font-size: 0.88rem; word-break: break-word; line-height: 1.3;">
+                                        ${item.permalink ? `<a href="${item.permalink}" target="_blank" style="text-decoration: none; color: inherit;" title="Abrir no Mercado Livre">${item.title} <i class="fas fa-arrow-up-right-from-square" style="font-size: 0.68rem; color: var(--color-text-offset);"></i></a>` : item.title}
                                     </div>
-                                    <div style="display: flex; gap: 0.5rem; align-items: center; font-size: 0.78rem; flex-wrap: wrap;">
+                                    <div style="display: flex; gap: 0.4rem; align-items: center; font-size: 0.74rem; flex-wrap: wrap;">
                                         <span style="color: var(--color-text-offset);">MLB: <code>${item.item_id}</code></span>
                                         ${item.connection_name ? `<span style="color: var(--color-text-muted);">| Conta: ${item.connection_name}</span>` : ''}
                                         ${sourceTag}
                                     </div>
                                 </div>
                             </td>
-                            <td>
+                            <td style="white-space: nowrap;">
                                 <span class="sku-badge">${item.sku || 'N/A'}</span>
                             </td>
-                            <td>
+                            <td style="white-space: nowrap;">
                                 <div style="display: flex; flex-direction: column;">
-                                    <span class="price-text" style="font-size: 0.98rem; font-weight: 700;">R$ ${parseFloat(item.price).toFixed(2)}</span>
-                                    ${item.markup_percent > 0 ? `<small style="color: var(--color-success); font-size: 0.74rem;">+${item.markup_percent}% markup</small>` : ''}
+                                    <span class="price-text" style="font-size: 0.92rem; font-weight: 700;">R$ ${parseFloat(item.price).toFixed(2)}</span>
+                                    ${item.markup_percent > 0 ? `<small style="color: var(--color-success); font-size: 0.7rem;">+${item.markup_percent}% markup</small>` : ''}
                                 </div>
                             </td>
-                            <td>
+                            <td style="white-space: nowrap;">
                                 <span class="stock-badge ${inStock ? 'in-stock' : 'out-of-stock'}">
                                     <i class="fas ${inStock ? 'fa-check' : 'fa-xmark'}"></i> ${item.available_quantity} un.
                                 </span>
                             </td>
-                            <td>${listingBadge}</td>
-                            <td>
+                            <td style="white-space: nowrap;">${listingBadge}</td>
+                            <td style="white-space: nowrap;">
                                 <span class="status-pill ${statusClass}"><span class="status-dot"></span> ${statusText}</span>
                             </td>
                             <td style="text-align: right; white-space: nowrap;">
