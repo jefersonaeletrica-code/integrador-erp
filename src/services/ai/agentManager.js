@@ -116,10 +116,11 @@ export async function processAgentMessage({ agentId, conversationId, message, db
     '- Diagnóstico de Anúncio: consultar_saude_e_visitas_anuncio_ml (nota de qualidade 0-100% e histórico de visitas)\n' +
     '- Mapa de Capacidades: consultar_mapa_capacidades_ml (para inspecionar quais dados cada endpoint entrega antes de buscar)';
 
-  const performanceGuidance = '\n\nDIRETRIZ DE AGILIDADE MÁXIMA:\n' +
-    '- Seja ultra-direto, assertivo e ágil. Responda com foco total na pergunta do usuário.\n' +
-    '- A ferramenta `consultar_vendas_e_pedidos_ml` JÁ RETORNA faturamento, quantidade vendida, preço, taxas e MARGEM LÍQUIDA % dos produtos mais vendidos.\n' +
-    '- Responda em 1 ÚNICO ciclo assim que obtiver os dados da ferramenta principal, sem fazer chamadas secundárias repetitivas.';
+  const performanceGuidance = '\n\nDIRETRIZ DE OBJETIVIDADE ANALÍTICA E RACIOCÍNIO:\n' +
+    '1. Responda DIRETAMENTE e OBJETIVAMENTE à pergunta exata do usuário logo na primeira linha, destacando o anúncio/produto principal, número de vendas, faturamento e sua margem líquida exata.\n' +
+    '2. Apresente os dados de forma consultiva e executiva (destaque o item campeão, comissão ML, frete e margem líquida percentual).\n' +
+    '3. A ferramenta `consultar_vendas_e_pedidos_ml` JÁ RETORNA faturamento, quantidade vendida, preço, taxas e MARGEM LÍQUIDA % dos produtos mais vendidos.\n' +
+    '4. Responda em 1 ÚNICO ciclo assim que obtiver os dados, sem fazer chamadas secundárias repetitivas.';
 
   const systemPrompt = (agent.system_prompt || '') + otherAgentsContext + apiDomainsContext + performanceGuidance;
 
@@ -594,23 +595,47 @@ function generateStructuredFallbackSummary(executedActions, userMessage = '') {
     return 'Concluí a consulta aos dados, mas não foi possível gerar o texto sintetizado no momento. Por favor, repita a pergunta.';
   }
 
-  let text = '### 📊 Relatório Consolidado de Dados do Mercado Livre\n\n';
+  const userQuery = (userMessage || '').toLowerCase();
+  let text = '';
 
   for (const action of executedActions) {
     const { tool_name, result } = action;
     if (!result || result.erro) continue;
 
     if (tool_name === 'consultar_vendas_e_pedidos_ml') {
-      text += '#### 🛒 Resumo de Vendas & Faturamento\n';
+      const topProducts = Array.isArray(result.produtos_mais_vendidos) ? result.produtos_mais_vendidos : [];
+      const top1 = topProducts[0];
+
+      if (userQuery.includes('mais vendid') || userQuery.includes('mais vendas') || userQuery.includes('maior venda') || userQuery.includes('margem') || userQuery.includes('qual anuncio') || userQuery.includes('qual anúncio') || userQuery.includes('teve mais')) {
+        if (top1) {
+          const margemStr = top1.margem_liquida_percent !== undefined ? `${top1.margem_liquida_percent}%` : 'N/A';
+          text += `### 🎯 Anúncio Campeão de Vendas & Rentabilidade\n\n`;
+          text += `O anúncio que teve mais vendas no período analisado é **${top1.titulo}** (ID: \`${top1.item_id}\`).\n\n`;
+          text += `**Métricas Detalhadas do Item:**\n`;
+          text += `- 📦 **Volume Vendido:** **${top1.quantidade_vendida} unidades**\n`;
+          text += `- 💰 **Faturamento Gerado:** **R$ ${top1.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**\n`;
+          text += `- 🏷️ **Preço Atual de Venda:** R$ ${top1.preco_atual ? top1.preco_atual.toFixed(2) : '-'}\n`;
+          text += `- 💸 **Comissão Mercado Livre:** R$ ${top1.taxa_ml ? top1.taxa_ml.toFixed(2) : '-'}\n`;
+          text += `- 🚚 **Frete Pago pelo Vendedor:** R$ ${top1.frete_vendedor ? top1.frete_vendedor.toFixed(2) : '0.00'}\n`;
+          text += `- 💵 **Recebimento Líquido Unitário:** R$ ${top1.valor_liquido ? top1.valor_liquido.toFixed(2) : '-'}\n`;
+          text += `- 📈 **Margem de Lucro Líquida:** **${margemStr}**\n\n`;
+
+          const margemNum = top1.margem_liquida_percent || 0;
+          const statusLucro = margemNum >= 25 ? 'excelente rentabilidade líquida' : margemNum >= 15 ? 'rentabilidade equilibrada e sustentável' : 'margem de lucro reduzida (recomendado reavaliar preço/custos)';
+          text += `> 💡 **Parecer do Auditor:** Este item é o carro-chefe de vendas da sua loja com ${statusLucro}, entregando **${margemStr}** de margem líquida real por unidade vendida.\n\n`;
+        }
+      }
+
+      text += `#### 🛒 Panorama Geral de Vendas no Mercado Livre\n`;
       text += `- **Total de Pedidos:** ${result.pedidos_listados || result.total_pedidos_encontrados || 0}\n`;
       text += `- **Faturamento da Amostra:** R$ ${(result.faturamento_total_amostra || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
       text += `- **Ticket Médio:** R$ ${(result.ticket_medio || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\n`;
 
-      if (Array.isArray(result.produtos_mais_vendidos) && result.produtos_mais_vendidos.length > 0) {
-        text += '##### 🏆 Ranking de Produtos Mais Vendidos & Margens:\n';
+      if (topProducts.length > 0) {
+        text += '##### 🏆 Ranking dos Produtos Mais Vendidos & Margens:\n';
         text += '| Anúncio / Produto | Qtd Vendida | Faturamento | Preço Unit. | Valor Líquido | Margem Líquida |\n';
         text += '| :--- | :--- | :--- | :--- | :--- | :--- |\n';
-        for (const p of result.produtos_mais_vendidos) {
+        for (const p of topProducts) {
           const preco = p.preco_atual ? `R$ ${p.preco_atual.toFixed(2)}` : '-';
           const liquido = p.valor_liquido ? `R$ ${p.valor_liquido.toFixed(2)}` : '-';
           const margem = p.margem_liquida_percent !== undefined ? `${p.margem_liquida_percent}%` : '-';
@@ -619,7 +644,7 @@ function generateStructuredFallbackSummary(executedActions, userMessage = '') {
         text += '\n';
       }
     } else if (tool_name === 'buscar_anuncios_ml' && Array.isArray(result.anuncios)) {
-      text += `#### 📦 Anúncios Encontrados (${result.total || result.anuncios.length})\n`;
+      text += `#### 📦 Anúncios da Conta (${result.total || result.anuncios.length} itens)\n`;
       text += '| Item ID | Título | Preço | Estoque | Status | Margem Líquida |\n';
       text += '| :--- | :--- | :--- | :--- | :--- | :--- |\n';
       for (const a of result.anuncios.slice(0, 10)) {
@@ -628,28 +653,28 @@ function generateStructuredFallbackSummary(executedActions, userMessage = '') {
       }
       text += '\n';
     } else if (tool_name === 'obter_detalhes_anuncio_ml') {
-      text += `#### 🔍 Detalhes do Anúncio: **${result.titulo}** (\`${result.item_id}\`)\n`;
-      text += `- **Preço:** R$ ${result.preco?.toFixed(2) || '0.00'}\n`;
-      text += `- **Estoque:** ${result.estoque} unidades (${result.status})\n`;
+      text += `#### 🔍 Diagnóstico do Anúncio: **${result.titulo}** (\`${result.item_id}\`)\n`;
+      text += `- **Preço Atual:** R$ ${result.preco?.toFixed(2) || '0.00'}\n`;
+      text += `- **Estoque Disponível:** ${result.estoque} unidades (${result.status})\n`;
       if (result.financeiro) {
-        text += `- **Comissão Mercado Livre:** R$ ${result.financeiro.taxa_ml_total?.toFixed(2) || '0.00'}\n`;
+        text += `- **Comissão ML:** R$ ${result.financeiro.taxa_ml_total?.toFixed(2) || '0.00'}\n`;
         text += `- **Frete Vendedor:** R$ ${result.financeiro.frete_vendedor?.toFixed(2) || '0.00'}\n`;
         text += `- **Valor Líquido Recebido:** R$ ${result.financeiro.valor_liquido?.toFixed(2) || '0.00'}\n`;
         text += `- **Margem Líquida Estimada:** **${result.financeiro.margem_percent || 0}%**\n`;
       }
       text += '\n';
     } else if (tool_name === 'consultar_reputacao_e_metricas_ml') {
-      text += '#### 🏅 Reputação & Saúde da Conta\n';
-      text += `- **Vendedor:** ${result.apelido || 'N/A'} (Nível: \`${result.nivel_reputacao}\`)\n`;
+      text += '#### 🏅 Reputação & Qualidade Operacional da Conta\n';
+      text += `- **Vendedor:** ${result.apelido || 'N/A'} (Termômetro: \`${result.nivel_reputacao}\`)\n`;
       text += `- **Medalha:** ${result.medalha_mercadolider || 'Nenhuma'}\n`;
-      text += `- **Status de Saúde:** **${result.status_saude_conta}**\n`;
-      text += `- **Reclamações:** ${result.metricas?.taxa_reclamacoes_percent || 0}%\n`;
+      text += `- **Saúde Operacional:** **${result.status_saude_conta}**\n`;
+      text += `- **Taxa de Reclamações:** ${result.metricas?.taxa_reclamacoes_percent || 0}%\n`;
       text += `- **Atraso no Envio:** ${result.metricas?.taxa_despachos_atrasados_percent || 0}%\n`;
       text += `- **Cancelamentos:** ${result.metricas?.taxa_cancelamentos_percent || 0}%\n\n`;
     }
   }
 
-  return text;
+  return text || 'Consulta concluída com sucesso.';
 }
 
 /**
