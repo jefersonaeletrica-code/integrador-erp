@@ -1371,6 +1371,22 @@ export function startCatalogStatusSyncJob(db, intervalMinutes = 10) {
 }
 
 /**
+ * Tabela oficial de taxa fixa / custo operacional por faixa de preço do Mercado Livre Brasil (MLB)
+ * para anúncios com preço abaixo de R$ 79,00.
+ * @param {number} price - Preço de venda do produto
+ * @returns {number} Taxa fixa estimada em R$
+ */
+export function getMlbFixedFeeByPrice(price) {
+    const p = parseFloat(price || 0);
+    if (isNaN(p) || p <= 0 || p >= 79.00) return 0.00;
+    if (p >= 50.00) return 6.75;
+    if (p >= 29.00) return 6.50;
+    if (p >= 15.00) return 6.00;
+    // Para itens abaixo de R$ 15,00, a taxa fixa não pode inviabilizar o produto (limite de 50% do valor)
+    return Math.min(6.00, Math.round((p * 0.5) * 100) / 100);
+}
+
+/**
  * Tabela oficial de custos de envio padrão do Mercado Envios ME2 (Mercado Livre Brasil)
  * para anúncios com Frete Grátis (obrigatório a partir de R$ 79,00).
  * Usado como fallback confiável quando a API remota de shipping_options não retorna o valor exato.
@@ -1431,6 +1447,22 @@ export async function calculateItemFeesAndNet(connection, itemData, db) {
             };
             if (categoryId) params.category_id = categoryId;
 
+            // Tentativa 1: Endpoint personalizado do usuário se disponível
+            if (userId) {
+                try {
+                    const resUser = await meliAxios.get(`/users/${userId}/listing_prices`, {
+                        params,
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (resUser.data && (Array.isArray(resUser.data) ? resUser.data.length > 0 : resUser.data.sale_fee_amount)) {
+                        return resUser.data;
+                    }
+                } catch (uErr) {
+                    // Segue para fallback
+                }
+            }
+
+            // Tentativa 2: Endpoint do site
             const res = await meliAxios.get(`/sites/${siteId}/listing_prices`, {
                 params,
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -1438,25 +1470,52 @@ export async function calculateItemFeesAndNet(connection, itemData, db) {
             return res.data;
         });
 
+        let matched = null;
         if (Array.isArray(lpData) && lpData.length > 0) {
-            const matched = lpData.find(e => e.listing_type_id === listingTypeId) || lpData[0];
-            saleFeeAmount = parseFloat(matched.sale_fee_amount || 0);
-            percentageFee = matched.sale_fee_details?.percentage_fee ?? null;
-            fixedFee = matched.sale_fee_details?.fixed_fee ?? null;
+            matched = lpData.find(e => e.listing_type_id === listingTypeId) || lpData[0];
         } else if (lpData && typeof lpData === 'object') {
-            saleFeeAmount = parseFloat(lpData.sale_fee_amount || 0);
-            percentageFee = lpData.sale_fee_details?.percentage_fee ?? null;
-            fixedFee = lpData.sale_fee_details?.fixed_fee ?? null;
+            matched = lpData;
+        }
+
+        if (matched) {
+            const rawSaleFeeAmount = parseFloat(matched.sale_fee_amount || matched.sale_fee_details?.gross_amount || 0);
+            percentageFee = matched.sale_fee_details?.percentage_fee ?? matched.percentage_fee ?? null;
+            const apiFixedFee = matched.sale_fee_details?.fixed_fee ?? matched.fixed_fee ?? null;
+
+            if (percentageFee === null || percentageFee === undefined || isNaN(percentageFee)) {
+                percentageFee = listingTypeId === 'gold_pro' ? 19.0 : 14.0;
+            } else {
+                percentageFee = parseFloat(percentageFee);
+            }
+
+            const pctVal = Math.round((price * (percentageFee / 100)) * 100) / 100;
+
+            // Extrai a taxa fixa da API quando informada
+            if (apiFixedFee !== null && apiFixedFee !== undefined && parseFloat(apiFixedFee) > 0) {
+                fixedFee = parseFloat(apiFixedFee);
+            } else if (price < 79.00 && siteId === 'MLB') {
+                // Se a API retornou um sale_fee_amount maior que a porcentagem pura, a diferença é a taxa fixa real
+                if (rawSaleFeeAmount > pctVal + 0.05) {
+                    fixedFee = Math.round((rawSaleFeeAmount - pctVal) * 100) / 100;
+                } else {
+                    // API retornou apenas a fatia percentual -> aplica a tabela oficial do MLB por faixa de preço
+                    fixedFee = getMlbFixedFeeByPrice(price);
+                }
+            } else {
+                fixedFee = 0.00;
+            }
+
+            // Garante o valor total correto da comissão (Percentual + Taxa Fixa)
+            saleFeeAmount = Math.round((pctVal + (fixedFee || 0)) * 100) / 100;
         }
     } catch (feeErr) {
         logger.warn(`[MercadoLivreService] Falha ao consultar listing_prices para ${itemId || 'item'}: ${feeErr.message}`);
         // Fallback padrão para MLB caso a API falhe temporariamente
         const rate = listingTypeId === 'gold_pro' ? 0.19 : 0.14;
-        const baseFee = price * rate;
-        const fix = price < 79 ? 6.00 : 0;
-        saleFeeAmount = Math.round((baseFee + fix) * 100) / 100;
         percentageFee = listingTypeId === 'gold_pro' ? 19.0 : 14.0;
-        fixedFee = fix;
+        fixedFee = price < 79.00 ? getMlbFixedFeeByPrice(price) : 0.00;
+        const baseFee = price * rate;
+        saleFeeAmount = Math.round((baseFee + fixedFee) * 100) / 100;
     }
 
     // 2. Consulta custo de frete pago pelo vendedor (Mercado Envíos / Frete Grátis)
