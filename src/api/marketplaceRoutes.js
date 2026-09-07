@@ -132,8 +132,14 @@ export default (db) => {
                 return res.status(404).json({ sucesso: false, erro: 'Conexão de Marketplace não encontrada.' });
             }
 
-            // Mantém tokens já autenticados ao mesclar
-            const newCredentials = { ...(connection.credentials || {}), ...credentials };
+            const existingCreds = safeJsonParse(connection.credentials) || {};
+            const incomingCreds = safeJsonParse(credentials) || {};
+
+            // Preserva tokens OAuth existentes (access_token, refresh_token, user_id, expires_at, etc.) ao editar client_id/secret/redirect_uri
+            const newCredentials = { 
+                ...existingCreds, 
+                ...incomingCreds 
+            };
             const updatedConnection = { ...connection, name, type, credentials: newCredentials };
 
             await db.updateMarketplaceConnection(updatedConnection);

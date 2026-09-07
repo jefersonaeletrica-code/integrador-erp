@@ -381,16 +381,25 @@ export const ensureInitialized = () => {
   return initializationPromise;
 };
 
-// Helper para parsear JSON de forma segura, evitando que a aplicação quebre.
-const safeJsonParse = (data) => {
-    if (typeof data === 'string') {
+// Helper para parsear JSON de forma segura, evitando que a aplicação quebre ou fique com strings aninhadas.
+export const safeJsonParse = (data) => {
+    if (data === null || data === undefined) return null;
+    let result = data;
+    while (typeof result === 'string') {
         try {
-            return JSON.parse(data);
-        } catch (e) {
-            return null; // Retorna null se a string JSON for inválida
+            const parsed = JSON.parse(result);
+            if (typeof parsed === 'object' && parsed !== null) {
+                result = parsed;
+            } else if (typeof parsed === 'string') {
+                result = parsed;
+            } else {
+                break;
+            }
+        } catch {
+            break;
         }
     }
-    return data; // Retorna o dado como está se já for um objeto
+    return result;
 };
 
 export const readDb = async () => {
@@ -426,12 +435,13 @@ export const updateSupplierConnection = async (connection) => {
   const conn = await getPool().getConnection();
   try {
     const { id, name, credentials, cookies: sessionData } = connection; // Renomeado para clareza
+    const credObj = safeJsonParse(credentials) || {};
     await conn.execute(
       'UPDATE supplier_connections SET name = ?, credentials = ?, session_data = ? WHERE id = ?',
       [
         name,
-        JSON.stringify(credentials),
-        sessionData ? JSON.stringify(sessionData) : null,
+        JSON.stringify(credObj),
+        sessionData ? (typeof sessionData === 'string' ? sessionData : JSON.stringify(sessionData)) : null,
         id
       ]
     );
@@ -443,40 +453,60 @@ export const updateSupplierConnection = async (connection) => {
   }
 };
 
-export const updateDb = async (partial) => {
-  // Esta função agora será mais específica para cada tipo de atualização
-  // A lógica principal de CRUD será movida para o server.js
-  await ensureInitialized(); // Garante que a inicialização terminou
+export const updateErpConnection = async (connection) => {
+  await ensureInitialized();
+  const conn = await getPool().getConnection();
+  try {
+    const { id, name, type, credentials } = connection;
+    const credObj = safeJsonParse(credentials) || {};
+    await conn.execute(
+      'UPDATE erp_connections SET name = ?, type = ?, credentials = ? WHERE id = ?',
+      [
+        name,
+        type,
+        JSON.stringify(credObj),
+        id
+      ]
+    );
+  } catch (error) {
+    console.error(`Erro ao atualizar a conexão ERP (ID: ${connection.id}) no MySQL:`, error);
+    throw error;
+  } finally {
+    conn.release();
+  }
+};
+
+export const updateDb = async (data) => {
+  await ensureInitialized();
   const connection = await getPool().getConnection();
   try {
-    await connection.beginTransaction();
-
-    if (Array.isArray(partial.produtos)) {
-      await connection.query('TRUNCATE TABLE produtos_importados');
-      if (partial.produtos.length > 0) {
-        const productValues = partial.produtos.map(p => [p.codigo, p.nome, p.preco]);
-        await connection.query('INSERT INTO produtos_importados (codigo, nome, preco) VALUES ?', [productValues]);
-      }
-    } else if (partial.connection) {
-      // Lógica para atualizar uma conexão ERP específica
-      const { id, name, type, credentials } = partial.connection;
-      // A verificação agora inclui o campo 'type' para garantir a integridade dos dados.
-      if (id && name && type && credentials) {
+    // 1. Atualizar conexões de ERP
+    if (data.connections && Array.isArray(data.connections)) {
+      for (const conn of data.connections) {
+        const credObj = safeJsonParse(conn.credentials) || {};
         await connection.execute(
           'UPDATE erp_connections SET name = ?, type = ?, credentials = ? WHERE id = ?',
-          [
-            name,
-            type,
-            JSON.stringify(credentials),
-            id
-          ]
+          [conn.name, conn.type, JSON.stringify(credObj), conn.id]
         );
       }
     }
 
-    await connection.commit();
+    // 2. Atualizar conexões de Fornecedor
+    if (data.supplierConnections && Array.isArray(data.supplierConnections)) {
+      for (const conn of data.supplierConnections) {
+        const credObj = safeJsonParse(conn.credentials) || {};
+        await connection.execute(
+          'UPDATE supplier_connections SET name = ?, credentials = ?, session_data = ? WHERE id = ?',
+          [
+            conn.name,
+            JSON.stringify(credObj),
+            conn.cookies ? JSON.stringify(conn.cookies) : null,
+            conn.id
+          ]
+        );
+      }
+    }
   } catch (error) {
-    await connection.rollback();
     console.error('Erro ao atualizar o banco de dados MySQL:', error);
     throw error;
   } finally {
@@ -489,12 +519,13 @@ export const updateMarketplaceConnection = async (connection) => {
   const conn = await getPool().getConnection();
   try {
     const { id, name, type = 'mercadolivre', credentials } = connection;
+    const credObj = safeJsonParse(credentials) || {};
     await conn.execute(
       'UPDATE marketplace_connections SET name = ?, type = ?, credentials = ? WHERE id = ?',
       [
         name,
         type,
-        JSON.stringify(credentials),
+        JSON.stringify(credObj),
         id
       ]
     );
