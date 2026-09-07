@@ -4227,6 +4227,774 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * =================================================================
+     * MÓDULO DE INTELIGÊNCIA ARTIFICIAL (GEMINI AGENTS)
+     * =================================================================
+     */
+
+    /**
+     * Helper para formatar Markdown simples em HTML seguro
+     */
+    function formatMarkdownText(text) {
+        if (!text) return '';
+        let html = text
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
+        // Headers
+        html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+        html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+        html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+
+        // Bold & Italic
+        html = html.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
+        html = html.replace(/\*(.*?)\*/gim, '<em>$1</em>');
+
+        // Inline code
+        html = html.replace(/`([^`]+)`/gim, '<code>$1</code>');
+
+        // Listas não ordenadas
+        html = html.replace(/^\s*[-*]\s+(.*$)/gim, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\/li>)/gim, '<ul>$1</ul>');
+        html = html.replace(/<\/ul>\s*<ul>/gim, '');
+
+        // Quebras de linha normais
+        html = html.replace(/\n\n/gim, '</p><p>');
+        html = html.replace(/\n/gim, '<br>');
+
+        return `<p>${html}</p>`;
+    }
+
+    /**
+     * TELA 1: Chat & Copilot com Agentes
+     */
+    async function renderAIChatView(targetAgentId = null, targetConvId = null) {
+        mainTitle.textContent = 'Chat com Agentes IA';
+        mainSubtitle.textContent = 'Interaja com agentes especializados equipados com ferramentas para análise e execução no ERP';
+        headerActions.innerHTML = '';
+        showLoading('Carregando agentes e conversas...');
+
+        try {
+            const [agentsRes, convsRes, settingsRes] = await Promise.all([
+                api('/api/ai/agents'),
+                api('/api/ai/conversations'),
+                api('/api/ai/settings')
+            ]);
+
+            const agents = agentsRes.agents || [];
+            const conversations = convsRes.conversations || [];
+            const hasKey = settingsRes.settings?.has_key;
+
+            if (!hasKey) {
+                pageContent.innerHTML = `
+                    <div class="empty-state" style="max-width: 600px; margin: 3rem auto;">
+                        <div class="empty-state-icon" style="color: var(--color-primary); background-color: var(--color-primary-light);">
+                            <i class="fas fa-key"></i>
+                        </div>
+                        <h3>Chave do Google Gemini Necessária</h3>
+                        <p>Para ativar os agentes inteligentes, cadastre sua chave de API do Google Gemini (Google AI Studio ou Vertex AI).</p>
+                        <button class="btn btn-primary" id="btn-goto-ai-settings" style="margin-top: 1rem;">
+                            <i class="fas fa-gear"></i> Configurar Chave da API
+                        </button>
+                    </div>
+                `;
+                document.getElementById('btn-goto-ai-settings')?.addEventListener('click', () => {
+                    setActiveNavLink('nav-ai-settings');
+                    renderAISettingsView();
+                });
+                return;
+            }
+
+            if (agents.length === 0) {
+                pageContent.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon" style="color: var(--color-warning); background-color: var(--color-warning-light);">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <h3>Nenhum agente cadastrado</h3>
+                        <p>Não há agentes de IA ativos no momento.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let currentAgentId = targetAgentId || agents[0].id;
+            let currentConvId = targetConvId || (conversations.find(c => c.agent_id == currentAgentId)?.id || null);
+
+            const activeAgent = agents.find(a => a.id == currentAgentId) || agents[0];
+
+            pageContent.innerHTML = `
+                <div class="ai-chat-layout">
+                    <!-- Barra Lateral de Conversas -->
+                    <div class="ai-conv-sidebar">
+                        <div class="ai-conv-sidebar-header">
+                            <button type="button" class="ai-new-chat-btn" id="ai-btn-new-chat">
+                                <i class="fas fa-plus"></i> Nova Análise
+                            </button>
+                            <label style="font-size: 0.76rem; font-weight: 700; color: var(--color-text-offset); text-transform: uppercase;">Agente Ativo:</label>
+                            <select id="ai-sidebar-agent-select" class="ai-agent-selector-select">
+                                ${agents.map(a => `
+                                    <option value="${a.id}" ${a.id == activeAgent.id ? 'selected' : ''}>
+                                        ${a.name} (${a.model})
+                                    </option>
+                                `).join('')}
+                            </select>
+                        </div>
+                        <div class="ai-conv-list" id="ai-conv-list">
+                            ${conversations.length === 0 ? `
+                                <div style="text-align: center; color: var(--color-text-muted); font-size: 0.8rem; padding: 2rem 1rem;">
+                                    Nenhuma conversa anterior. Inicie uma nova análise ao lado!
+                                </div>
+                            ` : conversations.map(c => `
+                                <div class="ai-conv-item ${c.id == currentConvId ? 'active' : ''}" data-conv-id="${c.id}" data-agent-id="${c.agent_id}">
+                                    <div class="ai-conv-item-info">
+                                        <span class="ai-conv-item-title">${c.title || 'Nova Conversa'}</span>
+                                        <span class="ai-conv-item-agent">
+                                            <i class="fas ${c.avatar_icon || 'fa-robot'}" style="color: ${c.avatar_color || 'var(--color-primary)'};"></i>
+                                            ${c.agent_name || 'Agente'} • ${c.message_count || 0} msgs
+                                        </span>
+                                    </div>
+                                    <button type="button" class="ai-conv-item-delete" data-action="delete-conv" data-conv-id="${c.id}" title="Excluir conversa">
+                                        <i class="fas fa-trash-can"></i>
+                                    </button>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- Viewport Principal do Chat -->
+                    <div class="ai-chat-viewport">
+                        <div class="ai-chat-header">
+                            <div class="ai-agent-header-info">
+                                <div class="ai-agent-avatar" style="background-color: ${activeAgent.avatar_color || '#3b82f6'};">
+                                    <i class="fas ${activeAgent.avatar_icon || 'fa-robot'}"></i>
+                                </div>
+                                <div class="ai-agent-header-text">
+                                    <h3>
+                                        ${activeAgent.name}
+                                        <span class="ai-model-badge"><i class="fas fa-sparkles"></i> ${activeAgent.model}</span>
+                                    </h3>
+                                    <p>${activeAgent.role_title}</p>
+                                </div>
+                            </div>
+                            <div>
+                                <span class="badge ${activeAgent.require_confirmation ? 'badge-warning' : 'badge-success'}" style="font-size: 0.74rem;">
+                                    <i class="fas ${activeAgent.require_confirmation ? 'fa-shield-halved' : 'fa-bolt'}"></i>
+                                    ${activeAgent.require_confirmation ? 'Requer Confirmação' : 'Autônomo'}
+                                </span>
+                            </div>
+                        </div>
+
+                        <!-- Container de Mensagens -->
+                        <div class="ai-messages-container" id="ai-messages-container">
+                            <div class="ai-message assistant">
+                                <div class="ai-agent-avatar" style="background-color: ${activeAgent.avatar_color || '#3b82f6'}; width: 32px; height: 32px; font-size: 0.95rem;">
+                                    <i class="fas ${activeAgent.avatar_icon || 'fa-robot'}"></i>
+                                </div>
+                                <div class="ai-message-bubble">
+                                    <p>Olá! Eu sou o <strong>${activeAgent.name}</strong>.</p>
+                                    <p>${activeAgent.description}</p>
+                                    <p style="margin-top: 0.5rem; font-size: 0.82rem; color: var(--color-text-offset);">
+                                        <i class="fas fa-wrench"></i> <strong>Ferramentas conectadas:</strong> ${(activeAgent.allowed_tools || []).join(', ')}
+                                    </p>
+                                    <p style="margin-top: 0.4rem;">Como posso ajudar você agora?</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Chips de Sugestões Rápidas -->
+                        <div class="ai-prompt-chips" id="ai-prompt-chips">
+                            <button type="button" class="ai-chip-btn" data-prompt="Auditar anúncios com margem líquida inferior a 15%">
+                                <i class="fas fa-percent"></i> Auditar Margens Baixas (< 15%)
+                            </button>
+                            <button type="button" class="ai-chip-btn" data-prompt="Verificar oportunidades de Buy Box no Catálogo">
+                                <i class="fas fa-trophy"></i> Oportunidades Buy Box
+                            </button>
+                            <button type="button" class="ai-chip-btn" data-prompt="Gerar um resumo geral das métricas da loja">
+                                <i class="fas fa-chart-line"></i> Resumo Geral da Loja
+                            </button>
+                            <button type="button" class="ai-chip-btn" data-prompt="Verificar divergências de estoque com fornecedores">
+                                <i class="fas fa-boxes-stacked"></i> Auditoria de Estoque
+                            </button>
+                        </div>
+
+                        <!-- Caixa de Entrada -->
+                        <div class="ai-input-area">
+                            <textarea id="ai-chat-input" class="ai-chat-textarea" placeholder="Envie uma instrução ou pergunta para o ${activeAgent.name}... (Shift + Enter para pular linha)"></textarea>
+                            <button type="button" id="ai-chat-send-btn" class="ai-send-btn" title="Enviar Mensagem">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Helper para renderizar mensagens da conversa carregada
+            const loadAndRenderMessages = async (convId) => {
+                if (!convId) return;
+                try {
+                    const res = await api(`/api/ai/conversations/${convId}`);
+                    const messages = res.messages || [];
+                    const container = document.getElementById('ai-messages-container');
+                    if (!container) return;
+
+                    let html = '';
+                    for (const m of messages) {
+                        if (m.sender === 'user') {
+                            html += `
+                                <div class="ai-message user">
+                                    <div class="ai-message-bubble">${formatMarkdownText(m.content)}</div>
+                                </div>
+                            `;
+                        } else if (m.sender === 'assistant') {
+                            html += `
+                                <div class="ai-message assistant">
+                                    <div class="ai-agent-avatar" style="background-color: ${activeAgent.avatar_color || '#3b82f6'}; width: 32px; height: 32px; font-size: 0.95rem;">
+                                        <i class="fas ${activeAgent.avatar_icon || 'fa-robot'}"></i>
+                                    </div>
+                                    <div class="ai-message-bubble">
+                                        ${m.content ? formatMarkdownText(m.content) : ''}
+                                        ${Array.isArray(m.tool_calls) && m.tool_calls.length > 0 ? `
+                                            <div style="margin-top: 0.5rem;">
+                                                ${m.tool_calls.map(tc => `
+                                                    <div class="ai-tool-call-card">
+                                                        <div class="ai-tool-call-info">
+                                                            <i class="fas fa-gear" style="color: var(--color-primary);"></i>
+                                                            <span><strong>Ferramenta:</strong> <code>${tc.name}</code></span>
+                                                        </div>
+                                                        <span class="ai-tool-call-badge success">Executado</span>
+                                                    </div>
+                                                `).join('')}
+                                            </div>
+                                        ` : ''}
+                                    </div>
+                                </div>
+                            `;
+                        } else if (m.sender === 'system') {
+                            html += `
+                                <div class="ai-message system">
+                                    <div class="ai-message-bubble">${m.content}</div>
+                                </div>
+                            `;
+                        }
+                    }
+
+                    if (html) {
+                        container.innerHTML = html;
+                        container.scrollTop = container.scrollHeight;
+                    }
+                } catch (e) {
+                    console.error('Erro ao carregar mensagens da conversa:', e);
+                }
+            };
+
+            if (currentConvId) {
+                await loadAndRenderMessages(currentConvId);
+            }
+
+            // Event Listeners da View de Chat
+            const inputEl = document.getElementById('ai-chat-input');
+            const sendBtn = document.getElementById('ai-chat-send-btn');
+            const messagesContainer = document.getElementById('ai-messages-container');
+            const agentSelect = document.getElementById('ai-sidebar-agent-select');
+            const newChatBtn = document.getElementById('ai-btn-new-chat');
+
+            // Troca de agente
+            agentSelect?.addEventListener('change', () => {
+                renderAIChatView(parseInt(agentSelect.value, 10), null);
+            });
+
+            // Novo chat
+            newChatBtn?.addEventListener('click', () => {
+                renderAIChatView(currentAgentId, null);
+            });
+
+            // Selecionar conversa na lista
+            document.getElementById('ai-conv-list')?.addEventListener('click', async (e) => {
+                const deleteBtn = e.target.closest('[data-action="delete-conv"]');
+                if (deleteBtn) {
+                    e.stopPropagation();
+                    const convId = deleteBtn.dataset.convId;
+                    if (confirm('Deseja excluir esta conversa do histórico?')) {
+                        await api(`/api/ai/conversations/${convId}`, 'DELETE');
+                        showToast('Conversa excluída.', 'info');
+                        renderAIChatView(currentAgentId, null);
+                    }
+                    return;
+                }
+
+                const item = e.target.closest('.ai-conv-item');
+                if (item) {
+                    const convId = item.dataset.convId;
+                    const agId = item.dataset.agentId;
+                    renderAIChatView(agId, convId);
+                }
+            });
+
+            // Clique em chips de sugestão
+            document.getElementById('ai-prompt-chips')?.addEventListener('click', (e) => {
+                const chip = e.target.closest('.ai-chip-btn');
+                if (chip && chip.dataset.prompt && inputEl) {
+                    inputEl.value = chip.dataset.prompt;
+                    sendMessage();
+                }
+            });
+
+            // Função de envio de mensagem
+            const sendMessage = async () => {
+                const text = inputEl?.value.trim();
+                if (!text) return;
+
+                inputEl.value = '';
+                inputEl.disabled = true;
+                sendBtn.disabled = true;
+
+                // Renderiza bolha do usuário imediatamente
+                messagesContainer.innerHTML += `
+                    <div class="ai-message user">
+                        <div class="ai-message-bubble">${formatMarkdownText(text)}</div>
+                    </div>
+                `;
+
+                // Indicador de digitação
+                const typingId = 'ai-typing-' + Date.now();
+                messagesContainer.innerHTML += `
+                    <div class="ai-message assistant" id="${typingId}">
+                        <div class="ai-agent-avatar" style="background-color: ${activeAgent.avatar_color || '#3b82f6'}; width: 32px; height: 32px; font-size: 0.95rem;">
+                            <i class="fas ${activeAgent.avatar_icon || 'fa-robot'}"></i>
+                        </div>
+                        <div class="ai-message-bubble">
+                            <div class="ai-typing-indicator">
+                                <div class="ai-typing-dot"></div>
+                                <div class="ai-typing-dot"></div>
+                                <div class="ai-typing-dot"></div>
+                                <span style="font-size: 0.8rem; color: var(--color-text-offset); margin-left: 0.5rem;">${activeAgent.name} está analisando...</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+                try {
+                    const res = await api('/api/ai/chat', 'POST', {
+                        agent_id: activeAgent.id,
+                        conversation_id: currentConvId,
+                        message: text
+                    });
+
+                    currentConvId = res.conversation_id;
+
+                    // Remove indicador de digitação
+                    document.getElementById(typingId)?.remove();
+
+                    // Renderiza resposta da IA
+                    let assistantHtml = `
+                        <div class="ai-message assistant">
+                            <div class="ai-agent-avatar" style="background-color: ${activeAgent.avatar_color || '#3b82f6'}; width: 32px; height: 32px; font-size: 0.95rem;">
+                                <i class="fas ${activeAgent.avatar_icon || 'fa-robot'}"></i>
+                            </div>
+                            <div class="ai-message-bubble">
+                                ${res.message ? formatMarkdownText(res.message) : ''}
+                                
+                                ${Array.isArray(res.executed_actions) && res.executed_actions.length > 0 ? `
+                                    <div style="margin-top: 0.75rem;">
+                                        ${res.executed_actions.map(ea => `
+                                            <div class="ai-tool-call-card">
+                                                <div class="ai-tool-call-info">
+                                                    <i class="fas fa-check-circle" style="color: var(--color-success);"></i>
+                                                    <span><strong>Ação Executada:</strong> <code>${ea.tool_name}</code></span>
+                                                </div>
+                                                <span class="ai-tool-call-badge success">Concluído</span>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                ` : ''}
+
+                                ${Array.isArray(res.pending_actions) && res.pending_actions.length > 0 ? `
+                                    <div style="margin-top: 0.75rem;">
+                                        ${res.pending_actions.map(pa => `
+                                            <div class="ai-action-approval-card" id="ai-pending-card-${pa.action_id}">
+                                                <div class="ai-action-approval-header">
+                                                    <i class="fas fa-triangle-exclamation"></i>
+                                                    <span>Confirmação Necessária de Alteração</span>
+                                                </div>
+                                                <div class="ai-action-approval-body">
+                                                    <strong>${pa.descricao}</strong>
+                                                    <div style="font-size: 0.78rem; color: var(--color-text-offset); margin-top: 0.35rem;">
+                                                        Ferramenta: <code>${pa.tool_name}</code>
+                                                    </div>
+                                                </div>
+                                                <div class="ai-action-approval-buttons">
+                                                    <button type="button" class="btn btn-secondary btn-sm btn-reject-action" data-action-id="${pa.action_id}">
+                                                        <i class="fas fa-times"></i> Rejeitar
+                                                    </button>
+                                                    <button type="button" class="btn btn-success btn-sm btn-approve-action" data-action-id="${pa.action_id}">
+                                                        <i class="fas fa-check"></i> Aprovar e Executar no ML
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+
+                    messagesContainer.innerHTML += assistantHtml;
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+                } catch (chatErr) {
+                    document.getElementById(typingId)?.remove();
+                    messagesContainer.innerHTML += `
+                        <div class="ai-message assistant">
+                            <div class="ai-agent-avatar" style="background-color: var(--color-danger); width: 32px; height: 32px;">
+                                <i class="fas fa-triangle-exclamation"></i>
+                            </div>
+                            <div class="ai-message-bubble" style="border-color: var(--color-danger); background-color: var(--color-danger-light);">
+                                <p style="color: var(--color-danger); font-weight: 600;">Erro ao consultar agente:</p>
+                                <p style="font-size: 0.85rem;">${chatErr.message}</p>
+                            </div>
+                        </div>
+                    `;
+                    showToast(`Erro do Agente: ${chatErr.message}`, 'error');
+                } finally {
+                    if (inputEl) {
+                        inputEl.disabled = false;
+                        inputEl.focus();
+                    }
+                    if (sendBtn) sendBtn.disabled = false;
+                }
+            };
+
+            sendBtn?.addEventListener('click', sendMessage);
+            inputEl?.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+
+            // Listener para aprovação ou rejeição de ações pendentes
+            messagesContainer?.addEventListener('click', async (e) => {
+                const approveBtn = e.target.closest('.btn-approve-action');
+                if (approveBtn) {
+                    const actionId = approveBtn.dataset.actionId;
+                    approveBtn.disabled = true;
+                    approveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando...';
+                    try {
+                        const res = await api(`/api/ai/actions/${actionId}/approve`, 'POST');
+                        showToast(res.mensagem || 'Ação aprovada e executada com sucesso!', 'success');
+                        const card = document.getElementById(`ai-pending-card-${actionId}`);
+                        if (card) {
+                            card.innerHTML = `
+                                <div style="color: var(--color-success); font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+                                    <i class="fas fa-circle-check"></i> Ação Aprovada e Concluída no Mercado Livre
+                                </div>
+                            `;
+                        }
+                    } catch (err) {
+                        showToast(`Erro ao aprovar: ${err.message}`, 'error');
+                        approveBtn.disabled = false;
+                        approveBtn.innerHTML = '<i class="fas fa-check"></i> Aprovar e Executar';
+                    }
+                    return;
+                }
+
+                const rejectBtn = e.target.closest('.btn-reject-action');
+                if (rejectBtn) {
+                    const actionId = rejectBtn.dataset.actionId;
+                    try {
+                        await api(`/api/ai/actions/${actionId}/reject`, 'POST');
+                        showToast('Ação cancelada.', 'info');
+                        const card = document.getElementById(`ai-pending-card-${actionId}`);
+                        if (card) {
+                            card.innerHTML = `
+                                <div style="color: var(--color-text-muted); font-size: 0.85rem;">
+                                    <i class="fas fa-ban"></i> Ação rejeitada pelo usuário.
+                                </div>
+                            `;
+                        }
+                    } catch (err) {
+                        showToast(`Erro ao rejeitar: ${err.message}`, 'error');
+                    }
+                }
+            });
+
+        } catch (error) {
+            renderError(error);
+        }
+    }
+
+    /**
+     * TELA 2: Hub de Agentes Especializados
+     */
+    async function renderAIAgentsHubView() {
+        mainTitle.textContent = 'Hub de Agentes Inteligentes';
+        mainSubtitle.textContent = 'Agentes autônomos treinados para executar funções de negócio no ERP e Mercado Livre';
+        headerActions.innerHTML = '';
+        showLoading('Carregando agentes...');
+
+        try {
+            const res = await api('/api/ai/agents');
+            const agents = res.agents || [];
+
+            pageContent.innerHTML = `
+                <div class="ai-page-header">
+                    <div>
+                        <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--color-text);">Agentes Especialistas Disponíveis</h2>
+                        <p style="font-size: 0.85rem; color: var(--color-text-offset);">Selecione um agente para iniciar uma análise ou automação</p>
+                    </div>
+                </div>
+
+                <div class="ai-agents-grid">
+                    ${agents.map(a => `
+                        <div class="ai-agent-card">
+                            <div>
+                                <div class="ai-agent-card-top">
+                                    <div class="ai-agent-avatar" style="background-color: ${a.avatar_color || '#3b82f6'}; width: 48px; height: 48px; font-size: 1.35rem;">
+                                        <i class="fas ${a.avatar_icon || 'fa-robot'}"></i>
+                                    </div>
+                                    <div class="ai-agent-card-info">
+                                        <h3>${a.name}</h3>
+                                        <div class="role">${a.role_title}</div>
+                                        <div class="desc">${a.description}</div>
+                                    </div>
+                                </div>
+                                <div style="margin-top: 1rem;">
+                                    <div style="font-size: 0.75rem; font-weight: 700; color: var(--color-text-muted); text-transform: uppercase; margin-bottom: 0.4rem;">
+                                        Ferramentas Habilitadas:
+                                    </div>
+                                    <div class="ai-agent-card-tools">
+                                        ${(a.allowed_tools || []).map(t => `<span class="ai-tool-tag"><i class="fas fa-wrench"></i> ${t}</span>`).join('')}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center;">
+                                <span class="badge ${a.require_confirmation ? 'badge-warning' : 'badge-success'}" style="font-size: 0.72rem;">
+                                    ${a.require_confirmation ? 'Confirmação Manual' : 'Autônomo'}
+                                </span>
+                                <button type="button" class="btn btn-primary btn-sm btn-open-agent-chat" data-agent-id="${a.id}">
+                                    <i class="fas fa-comments"></i> Conversar
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            document.querySelectorAll('.btn-open-agent-chat').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const agentId = btn.dataset.agentId;
+                    setActiveNavLink('nav-ai-chat');
+                    renderAIChatView(parseInt(agentId, 10), null);
+                });
+            });
+
+        } catch (error) {
+            renderError(error);
+        }
+    }
+
+    /**
+     * TELA 3: Configurações do Módulo de IA (Gemini)
+     */
+    async function renderAISettingsView() {
+        mainTitle.textContent = 'Configurações de Inteligência Artificial';
+        mainSubtitle.textContent = 'Gerencie sua chave da API Google Gemini, modelos e parâmetros de raciocínio';
+        headerActions.innerHTML = '';
+        showLoading('Carregando configurações de IA...');
+
+        try {
+            const res = await api('/api/ai/settings');
+            const settings = res.settings || {};
+
+            pageContent.innerHTML = `
+                <div class="ai-settings-container">
+                    <div class="ai-card">
+                        <h3 class="ai-card-title"><i class="fas fa-key" style="color: var(--color-primary);"></i> Chave de API do Google Gemini</h3>
+                        <p class="ai-card-subtitle">Insira a chave de API gerada no <a href="https://aistudio.google.com/" target="_blank" style="color: var(--color-primary); text-decoration: underline;">Google AI Studio</a> ou Vertex AI.</p>
+
+                        <form id="ai-settings-form">
+                            <div class="form-group">
+                                <label for="ai-gemini-key">Chave de API (API Key)</label>
+                                <div style="display: flex; gap: 0.65rem;">
+                                    <input type="password" id="ai-gemini-key" class="form-control" placeholder="${settings.has_key ? `Chave salva: ${settings.masked_key}` : 'Cole aqui sua chave (Ex: AIzaSy...)'}">
+                                    <button type="button" id="ai-btn-test-key" class="btn btn-secondary" style="min-width: 140px;">
+                                        <i class="fas fa-vial"></i> Testar Conexão
+                                    </button>
+                                </div>
+                                <small style="color: var(--color-text-offset); font-size: 0.78rem; margin-top: 0.25rem; display: block;">
+                                    ${settings.has_key ? `✅ Chave ativa configurada (${settings.masked_key}). Deixe em branco para manter a atual.` : 'Nenhuma chave configurada ainda.'}
+                                </small>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem;">
+                                <div class="form-group">
+                                    <label for="ai-default-model">Modelo Padrão do Gemini</label>
+                                    <select id="ai-default-model" class="form-control">
+                                        <option value="gemini-2.5-flash" ${settings.default_model === 'gemini-2.5-flash' ? 'selected' : ''}>gemini-2.5-flash (Mais Rápido & Econômico - Recomendado)</option>
+                                        <option value="gemini-2.5-pro" ${settings.default_model === 'gemini-2.5-pro' ? 'selected' : ''}>gemini-2.5-pro (Raciocínio Profundo & Avançado)</option>
+                                        <option value="gemini-1.5-flash" ${settings.default_model === 'gemini-1.5-flash' ? 'selected' : ''}>gemini-1.5-flash</option>
+                                        <option value="gemini-1.5-pro" ${settings.default_model === 'gemini-1.5-pro' ? 'selected' : ''}>gemini-1.5-pro</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label for="ai-temperature">Temperatura (Criatividade vs Precisão): <span id="temp-val">${settings.temperature || 0.2}</span></label>
+                                    <input type="range" id="ai-temperature" min="0" max="1" step="0.05" value="${settings.temperature || 0.2}" class="form-range" style="width: 100%; margin-top: 0.5rem;">
+                                </div>
+                            </div>
+
+                            <div id="ai-test-result-box" style="display: none; margin-top: 1rem; padding: 0.85rem; border-radius: var(--border-radius-sm); font-size: 0.85rem;"></div>
+
+                            <div style="margin-top: 1.5rem; display: flex; justify-content: flex-end;">
+                                <button type="submit" id="ai-btn-save-settings" class="btn btn-primary" style="min-width: 160px;">
+                                    <i class="fas fa-save"></i> Salvar Configurações
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+
+            const form = document.getElementById('ai-settings-form');
+            const keyInput = document.getElementById('ai-gemini-key');
+            const modelSelect = document.getElementById('ai-default-model');
+            const tempRange = document.getElementById('ai-temperature');
+            const tempVal = document.getElementById('temp-val');
+            const testBtn = document.getElementById('ai-btn-test-key');
+            const testResultBox = document.getElementById('ai-test-result-box');
+            const saveBtn = document.getElementById('ai-btn-save-settings');
+
+            tempRange?.addEventListener('input', () => {
+                if (tempVal) tempVal.textContent = tempRange.value;
+            });
+
+            // Testar Chave
+            testBtn?.addEventListener('click', async () => {
+                testBtn.disabled = true;
+                testBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Testando...';
+                testResultBox.style.display = 'block';
+                testResultBox.className = 'status-box';
+                testResultBox.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Conectando à API do Google Gemini...';
+
+                try {
+                    const res = await api('/api/ai/settings/test', 'POST', {
+                        apiKey: keyInput.value.trim(),
+                        model: modelSelect.value
+                    });
+
+                    testResultBox.style.backgroundColor = 'var(--color-success-light)';
+                    testResultBox.style.color = 'var(--color-success)';
+                    testResultBox.style.border = '1px solid var(--color-success)';
+                    testResultBox.innerHTML = `✅ <strong>Sucesso!</strong> ${res.mensagem} (Modelo: <code>${res.modelo}</code>)`;
+                    showToast('Conexão com a API do Gemini realizada com sucesso!', 'success');
+                } catch (err) {
+                    testResultBox.style.backgroundColor = 'var(--color-danger-light)';
+                    testResultBox.style.color = 'var(--color-danger)';
+                    testResultBox.style.border = '1px solid var(--color-danger)';
+                    testResultBox.innerHTML = `❌ <strong>Erro no teste:</strong> ${err.message}`;
+                    showToast(`Falha no teste: ${err.message}`, 'error');
+                } finally {
+                    testBtn.disabled = false;
+                    testBtn.innerHTML = '<i class="fas fa-vial"></i> Testar Conexão';
+                }
+            });
+
+            // Salvar Configurações
+            form?.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+
+                try {
+                    await api('/api/ai/settings', 'POST', {
+                        gemini_api_key: keyInput.value.trim() || undefined,
+                        default_model: modelSelect.value,
+                        temperature: parseFloat(tempRange.value)
+                    });
+
+                    showToast('Configurações de IA salvas com sucesso!', 'success');
+                    renderAISettingsView();
+                } catch (err) {
+                    showToast(`Erro ao salvar: ${err.message}`, 'error');
+                } finally {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-save"></i> Salvar Configurações';
+                }
+            });
+
+        } catch (error) {
+            renderError(error);
+        }
+    }
+
+    /**
+     * TELA 4: Auditoria de Ações Executadas por Agentes
+     */
+    async function renderAILogsView() {
+        mainTitle.textContent = 'Auditoria de Ações dos Agentes';
+        mainSubtitle.textContent = 'Histórico detalhado de ferramentas, consultas e alterações executadas pela IA';
+        headerActions.innerHTML = '';
+        showLoading('Carregando histórico de auditoria...');
+
+        try {
+            const res = await api('/api/ai/logs?limit=100');
+            const logs = res.logs || [];
+
+            pageContent.innerHTML = `
+                <div class="table-container">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Data / Hora</th>
+                                <th>Agente</th>
+                                <th>Ferramenta (Tool)</th>
+                                <th>Argumentos</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${logs.length === 0 ? `
+                                <tr>
+                                    <td colspan="5" style="text-align: center; color: var(--color-text-muted); padding: 2rem;">
+                                        Nenhuma ação registrada ainda.
+                                    </td>
+                                </tr>
+                            ` : logs.map(l => {
+                                const statusClass = l.status === 'executed' || l.status === 'approved' ? 'badge-success' : (l.status === 'pending_approval' ? 'badge-warning' : 'badge-danger');
+                                const statusLabel = l.status === 'executed' ? 'Executado' : (l.status === 'approved' ? 'Aprovado' : (l.status === 'pending_approval' ? 'Pendente' : 'Falhou'));
+                                const dateStr = l.created_at ? new Date(l.created_at).toLocaleString('pt-BR') : '-';
+
+                                return `
+                                    <tr>
+                                        <td style="font-size: 0.8rem; white-space: nowrap;">${dateStr}</td>
+                                        <td>
+                                            <span style="font-weight: 600; display: flex; align-items: center; gap: 0.35rem;">
+                                                <i class="fas ${l.avatar_icon || 'fa-robot'}" style="color: ${l.avatar_color || 'var(--color-primary)'};"></i>
+                                                ${l.agent_name || 'Agente'}
+                                            </span>
+                                        </td>
+                                        <td><code>${l.tool_name}</code></td>
+                                        <td style="max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem; font-family: var(--font-family-mono);">
+                                            ${JSON.stringify(l.tool_args || {})}
+                                        </td>
+                                        <td><span class="badge ${statusClass}">${statusLabel}</span></td>
+                                    </tr>
+                                `;
+                            }).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        } catch (error) {
+            renderError(error);
+        }
+    }
+
+    /**
+     * =================================================================
      * ROTEAMENTO E CONTROLE DE NAVEGAÇÃO
      * =================================================================
      */
@@ -4248,7 +5016,11 @@ document.addEventListener('DOMContentLoaded', () => {
         'nav-conexoes-erp': renderErpConnections,
         'nav-conexoes-fornecedores': renderSupplierConnections,
         'nav-meli-anuncios': renderMercadoLivreListings,
-        'nav-meli-conexoes': renderMarketplaceConnections
+        'nav-meli-conexoes': renderMarketplaceConnections,
+        'nav-ai-chat': () => renderAIChatView(),
+        'nav-ai-agents': renderAIAgentsHubView,
+        'nav-ai-settings': renderAISettingsView,
+        'nav-ai-logs': renderAILogsView
     };
 
     document.querySelector('.menu-links').addEventListener('click', (e) => {

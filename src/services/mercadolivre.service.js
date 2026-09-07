@@ -1450,7 +1450,7 @@ export async function calculateItemFeesAndNet(connection, itemData, db) {
     let freeShipping = false;
     let logisticType = itemData.shipping?.logistic_type || null;
 
-    // 1. Consulta taxas de venda (comissão do Mercado Livre) via API oficial (/sites/{siteId}/listing_prices)
+    // 1. Consulta taxas de venda (comissão do Mercado Livre) via Simulador de Custos (/users/{userId}/items/prices)
     try {
         const lpData = await executeMeliRequest(connection, db, async (token) => {
             const params = {
@@ -1459,7 +1459,43 @@ export async function calculateItemFeesAndNet(connection, itemData, db) {
                 currency_id: 'BRL'
             };
             if (categoryId) params.category_id = categoryId;
+            if (itemId) params.item_id = itemId;
 
+            // Tentativa 1: Simulador de Custos de Anúncio (/users/{userId}/items/prices)
+            if (userId) {
+                try {
+                    logger.info(`[MercadoLivreService] [Taxas] Consultando /users/${userId}/items/prices com params: ${JSON.stringify(params)}`);
+                    const resItemsPrices = await meliAxios.get(`/users/${userId}/items/prices`, {
+                        params,
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (resItemsPrices.data) {
+                        logger.info(`[MercadoLivreService] [Taxas] Resposta de /users/${userId}/items/prices: ${JSON.stringify(resItemsPrices.data)}`);
+                        return resItemsPrices.data;
+                    }
+                } catch (pErr) {
+                    logger.info(`[MercadoLivreService] [Taxas] /users/${userId}/items/prices falhou (${pErr.response?.status || pErr.message}): ${JSON.stringify(pErr.response?.data || {})}`);
+                }
+            }
+
+            // Tentativa 2: Endpoint personalizado do usuário (/users/{userId}/listing_prices)
+            if (userId) {
+                try {
+                    logger.info(`[MercadoLivreService] [Taxas] Consultando /users/${userId}/listing_prices com params: ${JSON.stringify(params)}`);
+                    const resUser = await meliAxios.get(`/users/${userId}/listing_prices`, {
+                        params,
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (resUser.data) {
+                        logger.info(`[MercadoLivreService] [Taxas] Resposta de /users/${userId}/listing_prices: ${JSON.stringify(resUser.data)}`);
+                        return resUser.data;
+                    }
+                } catch (uErr) {
+                    logger.info(`[MercadoLivreService] [Taxas] /users/${userId}/listing_prices falhou (${uErr.response?.status || uErr.message}): ${JSON.stringify(uErr.response?.data || {})}`);
+                }
+            }
+
+            // Tentativa 3: Endpoint geral do site (/sites/{siteId}/listing_prices)
             logger.info(`[MercadoLivreService] [Taxas] Consultando /sites/${siteId}/listing_prices com params: ${JSON.stringify(params)}`);
             const res = await meliAxios.get(`/sites/${siteId}/listing_prices`, {
                 params,
@@ -1510,10 +1546,8 @@ export async function calculateItemFeesAndNet(connection, itemData, db) {
 
             const rawTotalFee = parseFloat(matched.sale_fee_amount ?? matched.sale_fee ?? details.gross_amount ?? details.sale_fee_amount ?? details.total_fee ?? 0);
 
-            const rawFixedNum = (rawFixed !== null && rawFixed !== undefined && !isNaN(parseFloat(rawFixed))) ? parseFloat(rawFixed) : null;
-
-            if (rawFixedNum !== null && rawFixedNum > 0) {
-                fixedFee = rawFixedNum;
+            if (rawFixed !== null && rawFixed !== undefined && !isNaN(parseFloat(rawFixed))) {
+                fixedFee = parseFloat(rawFixed);
                 saleFeeAmount = Math.round((pctVal + fixedFee) * 100) / 100;
                 logger.info(`[MercadoLivreService] [Taxas] Taxa fixa extraída de campo da API: R$ ${fixedFee}`);
             } else if (rawTotalFee > pctVal + 0.01) {
@@ -1522,10 +1556,10 @@ export async function calculateItemFeesAndNet(connection, itemData, db) {
                 saleFeeAmount = Math.round(rawTotalFee * 100) / 100;
                 logger.info(`[MercadoLivreService] [Taxas] Taxa fixa calculada por diferença da API (total ${rawTotalFee} - pct ${pctVal}): R$ ${fixedFee}`);
             } else if (price < 79.00 && siteId === 'MLB') {
-                // Fallback dinâmico por faixa de preço oficial do Mercado Livre Brasil
+                // Fallback dinâmico por faixa de preço oficial caso a API omita a taxa fixa
                 fixedFee = getMlbFixedFeeByPrice(price);
                 saleFeeAmount = Math.round((pctVal + fixedFee) * 100) / 100;
-                logger.info(`[MercadoLivreService] [Taxas] Taxa fixa calculada pela tabela oficial MLB por faixa de preço: R$ ${fixedFee}`);
+                logger.info(`[MercadoLivreService] [Taxas] API não retornou taxa fixa para < 79, aplicado fallback MLB por faixa: R$ ${fixedFee}`);
             } else {
                 fixedFee = 0.00;
                 saleFeeAmount = rawTotalFee > 0 ? Math.round(rawTotalFee * 100) / 100 : pctVal;
