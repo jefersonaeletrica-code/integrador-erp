@@ -76,67 +76,53 @@ export async function testGeminiApiKey(apiKey, model = 'gemini-3.6-flash') {
   }
 
   const cleanKey = apiKey.trim();
-  
-  // Tenta obter os modelos habilitados para esta chave
+  const targetModel = (model || '').trim() || 'gemini-3.6-flash';
   const availableModels = await listAvailableGeminiModels(cleanKey);
-  const availableIds = availableModels.map(m => m.id);
 
-  const requestedModel = (model || '').trim() || 'gemini-3.6-flash';
-
-  const modelsToTry = [
-    requestedModel,
-    ...availableIds,
-    ...SUPPORTED_MODELS
-  ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
-
-  let lastError = null;
-
-  for (const candidateModel of modelsToTry) {
-    try {
-      const url = `${GEMINI_API_BASE}/models/${candidateModel}:generateContent?key=${cleanKey}`;
-      const payload = {
-        contents: [
-          {
-            role: 'user',
-            parts: [{ text: 'Responda apenas a palavra: OK' }]
-          }
-        ],
-        generationConfig: {
-          maxOutputTokens: 10,
-          temperature: 0.1
+  try {
+    const url = `${GEMINI_API_BASE}/models/${targetModel}:generateContent?key=${cleanKey}`;
+    const payload = {
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: 'Responda apenas a palavra: OK' }]
         }
-      };
-
-      const response = await axios.post(url, payload, {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 15000
-      });
-
-      const reply = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      return {
-        sucesso: true,
-        modelo: candidateModel,
-        resposta: reply.trim(),
-        available_models: availableModels.length > 0 ? availableModels : SUPPORTED_MODELS.map(id => ({ id, name: id })),
-        mensagem: `Conexão com a API do Google Gemini validada com sucesso no modelo "${candidateModel}"!`
-      };
-    } catch (error) {
-      lastError = error;
-      const statusCode = error.response?.status;
-      if (statusCode === 400 && error.response?.data?.error?.message?.includes('API_KEY_INVALID')) {
-        throw new Error('Chave de API do Google Gemini inválida. Verifique se copiou a chave correta no Google AI Studio.');
+      ],
+      generationConfig: {
+        maxOutputTokens: 10,
+        temperature: 0.1
       }
-      if (statusCode === 403) {
-        throw new Error(`Permissão negada (403): ${error.response?.data?.error?.message || error.message}`);
-      }
-      logger.warn(`[GeminiService] Modelo ${candidateModel} retornou erro ${statusCode || error.message}. Tentando próximo modelo...`);
+    };
+
+    const response = await axios.post(url, payload, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 8000
+    });
+
+    const reply = response.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    return {
+      sucesso: true,
+      modelo: targetModel,
+      resposta: reply.trim(),
+      available_models: availableModels.length > 0 ? availableModels : SUPPORTED_MODELS.map(id => ({ id, name: id })),
+      mensagem: `Conexão com a API do Google Gemini validada com sucesso no modelo "${targetModel}"!`
+    };
+  } catch (error) {
+    const statusCode = error.response?.status;
+    const errorDetail = error.response?.data?.error?.message || error.message;
+
+    if (statusCode === 400 && errorDetail.includes('API_KEY_INVALID')) {
+      throw new Error('Chave de API do Google Gemini inválida. Verifique se copiou a chave correta no Google AI Studio.');
     }
-  }
+    if (statusCode === 403) {
+      throw new Error(`Permissão negada (403): ${errorDetail}`);
+    }
+    if (statusCode === 429) {
+      throw new Error(`Limite de requisições excedido (429) no modelo ${targetModel}.`);
+    }
 
-  const errorMsg = lastError?.response?.data?.error?.message || lastError?.message || 'Erro desconhecido';
-  const statusCode = lastError?.response?.status;
-  logger.error(`[GeminiService] Erro ao testar chave Gemini (${statusCode}): ${errorMsg}`);
-  throw new Error(`Falha ao conectar com a API do Gemini (${statusCode || 'Rede'}): ${errorMsg}`);
+    throw new Error(`Falha ao conectar com a API do Gemini (${statusCode || 'Timeout'}): ${errorDetail}`);
+  }
 }
 
 /**
@@ -165,14 +151,7 @@ export async function generateGeminiContent({
   }
 
   const cleanKey = apiKey.trim();
-
-  // Modelos suportados válidos para fallback
-  const requestedModel = (model || '').trim() || 'gemini-3.6-flash';
-
-  const modelsToTry = [
-    requestedModel,
-    ...SUPPORTED_MODELS
-  ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
+  const targetModel = (model || '').trim() || 'gemini-3.6-flash';
 
   const requestBody = {
     contents,
@@ -198,77 +177,56 @@ export async function generateGeminiContent({
     ];
   }
 
-  let lastError = null;
+  try {
+    const url = `${GEMINI_API_BASE}/models/${targetModel}:generateContent?key=${cleanKey}`;
+    const response = await axios.post(url, requestBody, {
+      headers: { 'Content-Type': 'application/json' },
+      timeout: 10000 // 10s timeout máximo direto sem alternar modelos
+    });
 
-  for (const candidateModel of modelsToTry) {
-    try {
-      const url = `${GEMINI_API_BASE}/models/${candidateModel}:generateContent?key=${cleanKey}`;
-      const response = await axios.post(url, requestBody, {
-        headers: { 'Content-Type': 'application/json' },
-        timeout: 20000 // 20 segundos máx por modelo para evitar travamentos
-      });
+    const candidate = response.data?.candidates?.[0];
+    if (!candidate) {
+      throw new Error('Nenhuma resposta gerada pelo modelo Gemini.');
+    }
 
-      const candidate = response.data?.candidates?.[0];
-      if (!candidate) {
-        throw new Error('Nenhuma resposta gerada pelo modelo Gemini.');
+    const parts = candidate.content?.parts || [];
+    let textContent = '';
+    const functionCalls = [];
+
+    for (const part of parts) {
+      if (part.text) {
+        textContent += part.text;
       }
-
-      const parts = candidate.content?.parts || [];
-      let textContent = '';
-      const functionCalls = [];
-
-      for (const part of parts) {
-        if (part.text) {
-          textContent += part.text;
-        }
-        if (part.functionCall) {
-          functionCalls.push({
-            name: part.functionCall.name,
-            args: part.functionCall.args || {}
-          });
-        }
-      }
-
-      return {
-        text: textContent,
-        functionCalls,
-        modelUsed: candidateModel,
-        finishReason: candidate.finishReason,
-        usageMetadata: response.data?.usageMetadata || null,
-        rawCandidate: candidate
-      };
-    } catch (error) {
-      lastError = error;
-      const statusCode = error.response?.status;
-      const errorDetail = error.response?.data?.error?.message || error.message;
-
-      if (statusCode === 401 || statusCode === 403 || errorDetail.includes('API_KEY_INVALID')) {
-        throw new Error(`Erro de autenticação Gemini (${statusCode}): ${errorDetail}`);
-      }
-
-      // Se for 429 (cota do modelo esgotada), pula imediatamente para o próximo modelo do pool de fallback
-      if (statusCode === 429) {
-        logger.warn(`[GeminiService] Cota esgotada (429) no modelo "${candidateModel}". Alternando instantaneamente para o próximo modelo disponível...`);
-        continue;
-      }
-
-      // Se for 503 (alta demanda temporária no Google) ou timeout, tenta o próximo modelo do pool
-      if (statusCode === 503 || error.code === 'ECONNABORTED' || errorDetail.includes('high demand') || errorDetail.includes('unavailable')) {
-        logger.warn(`[GeminiService] Modelo "${candidateModel}" indisponível/sobrecarregado (${statusCode || error.code}). Alternando para o próximo modelo disponível...`);
-        continue;
-      }
-
-      logger.warn(`[GeminiService] Modelo "${candidateModel}" falhou (Status: ${statusCode || 'Erro'}): ${errorDetail}`);
-
-      // Se o erro for 400 Bad Request que não seja relacionado ao nome do modelo, propaga
-      if (statusCode === 400 && !errorDetail.toLowerCase().includes('model') && !errorDetail.toLowerCase().includes('not found')) {
-        throw new Error(`Erro nos parâmetros enviados para o Gemini (400): ${errorDetail}`);
+      if (part.functionCall) {
+        functionCalls.push({
+          name: part.functionCall.name,
+          args: part.functionCall.args || {}
+        });
       }
     }
-  }
 
-  const errorMsg = lastError?.response?.data?.error?.message || lastError?.message || 'Erro desconhecido';
-  const statusCode = lastError?.response?.status;
-  logger.error(`[GeminiService] Erro na requisição Gemini (${statusCode}): ${errorMsg}`);
-  throw new Error(`Erro na API do Gemini (${statusCode || 'Erro'}): ${errorMsg}`);
+    return {
+      text: textContent,
+      functionCalls,
+      modelUsed: targetModel,
+      finishReason: candidate.finishReason,
+      usageMetadata: response.data?.usageMetadata || null,
+      rawCandidate: candidate
+    };
+  } catch (error) {
+    const statusCode = error.response?.status;
+    const errorDetail = error.response?.data?.error?.message || error.message;
+
+    if (statusCode === 401 || statusCode === 403 || errorDetail.includes('API_KEY_INVALID')) {
+      throw new Error(`Erro de autenticação Gemini (${statusCode}): ${errorDetail}`);
+    }
+
+    if (statusCode === 429) {
+      logger.warn(`[GeminiService] Limite de requisições por minuto atingido (429) no modelo "${targetModel}".`);
+      throw new Error(`Limite de requisições atingido (429) no modelo ${targetModel}.`);
+    }
+
+    logger.warn(`[GeminiService] Modelo "${targetModel}" retornou erro (${statusCode || 'Timeout'}): ${errorDetail}`);
+    throw new Error(`Erro na API do Gemini (${statusCode || 'Erro'}): ${errorDetail}`);
+  }
 }
