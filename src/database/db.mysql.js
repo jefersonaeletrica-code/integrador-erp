@@ -183,7 +183,7 @@ export const initializeDatabase = async () => {
       CREATE TABLE IF NOT EXISTS ai_settings (
         id INT AUTO_INCREMENT PRIMARY KEY,
         gemini_api_key VARCHAR(255) DEFAULT NULL,
-        default_model VARCHAR(50) NOT NULL DEFAULT 'gemini-2.5-flash',
+        default_model VARCHAR(50) NOT NULL DEFAULT 'gemini-1.5-flash',
         temperature DECIMAL(3,2) NOT NULL DEFAULT 0.20,
         max_output_tokens INT NOT NULL DEFAULT 4096,
         is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -197,7 +197,7 @@ export const initializeDatabase = async () => {
     if (aiSettingRows.length === 0) {
       await connection.query(`
         INSERT INTO ai_settings (gemini_api_key, default_model, temperature, max_output_tokens, is_active)
-        VALUES (NULL, 'gemini-2.5-flash', 0.20, 4096, TRUE)
+        VALUES (NULL, 'gemini-1.5-flash', 0.20, 4096, TRUE)
       `);
     }
 
@@ -211,7 +211,7 @@ export const initializeDatabase = async () => {
         role_title VARCHAR(150) NOT NULL,
         description TEXT NOT NULL,
         system_prompt LONGTEXT NOT NULL,
-        model VARCHAR(50) NOT NULL DEFAULT 'gemini-2.5-flash',
+        model VARCHAR(50) NOT NULL DEFAULT 'gemini-1.5-flash',
         allowed_tools JSON NOT NULL,
         require_confirmation BOOLEAN NOT NULL DEFAULT TRUE,
         is_active BOOLEAN NOT NULL DEFAULT TRUE,
@@ -260,6 +260,10 @@ export const initializeDatabase = async () => {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    // Migração automática de modelos antigos/inválidos para gemini-1.5-flash
+    await connection.query("UPDATE ai_settings SET default_model = 'gemini-1.5-flash' WHERE default_model = 'gemini-2.5-flash'");
+    await connection.query("UPDATE ai_agents SET model = 'gemini-1.5-flash' WHERE model = 'gemini-2.5-flash'");
+
     // Semeia agentes padrão caso a tabela esteja vazia
     const [agentRows] = await connection.query('SELECT id FROM ai_agents LIMIT 1');
     if (agentRows.length === 0) {
@@ -280,7 +284,7 @@ Regras de atuação:
 3. Se a margem líquida calculada for inferior a 15% ou negativa, alerte o vendedor imediatamente e sugira o preço de venda ideal.
 4. Antes de alterar qualquer preço de produto em massa, apresente o resumo das alterações propostas e peça confirmação.
 5. Sempre forneça respostas estruturadas com tabelas claras, percentuais de margem e valores em Reais (R$).`,
-          model: 'gemini-2.5-flash',
+          model: 'gemini-1.5-flash',
           allowed_tools: JSON.stringify(['buscar_anuncios_ml', 'simular_taxas_e_margem', 'obter_detalhes_anuncio_ml', 'atualizar_preco_anuncio_ml', 'consultar_estoque_fornecedor', 'resumo_geral_loja']),
           require_confirmation: 1
         },
@@ -298,7 +302,7 @@ Regras de atuação:
 3. Antes de sugerir baixar o preço para vencer a Buy Box, simule a nova margem líquida com a ferramenta 'simular_taxas_e_margem' para garantir que não haverá prejuízo.
 4. Se o preço para ganhar inviabilizar o lucro mínimo da loja (ex: margem < 10%), recomende pausar a disputa ou manter o preço atual.
 5. Apresente propostas de reprecificação claras com a margem antes vs depois da alteração.`,
-          model: 'gemini-2.5-flash',
+          model: 'gemini-1.5-flash',
           allowed_tools: JSON.stringify(['buscar_anuncios_ml', 'analisar_oportunidades_buybox', 'simular_taxas_e_margem', 'atualizar_preco_anuncio_ml', 'consultar_estoque_fornecedor']),
           require_confirmation: 1
         },
@@ -315,7 +319,7 @@ Regras de atuação:
 2. A descrição deve ser em texto puro (plain text), bem estruturada com tópicos claros (Benefícios, Especificações Técnicas, Compatibilidade, Conteúdo da Embalagem e Garantia).
 3. Consulte os detalhes do anúncio atual antes de propor alterações.
 4. Apresente o título antigo vs o novo título otimizado (com contador de caracteres) e a nova descrição sugerida.`,
-          model: 'gemini-2.5-flash',
+          model: 'gemini-1.5-flash',
           allowed_tools: JSON.stringify(['buscar_anuncios_ml', 'obter_detalhes_anuncio_ml', 'otimizar_titulo_descricao_ml']),
           require_confirmation: 1
         },
@@ -332,7 +336,7 @@ Regras de atuação:
 2. Identifique produtos cujo preço de custo aumentou no fornecedor mas o preço de venda no ML permaneceu inalterado, erodindo a margem.
 3. Se um produto estiver esgotado no fornecedor, recomende imediatamente zerar o estoque no Mercado Livre para evitar cancelamentos e penalizações na reputação.
 4. Apresente relatórios diretos e acionáveis.`,
-          model: 'gemini-2.5-flash',
+          model: 'gemini-1.5-flash',
           allowed_tools: JSON.stringify(['buscar_anuncios_ml', 'consultar_estoque_fornecedor', 'atualizar_estoque_anuncio_ml', 'atualizar_preco_anuncio_ml', 'resumo_geral_loja']),
           require_confirmation: 1
         }
@@ -625,7 +629,7 @@ export const getAISettings = async () => {
     if (rows.length === 0) {
       return {
         gemini_api_key: null,
-        default_model: 'gemini-2.5-flash',
+        default_model: 'gemini-1.5-flash',
         temperature: 0.20,
         max_output_tokens: 4096,
         is_active: true
@@ -654,7 +658,7 @@ export const saveAISettings = async (settings) => {
         WHERE id = ?
       `, [
         gemini_api_key || null,
-        default_model || 'gemini-2.5-flash',
+        default_model || 'gemini-1.5-flash',
         temperature !== undefined ? parseFloat(temperature) : 0.20,
         max_output_tokens !== undefined ? parseInt(max_output_tokens, 10) : 4096,
         is_active !== undefined ? (is_active ? 1 : 0) : 1,
@@ -667,7 +671,7 @@ export const saveAISettings = async (settings) => {
         VALUES (?, ?, ?, ?, ?)
       `, [
         gemini_api_key || null,
-        default_model || 'gemini-2.5-flash',
+        default_model || 'gemini-1.5-flash',
         temperature !== undefined ? parseFloat(temperature) : 0.20,
         max_output_tokens !== undefined ? parseInt(max_output_tokens, 10) : 4096,
         is_active !== undefined ? (is_active ? 1 : 0) : 1
@@ -748,7 +752,7 @@ export const saveOrUpdateAIAgent = async (agent) => {
         role_title,
         description,
         system_prompt,
-        model || 'gemini-2.5-flash',
+        model || 'gemini-1.5-flash',
         Array.isArray(allowed_tools) ? JSON.stringify(allowed_tools) : allowed_tools,
         require_confirmation !== undefined ? (require_confirmation ? 1 : 0) : 1,
         is_active !== undefined ? (is_active ? 1 : 0) : 1,
@@ -767,7 +771,7 @@ export const saveOrUpdateAIAgent = async (agent) => {
         role_title,
         description,
         system_prompt,
-        model || 'gemini-2.5-flash',
+        model || 'gemini-1.5-flash',
         Array.isArray(allowed_tools) ? JSON.stringify(allowed_tools) : allowed_tools,
         require_confirmation !== undefined ? (require_confirmation ? 1 : 0) : 1,
         is_active !== undefined ? (is_active ? 1 : 0) : 1

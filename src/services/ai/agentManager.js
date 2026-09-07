@@ -81,7 +81,7 @@ export async function processAgentMessage({ agentId, conversationId, message, db
     throw new Error('Chave da API do Google Gemini não está configurada. Acesse o menu "Configurações IA" e cadastre sua chave.');
   }
 
-  const model = agent.model || aiSettings.default_model || 'gemini-2.5-flash';
+  const model = agent.model || aiSettings.default_model || 'gemini-1.5-flash';
   const systemPrompt = agent.system_prompt;
   const requireConfirmation = agent.require_confirmation;
 
