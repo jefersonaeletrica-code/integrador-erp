@@ -1450,7 +1450,7 @@ export async function calculateItemFeesAndNet(connection, itemData, db) {
     let freeShipping = false;
     let logisticType = itemData.shipping?.logistic_type || null;
 
-    // 1. Consulta taxas de venda (comissão do Mercado Livre)
+    // 1. Consulta taxas de venda (comissão do Mercado Livre) via Simulador de Custos (/users/{userId}/items/prices)
     try {
         const lpData = await executeMeliRequest(connection, db, async (token) => {
             const params = {
@@ -1459,23 +1459,35 @@ export async function calculateItemFeesAndNet(connection, itemData, db) {
                 currency_id: 'BRL'
             };
             if (categoryId) params.category_id = categoryId;
+            if (itemId) params.item_id = itemId;
 
-            // Tentativa 1: Endpoint personalizado do usuário se disponível
+            // Tentativa 1: Simulador de Custos de Anúncio (/users/{userId}/items/prices)
+            if (userId) {
+                try {
+                    const resItemsPrices = await meliAxios.get(`/users/${userId}/items/prices`, {
+                        params,
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (resItemsPrices.data) return resItemsPrices.data;
+                } catch (pErr) {
+                    // Segue para tentativa 2
+                }
+            }
+
+            // Tentativa 2: Endpoint personalizado do usuário (/users/{userId}/listing_prices)
             if (userId) {
                 try {
                     const resUser = await meliAxios.get(`/users/${userId}/listing_prices`, {
                         params,
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
-                    if (resUser.data && (Array.isArray(resUser.data) ? resUser.data.length > 0 : resUser.data.sale_fee_amount)) {
-                        return resUser.data;
-                    }
+                    if (resUser.data) return resUser.data;
                 } catch (uErr) {
                     // Segue para fallback
                 }
             }
 
-            // Tentativa 2: Endpoint do site
+            // Tentativa 3: Endpoint geral do site (/sites/{siteId}/listing_prices)
             const res = await meliAxios.get(`/sites/${siteId}/listing_prices`, {
                 params,
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -1483,46 +1495,64 @@ export async function calculateItemFeesAndNet(connection, itemData, db) {
             return res.data;
         });
 
-        let matched = null;
-        if (Array.isArray(lpData) && lpData.length > 0) {
-            matched = lpData.find(e => e.listing_type_id === listingTypeId) || lpData[0];
+        let list = [];
+        if (Array.isArray(lpData)) {
+            list = lpData;
         } else if (lpData && typeof lpData === 'object') {
-            matched = lpData;
+            if (Array.isArray(lpData.listing_types)) list = lpData.listing_types;
+            else if (Array.isArray(lpData.results)) list = lpData.results;
+            else if (Array.isArray(lpData.prices)) list = lpData.prices;
+            else if (Array.isArray(lpData.items)) list = lpData.items;
+            else list = [lpData];
         }
 
-        if (matched) {
-            const rawSaleFeeAmount = parseFloat(matched.sale_fee_amount || matched.sale_fee_details?.gross_amount || 0);
-            percentageFee = matched.sale_fee_details?.percentage_fee ?? matched.percentage_fee ?? null;
-            const apiFixedFee = matched.sale_fee_details?.fixed_fee ?? matched.fixed_fee ?? null;
+        const matched = list.find(e => e.listing_type_id === listingTypeId) || list[0] || null;
 
-            if (percentageFee === null || percentageFee === undefined || isNaN(percentageFee)) {
-                percentageFee = listingTypeId === 'gold_pro' ? 19.0 : 14.0;
+        if (matched) {
+            const details = matched.sale_fee_details || matched.fee_details || matched.sale_fee_detail || matched.details || {};
+
+            // 1. Percentual de comissão
+            const rawPct = details.percentage_fee ?? details.percentage ?? matched.percentage_fee ?? matched.percentage ?? null;
+            if (rawPct !== null && rawPct !== undefined && !isNaN(parseFloat(rawPct))) {
+                percentageFee = parseFloat(rawPct);
             } else {
-                percentageFee = parseFloat(percentageFee);
+                percentageFee = listingTypeId === 'gold_pro' ? 19.0 : 14.0;
             }
 
             const pctVal = Math.round((price * (percentageFee / 100)) * 100) / 100;
 
-            // Extrai a taxa fixa da API quando informada
-            if (apiFixedFee !== null && apiFixedFee !== undefined && parseFloat(apiFixedFee) > 0) {
-                fixedFee = parseFloat(apiFixedFee);
+            // 2. Taxa fixa / Custo operacional retornado pela API
+            const rawFixed = details.fixed_fee ?? 
+                             details.fixed ?? 
+                             details.fixed_cost ?? 
+                             details.cost_per_unit ?? 
+                             details.unit_cost ?? 
+                             matched.fixed_fee ?? 
+                             matched.fixed ?? 
+                             matched.fixed_cost ?? 
+                             matched.cost_per_unit ?? 
+                             null;
+
+            const rawTotalFee = parseFloat(matched.sale_fee_amount ?? matched.sale_fee ?? details.gross_amount ?? details.sale_fee_amount ?? details.total_fee ?? 0);
+
+            if (rawFixed !== null && rawFixed !== undefined && !isNaN(parseFloat(rawFixed))) {
+                fixedFee = parseFloat(rawFixed);
+                saleFeeAmount = Math.round((pctVal + fixedFee) * 100) / 100;
+            } else if (rawTotalFee > pctVal + 0.01) {
+                // Se a API retornou o total da comissão (já com o custo operacional somado)
+                fixedFee = Math.round((rawTotalFee - pctVal) * 100) / 100;
+                saleFeeAmount = Math.round(rawTotalFee * 100) / 100;
             } else if (price < 79.00 && siteId === 'MLB') {
-                // Se a API retornou um sale_fee_amount maior que a porcentagem pura, a diferença é a taxa fixa real
-                if (rawSaleFeeAmount > pctVal + 0.05) {
-                    fixedFee = Math.round((rawSaleFeeAmount - pctVal) * 100) / 100;
-                } else {
-                    // API retornou apenas a fatia percentual -> aplica a tabela oficial do MLB por faixa de preço
-                    fixedFee = getMlbFixedFeeByPrice(price);
-                }
+                // Fallback dinâmico por faixa de preço oficial caso a API omita a taxa fixa
+                fixedFee = getMlbFixedFeeByPrice(price);
+                saleFeeAmount = Math.round((pctVal + fixedFee) * 100) / 100;
             } else {
                 fixedFee = 0.00;
+                saleFeeAmount = rawTotalFee > 0 ? Math.round(rawTotalFee * 100) / 100 : pctVal;
             }
-
-            // Garante o valor total correto da comissão (Percentual + Taxa Fixa)
-            saleFeeAmount = Math.round((pctVal + (fixedFee || 0)) * 100) / 100;
         }
     } catch (feeErr) {
-        logger.warn(`[MercadoLivreService] Falha ao consultar listing_prices para ${itemId || 'item'}: ${feeErr.message}`);
+        logger.warn(`[MercadoLivreService] Falha ao consultar simulador de taxas para ${itemId || 'item'}: ${feeErr.message}`);
         // Fallback padrão para MLB caso a API falhe temporariamente
         const rate = listingTypeId === 'gold_pro' ? 0.19 : 0.14;
         percentageFee = listingTypeId === 'gold_pro' ? 19.0 : 14.0;
