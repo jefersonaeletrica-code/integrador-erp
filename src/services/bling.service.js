@@ -11,7 +11,7 @@ const logger = getLogger();
  */
 export async function getBlingConnectionStatus(connection, db) {
     const { credentials } = connection;
-    if (!credentials.refresh_token) {
+    if (!credentials || !credentials.refresh_token) {
         return 'requires_auth';
     }
 
@@ -26,10 +26,20 @@ export async function getBlingConnectionStatus(connection, db) {
         // Atualiza os tokens no banco de dados
         connection.credentials.access_token = response.data.access_token;
         connection.credentials.refresh_token = response.data.refresh_token;
-        await db.updateDb({ connection });
+        
+        if (typeof db.updateErpConnection === 'function') {
+            await db.updateErpConnection(connection.id, connection);
+        } else if (typeof db.updateDb === 'function') {
+            await db.updateDb({ connection });
+        }
 
         return 'connected';
     } catch (error) {
+        const statusCode = error.response?.status;
+        if (statusCode === 400 || statusCode === 401) {
+            logger.warn(`[BlingService] Conexão ${connection.id} precisa de nova autorização OAuth (Status ${statusCode}).`);
+            return 'requires_auth';
+        }
         logger.error(`[BlingService] Falha ao renovar token para conexão ${connection.id}.`, error);
         return 'error';
     }
