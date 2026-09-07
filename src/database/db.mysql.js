@@ -302,7 +302,7 @@ Regras de atuação:
 3. Antes de sugerir baixar o preço para vencer a Buy Box, simule a nova margem líquida com a ferramenta 'simular_taxas_e_margem' para garantir que não haverá prejuízo.
 4. Se o preço para ganhar inviabilizar o lucro mínimo da loja (ex: margem < 10%), recomende pausar a disputa ou manter o preço atual.
 5. Apresente propostas de reprecificação claras com a margem antes vs depois da alteração.`,
-          model: 'gemini-1.5-flash',
+          model: 'gemini-3.6-flash',
           allowed_tools: JSON.stringify(['buscar_anuncios_ml', 'analisar_oportunidades_buybox', 'simular_taxas_e_margem', 'atualizar_preco_anuncio_ml', 'consultar_estoque_fornecedor']),
           require_confirmation: 1
         },
@@ -319,7 +319,7 @@ Regras de atuação:
 2. A descrição deve ser em texto puro (plain text), bem estruturada com tópicos claros (Benefícios, Especificações Técnicas, Compatibilidade, Conteúdo da Embalagem e Garantia).
 3. Consulte os detalhes do anúncio atual antes de propor alterações.
 4. Apresente o título antigo vs o novo título otimizado (com contador de caracteres) e a nova descrição sugerida.`,
-          model: 'gemini-1.5-flash',
+          model: 'gemini-3.6-flash',
           allowed_tools: JSON.stringify(['buscar_anuncios_ml', 'obter_detalhes_anuncio_ml', 'otimizar_titulo_descricao_ml']),
           require_confirmation: 1
         },
@@ -336,7 +336,7 @@ Regras de atuação:
 2. Identifique produtos cujo preço de custo aumentou no fornecedor mas o preço de venda no ML permaneceu inalterado, erodindo a margem.
 3. Se um produto estiver esgotado no fornecedor, recomende imediatamente zerar o estoque no Mercado Livre para evitar cancelamentos e penalizações na reputação.
 4. Apresente relatórios diretos e acionáveis.`,
-          model: 'gemini-1.5-flash',
+          model: 'gemini-3.6-flash',
           allowed_tools: JSON.stringify(['buscar_anuncios_ml', 'consultar_estoque_fornecedor', 'atualizar_estoque_anuncio_ml', 'atualizar_preco_anuncio_ml', 'resumo_geral_loja']),
           require_confirmation: 1
         }
@@ -363,9 +363,9 @@ Regras de atuação:
       console.log('4 Agentes de IA padrão criados com sucesso!');
     }
 
-    // Migração automática para atualizar qualquer referência ao modelo inexistente 'gemini-3.6-flash'
-    await connection.query(`UPDATE ai_agents SET model = 'gemini-1.5-flash' WHERE model LIKE '%3.6%' OR model IS NULL OR model = ''`);
-    await connection.query(`UPDATE ai_settings SET default_model = 'gemini-1.5-flash' WHERE default_model LIKE '%3.6%' OR default_model IS NULL OR default_model = ''`);
+    // Migração automática para atualizar modelos legados e descontinuados para 'gemini-3.6-flash'
+    await connection.query(`UPDATE ai_agents SET model = 'gemini-3.6-flash' WHERE model LIKE '%1.5%' OR model LIKE '%2.0%' OR model IS NULL OR model = ''`);
+    await connection.query(`UPDATE ai_settings SET default_model = 'gemini-3.6-flash' WHERE default_model LIKE '%1.5%' OR default_model LIKE '%2.0%' OR default_model IS NULL OR default_model = ''`);
 
     console.log('Banco de dados MySQL pronto.');
   } finally {
@@ -633,7 +633,7 @@ export const getAISettings = async () => {
     if (rows.length === 0) {
       return {
         gemini_api_key: null,
-        default_model: 'gemini-1.5-flash',
+        default_model: 'gemini-3.6-flash',
         temperature: 0.20,
         max_output_tokens: 4096,
         is_active: true
@@ -662,7 +662,7 @@ export const saveAISettings = async (settings) => {
         WHERE id = ?
       `, [
         gemini_api_key || null,
-        default_model || 'gemini-1.5-flash',
+        default_model || 'gemini-3.6-flash',
         temperature !== undefined ? parseFloat(temperature) : 0.20,
         max_output_tokens !== undefined ? parseInt(max_output_tokens, 10) : 4096,
         is_active !== undefined ? (is_active ? 1 : 0) : 1,
@@ -675,7 +675,7 @@ export const saveAISettings = async (settings) => {
         VALUES (?, ?, ?, ?, ?)
       `, [
         gemini_api_key || null,
-        default_model || 'gemini-1.5-flash',
+        default_model || 'gemini-3.6-flash',
         temperature !== undefined ? parseFloat(temperature) : 0.20,
         max_output_tokens !== undefined ? parseInt(max_output_tokens, 10) : 4096,
         is_active !== undefined ? (is_active ? 1 : 0) : 1

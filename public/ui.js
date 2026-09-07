@@ -369,7 +369,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 slugInput.readOnly = true;
                 slugInput.style.opacity = '0.7';
             }
-            if (modelSelect) modelSelect.value = agent.model || 'gemini-1.5-flash';
+            if (modelSelect) modelSelect.value = agent.model || 'gemini-3.6-flash';
             if (iconInput) iconInput.value = agent.avatar_icon || 'fa-robot';
             if (colorInput) colorInput.value = agent.avatar_color || '#3b82f6';
             if (descInput) descInput.value = agent.description || '';
@@ -397,7 +397,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 slugInput.readOnly = false;
                 slugInput.style.opacity = '1';
             }
-            if (modelSelect) modelSelect.value = 'gemini-1.5-flash';
+            if (modelSelect) modelSelect.value = 'gemini-3.6-flash';
             if (iconInput) iconInput.value = 'fa-robot';
             if (colorInput) colorInput.value = '#3b82f6';
             if (descInput) descInput.value = '';
@@ -4966,7 +4966,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                                 <div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
                                     <span class="badge badge-info" style="font-size: 0.72rem; font-family: monospace; display: inline-flex; align-items: center; gap: 0.35rem;">
-                                        <i class="fas fa-microchip"></i> ${a.model || 'gemini-1.5-flash'}
+                                        <i class="fas fa-microchip"></i> ${a.model || 'gemini-3.6-flash'}
                                     </span>
                                     <span class="badge ${a.require_confirmation ? 'badge-warning' : 'badge-success'}" style="font-size: 0.72rem; display: inline-flex; align-items: center; gap: 0.35rem;">
                                         <i class="fas ${a.require_confirmation ? 'fa-user-check' : 'fa-bolt'}"></i> ${a.require_confirmation ? 'Confirmação Manual' : 'Autônomo'}
@@ -5073,10 +5073,11 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <div class="form-group">
                                     <label for="ai-default-model">Modelo Padrão do Gemini</label>
                                     <select id="ai-default-model" class="form-control">
-                                        <option value="gemini-1.5-flash" ${(!settings.default_model || settings.default_model === 'gemini-1.5-flash') ? 'selected' : ''}>gemini-1.5-flash (Mais Rápido & Econômico - Padrão)</option>
-                                        <option value="gemini-2.0-flash" ${settings.default_model === 'gemini-2.0-flash' ? 'selected' : ''}>gemini-2.0-flash (Nova Geração 2.0 Flash)</option>
-                                        <option value="gemini-1.5-pro" ${settings.default_model === 'gemini-1.5-pro' ? 'selected' : ''}>gemini-1.5-pro (Raciocínio Profundo & Avançado)</option>
-                                        <option value="gemini-2.0-flash-lite" ${settings.default_model === 'gemini-2.0-flash-lite' ? 'selected' : ''}>gemini-2.0-flash-lite (Ultra Leve)</option>
+                                        <option value="gemini-3.6-flash" ${(!settings.default_model || settings.default_model === 'gemini-3.6-flash') ? 'selected' : ''}>gemini-3.6-flash (Recomendado - Mais Rápido & Inteligente)</option>
+                                        <option value="gemini-3.5-flash-lite" ${settings.default_model === 'gemini-3.5-flash-lite' ? 'selected' : ''}>gemini-3.5-flash-lite (Ultra Leve & Econômico)</option>
+                                        <option value="gemini-3.5-flash" ${settings.default_model === 'gemini-3.5-flash' ? 'selected' : ''}>gemini-3.5-flash (Alta Performance Flash)</option>
+                                        <option value="gemini-3.7-flash" ${settings.default_model === 'gemini-3.7-flash' ? 'selected' : ''}>gemini-3.7-flash (Nova Geração 3.7)</option>
+                                        <option value="gemini-flash-latest" ${settings.default_model === 'gemini-flash-latest' ? 'selected' : ''}>gemini-flash-latest (Versão Mais Recente)</option>
                                     </select>
                                 </div>
 

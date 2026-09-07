@@ -52,7 +52,7 @@ export default function createAIRoutes(db) {
         gemini_api_key: gemini_api_key !== undefined && gemini_api_key.trim() !== '' 
           ? gemini_api_key.trim() 
           : (gemini_api_key === '' ? null : current.gemini_api_key),
-        default_model: default_model || current.default_model || 'gemini-1.5-flash',
+        default_model: default_model || current.default_model || 'gemini-3.6-flash',
         temperature: temperature !== undefined ? parseFloat(temperature) : (current.temperature || 0.2),
         max_output_tokens: max_output_tokens !== undefined ? parseInt(max_output_tokens, 10) : (current.max_output_tokens || 4096),
         is_active: is_active !== undefined ? !!is_active : current.is_active
@@ -85,7 +85,7 @@ export default function createAIRoutes(db) {
         return res.status(400).json({ sucesso: false, erro: 'Informe a Chave de API do Gemini para realizar o teste.' });
       }
 
-      const result = await geminiService.testGeminiApiKey(apiKey, model || 'gemini-1.5-flash');
+      const result = await geminiService.testGeminiApiKey(apiKey, model || 'gemini-3.6-flash');
       res.json(result);
     } catch (error) {
       res.status(400).json({ sucesso: false, erro: error.message });

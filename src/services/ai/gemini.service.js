@@ -6,13 +6,14 @@ const logger = getLogger();
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 /**
- * Lista de modelos oficiais padrão suportados pelo Gemini
+ * Lista de modelos oficiais recomendados pelo Gemini (geração 3.x)
  */
 export const SUPPORTED_MODELS = [
-  'gemini-1.5-flash',
-  'gemini-2.0-flash',
-  'gemini-1.5-pro',
-  'gemini-2.0-flash-lite'
+  'gemini-3.6-flash',
+  'gemini-3.5-flash-lite',
+  'gemini-3.5-flash',
+  'gemini-3.7-flash',
+  'gemini-flash-latest'
 ];
 
 /**
@@ -28,7 +29,7 @@ export async function listAvailableGeminiModels(apiKey) {
     const res = await axios.get(url, { timeout: 12000 });
     const models = res.data?.models || [];
     
-    // Filtra apenas modelos de conversação/geração geral Gemini, ignorando modelos de áudio/tts/imagem/robótica
+    // Filtra apenas modelos de conversação/geração geral Gemini, ignorando modelos especializados não compatíveis
     const isChatGeminiModel = (id) => {
       if (!id || !id.startsWith('gemini-')) return false;
       const lower = id.toLowerCase();
@@ -63,10 +64,10 @@ export async function listAvailableGeminiModels(apiKey) {
 /**
  * Testa a validade de uma chave de API do Gemini fazendo uma requisição rápida de ping
  * @param {string} apiKey - Chave da API do Google AI Studio / Gemini
- * @param {string} model - Modelo a testar (padrão: 'gemini-1.5-flash')
+ * @param {string} model - Modelo a testar (padrão: 'gemini-3.6-flash')
  * @returns {Promise<object>} Status do teste
  */
-export async function testGeminiApiKey(apiKey, model = 'gemini-1.5-flash') {
+export async function testGeminiApiKey(apiKey, model = 'gemini-3.6-flash') {
   if (!apiKey || !apiKey.trim()) {
     throw new Error('Chave de API do Gemini não foi informada.');
   }
@@ -77,18 +78,16 @@ export async function testGeminiApiKey(apiKey, model = 'gemini-1.5-flash') {
   const availableModels = await listAvailableGeminiModels(cleanKey);
   const availableIds = availableModels.map(m => m.id);
 
-  let requestedModel = (model || '').trim();
-  if (requestedModel.includes('3.6') || !requestedModel) {
-    requestedModel = 'gemini-1.5-flash';
-  }
+  const requestedModel = (model || '').trim() || 'gemini-3.6-flash';
 
   const modelsToTry = [
     requestedModel,
-    'gemini-1.5-flash',
-    'gemini-2.0-flash',
-    'gemini-1.5-pro',
-    'gemini-2.0-flash-lite',
-    ...availableIds
+    ...availableIds,
+    'gemini-3.6-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.5-flash',
+    'gemini-3.7-flash',
+    'gemini-flash-latest'
   ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
   let lastError = null;
@@ -145,7 +144,7 @@ export async function testGeminiApiKey(apiKey, model = 'gemini-1.5-flash') {
  * Executa uma chamada à API do Gemini com suporte a System Instruction, Tools e Histórico Conversacional
  * @param {object} params
  * @param {string} params.apiKey - Chave da API
- * @param {string} params.model - Modelo Gemini (ex: 'gemini-1.5-flash' ou 'gemini-2.0-flash')
+ * @param {string} params.model - Modelo Gemini (ex: 'gemini-3.6-flash' ou 'gemini-3.5-flash-lite')
  * @param {string} params.systemPrompt - Instruções de sistema do agente
  * @param {Array} params.contents - Histórico de mensagens formatado para a API Gemini
  * @param {Array} params.tools - Declarações de ferramentas (schemas de functionDeclarations)
@@ -155,7 +154,7 @@ export async function testGeminiApiKey(apiKey, model = 'gemini-1.5-flash') {
  */
 export async function generateGeminiContent({
   apiKey,
-  model = 'gemini-1.5-flash',
+  model = 'gemini-3.6-flash',
   systemPrompt = '',
   contents = [],
   tools = [],
@@ -168,18 +167,20 @@ export async function generateGeminiContent({
 
   const cleanKey = apiKey.trim();
 
-  // Normaliza o modelo solicitado se for inválido
-  let requestedModel = (model || '').trim();
-  if (requestedModel.includes('3.6') || !requestedModel) {
-    requestedModel = 'gemini-1.5-flash';
-  }
+  // Consulta modelos disponíveis dinamicamente se necessário
+  const availableModels = await listAvailableGeminiModels(cleanKey);
+  const availableIds = availableModels.map(m => m.id);
+
+  const requestedModel = (model || '').trim() || 'gemini-3.6-flash';
 
   const modelsToTry = [
     requestedModel,
-    'gemini-1.5-flash',
-    'gemini-2.0-flash',
-    'gemini-1.5-pro',
-    'gemini-2.0-flash-lite'
+    ...availableIds,
+    'gemini-3.6-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-3.5-flash',
+    'gemini-3.7-flash',
+    'gemini-flash-latest'
   ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
   const requestBody = {
