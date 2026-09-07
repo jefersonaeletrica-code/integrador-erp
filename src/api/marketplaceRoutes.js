@@ -1282,6 +1282,7 @@ export default (db) => {
 
             const financial = await meliService.calculateItemFeesAndNet(conn, {
                 id: itemId,
+                item_id: itemId,
                 price: parseFloat(price),
                 listing_type_id: listing_type_id || 'gold_special',
                 category_id

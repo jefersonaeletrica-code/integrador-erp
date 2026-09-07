@@ -1371,6 +1371,25 @@ export function startCatalogStatusSyncJob(db, intervalMinutes = 10) {
 }
 
 /**
+ * Tabela oficial de custos de envio padrão do Mercado Envios ME2 (Mercado Livre Brasil)
+ * para anúncios com Frete Grátis (obrigatório a partir de R$ 79,00).
+ * Usado como fallback confiável quando a API remota de shipping_options não retorna o valor exato.
+ * @param {number} price - Preço de venda do produto
+ * @returns {number} Custo estimado do frete ME2 em R$
+ */
+export function getMlbStandardShippingCost(price) {
+    const p = parseFloat(price || 0);
+    if (isNaN(p) || p <= 0) return 0;
+    if (p >= 500) return 31.45;
+    if (p >= 300) return 28.45;
+    if (p >= 200) return 26.45;
+    if (p >= 150) return 24.45;
+    if (p >= 100) return 22.45;
+    if (p >= 79) return 20.45;
+    return 20.45; // Para anúncios < 79 que tenham frete grátis ativado manualmente
+}
+
+/**
  * Consulta as taxas de venda (comissão ML) e custo de frete (Mercado Envíos) para calcular o valor líquido recebido por venda
  * @param {object} connection - Conexão do Mercado Livre
  * @param {object} itemData - Objeto com dados do anúncio { item_id, price, listing_type_id, category_id, shipping }
@@ -1394,6 +1413,7 @@ export async function calculateItemFeesAndNet(connection, itemData, db) {
     const categoryId = itemData.category_id || null;
     const itemId = itemData.item_id || itemData.id || null;
     const siteId = connection.site_id || 'MLB';
+    const userId = connection.credentials?.user_id || connection.user_id || null;
 
     let saleFeeAmount = 0;
     let percentageFee = null;
@@ -1440,29 +1460,115 @@ export async function calculateItemFeesAndNet(connection, itemData, db) {
     }
 
     // 2. Consulta custo de frete pago pelo vendedor (Mercado Envíos / Frete Grátis)
-    if (itemId) {
+    // No Mercado Livre Brasil, produtos com preço >= R$ 79,00 têm frete grátis obrigatório pago pelo vendedor
+    const isFreeShippingExplicit = itemData.shipping?.free_shipping === true || 
+                                   itemData.free_shipping === true || 
+                                   (Array.isArray(itemData.shipping?.tags) && itemData.shipping.tags.includes('mandatory_free_shipping'));
+    const isMlbMandatoryFree = (siteId === 'MLB' && price >= 79.00);
+    const isFreeShippingActive = isFreeShippingExplicit || isMlbMandatoryFree;
+
+    if (isFreeShippingActive || itemId) {
         try {
             const shipData = await executeMeliRequest(connection, db, async (token) => {
-                const res = await meliAxios.get(`/items/${itemId}/shipping_options/free`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                return res.data;
+                // Tentativa 1: Endpoint oficial do vendedor com item_id
+                if (userId && itemId) {
+                    try {
+                        const res = await meliAxios.get(`/users/${userId}/shipping_options/free`, {
+                            params: { item_id: itemId },
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        if (res.data) return res.data;
+                    } catch (uErr) {
+                        // Segue para próximas tentativas
+                    }
+                }
+
+                // Tentativa 2: Endpoint direto do item
+                if (itemId) {
+                    try {
+                        const res = await meliAxios.get(`/items/${itemId}/shipping_options/free`, {
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        if (res.data) return res.data;
+                    } catch (iErr) {
+                        // Segue para próximas tentativas
+                    }
+                }
+
+                // Tentativa 3: Simulação pelo preço e categoria (sem item_id ou se endpoints acima falharam)
+                if (userId && isFreeShippingActive) {
+                    try {
+                        const simParams = {
+                            item_price: price,
+                            listing_type_id: listingTypeId
+                        };
+                        if (categoryId) simParams.category_id = categoryId;
+                        const res = await meliAxios.get(`/users/${userId}/shipping_options/free`, {
+                            params: simParams,
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        if (res.data) return res.data;
+                    } catch (simErr) {
+                        // Segue para fallback
+                    }
+                }
+
+                // Tentativa 4: Consulta shipping_options padrão com CEP
+                if (itemId) {
+                    try {
+                        const res = await meliAxios.get(`/items/${itemId}/shipping_options`, {
+                            params: { zip_code: '01001000' },
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                        if (res.data) return res.data;
+                    } catch (optErr) {
+                        // Segue para fallback
+                    }
+                }
+
+                return null;
             });
 
             if (shipData) {
-                freeShipping = true;
                 const allCountry = shipData.coverage?.all_country;
-                if (allCountry && allCountry.list_cost !== undefined) {
-                    shippingCost = parseFloat(allCountry.list_cost);
-                } else if (shipData.cost !== undefined) {
+                if (allCountry) {
+                    freeShipping = true;
+                    // Prioriza o custo efetivo com desconto que o vendedor realmente paga
+                    if (allCountry.cost !== undefined && allCountry.cost !== null) {
+                        shippingCost = parseFloat(allCountry.cost);
+                    } else if (allCountry.list_cost !== undefined && allCountry.list_cost !== null) {
+                        shippingCost = parseFloat(allCountry.list_cost);
+                    }
+                } else if (shipData.cost !== undefined && shipData.cost !== null) {
+                    freeShipping = true;
                     shippingCost = parseFloat(shipData.cost);
+                } else if (shipData.list_cost !== undefined && shipData.list_cost !== null) {
+                    freeShipping = true;
+                    shippingCost = parseFloat(shipData.list_cost);
+                } else if (Array.isArray(shipData.options)) {
+                    const freeOpt = shipData.options.find(o => o.cost === 0 || o.shipping_option_type === 'free');
+                    if (freeOpt) {
+                        freeShipping = true;
+                        shippingCost = parseFloat(freeOpt.list_cost || freeOpt.cost || 0);
+                    }
                 }
             }
         } catch (shipErr) {
-            // Se retornar 404/400, o anúncio não tem frete grátis pago pelo vendedor (comprador paga o frete)
-            shippingCost = 0;
-            freeShipping = false;
+            logger.warn(`[MercadoLivreService] Falha ao consultar frete na API para ${itemId || 'item'}: ${shipErr.message}`);
         }
+    }
+
+    // Se frete grátis é obrigatório (preço >= 79 em MLB) ou foi explicitamente ativado,
+    // mas a API não retornou valor ou retornou 0, aplica a tabela padrão oficial ME2
+    if (isFreeShippingActive) {
+        freeShipping = true;
+        if (shippingCost <= 0) {
+            shippingCost = getMlbStandardShippingCost(price);
+        }
+    } else {
+        // Para anúncios < 79 sem frete grátis ativado, o comprador paga o frete integralmente
+        shippingCost = 0;
+        freeShipping = false;
     }
 
     // 3. Calcula o valor líquido que sobra
