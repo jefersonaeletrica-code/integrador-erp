@@ -1545,21 +1545,24 @@ export async function calculateItemFeesAndNet(connection, itemData, db) {
                              null;
 
             const rawTotalFee = parseFloat(matched.sale_fee_amount ?? matched.sale_fee ?? details.gross_amount ?? details.sale_fee_amount ?? details.total_fee ?? 0);
+            const rawFixedNum = (rawFixed !== null && rawFixed !== undefined && !isNaN(parseFloat(rawFixed))) ? parseFloat(rawFixed) : null;
 
-            if (rawFixed !== null && rawFixed !== undefined && !isNaN(parseFloat(rawFixed))) {
-                fixedFee = parseFloat(rawFixed);
+            if (rawFixedNum !== null && rawFixedNum > 0) {
+                // Se a API retornou explicitamente uma taxa fixa positiva (> 0)
+                fixedFee = rawFixedNum;
                 saleFeeAmount = Math.round((pctVal + fixedFee) * 100) / 100;
-                logger.info(`[MercadoLivreService] [Taxas] Taxa fixa extraída de campo da API: R$ ${fixedFee}`);
+                logger.info(`[MercadoLivreService] [Taxas] Taxa fixa positiva extraída da API: R$ ${fixedFee}`);
             } else if (rawTotalFee > pctVal + 0.01) {
                 // Se a API retornou o total da comissão (já com o custo operacional somado)
                 fixedFee = Math.round((rawTotalFee - pctVal) * 100) / 100;
                 saleFeeAmount = Math.round(rawTotalFee * 100) / 100;
                 logger.info(`[MercadoLivreService] [Taxas] Taxa fixa calculada por diferença da API (total ${rawTotalFee} - pct ${pctVal}): R$ ${fixedFee}`);
             } else if (price < 79.00 && siteId === 'MLB') {
-                // Fallback dinâmico por faixa de preço oficial caso a API omita a taxa fixa
+                // A API /sites/MLB/listing_prices retornou fixed_fee: 0 (comportamento padrão da API pública)
+                // Para produtos < 79 no MLB, aplica a taxa fixa/operacional da tabela oficial do Mercado Livre
                 fixedFee = getMlbFixedFeeByPrice(price);
                 saleFeeAmount = Math.round((pctVal + fixedFee) * 100) / 100;
-                logger.info(`[MercadoLivreService] [Taxas] API não retornou taxa fixa para < 79, aplicado fallback MLB por faixa: R$ ${fixedFee}`);
+                logger.info(`[MercadoLivreService] [Taxas] API retornou fixed_fee: 0 para produto < 79 (MLB). Aplicada taxa fixa de R$ ${fixedFee}. Total comissão: R$ ${saleFeeAmount}`);
             } else {
                 fixedFee = 0.00;
                 saleFeeAmount = rawTotalFee > 0 ? Math.round(rawTotalFee * 100) / 100 : pctVal;
