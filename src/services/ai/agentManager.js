@@ -90,23 +90,24 @@ export async function processAgentMessage({ agentId, conversationId, message, db
     throw new Error('Chave da API do Google Gemini não está configurada. Acesse o menu "Configurações IA" e cadastre sua chave.');
   }
 
-  const model = agent.model || aiSettings.default_model || 'gemini-1.5-flash';
+  const model = agent.model || aiSettings.default_model || 'gemini-3.6-flash';
   const requireConfirmation = agent.require_confirmation;
 
   // 2. Disponibiliza todas as ferramentas do sistema para a IA orquestrar autonomamente
   const availableTools = toolDeclarations;
 
-  // Carrega outros agentes disponíveis para colaboração inter-agentes
+  // Carrega outros agentes disponíveis para colaboração inter-agentes sob demanda
   const allAgents = await dbManager.getAIAgents();
   const otherAgents = allAgents.filter(a => a.id !== agent.id && a.is_active);
   let otherAgentsContext = '';
   if (otherAgents.length > 0) {
-    otherAgentsContext = `\n\n--- AGENTES COLEGAS DISPONÍVEIS NO SISTEMA PARA CONSULTA ---\nVocê pode interagir e consultar outros agentes especialistas do sistema usando a ferramenta 'consultar_outro_agente' quando precisar de análises complementares ou especializadas:\n` +
-      otherAgents.map(a => `- Slug: "${a.slug}" | Nome: "${a.name}" | Especialidade: "${a.role_title}"`).join('\n') +
-      `\nAo usar 'consultar_outro_agente', envie perguntas claras com dados contextuais relevantes e depois consolide a resposta do colega na sua análise final ao usuário.`;
+    otherAgentsContext = '\n\n--- AGENTES COLEGAS (Use apenas se solicitado expressamente pelo usuário) ---\n' +
+      otherAgents.map(a => `- Slug: "${a.slug}" | Nome: "${a.name}" | Especialidade: "${a.role_title}"`).join('\n');
   }
 
-  const systemPrompt = (agent.system_prompt || '') + otherAgentsContext;
+  const performanceGuidance = '\n\nDIRETRIZ DE AGILIDADE: Seja direto, ágil e objetivo. A ferramenta buscar_anuncios_ml já calcula e retorna todos os dados financeiros e de concorrência consolidados (preço, taxas ML, frete, líquido, margem % e Buy Box). Sintetize a resposta diretamente para o usuário sem fazer chamadas redundantes.';
+
+  const systemPrompt = (agent.system_prompt || '') + otherAgentsContext + performanceGuidance;
 
   // 3. Salva a mensagem do usuário no banco
   await dbManager.saveAIMessage({
@@ -120,7 +121,7 @@ export async function processAgentMessage({ agentId, conversationId, message, db
   let contents = formatMessagesForGemini(dbMessages);
 
   let loopCount = 0;
-  const maxLoops = 6;
+  const maxLoops = 3; // Máximo de 3 iterações para resposta rápida e evitar loops excessivos
   let finalAssistantText = '';
   const executedActions = [];
   const pendingActions = [];
@@ -433,7 +434,7 @@ export async function delegateToAgent({ targetSlug, prompt, callingAgentId, db, 
 
   logger.info(`[AgentCollaboration] Agente "${callingName}" está consultando especialista "${targetAgent.name}" (Slug: ${targetSlug})...`);
 
-  const targetModel = targetAgent.model || aiSettings.default_model || 'gemini-1.5-flash';
+  const targetModel = targetAgent.model || aiSettings.default_model || 'gemini-3.6-flash';
   
   // Disponibiliza as ferramentas de leitura e análise para o especialista
   const readTools = toolDeclarations.filter(t => !WRITE_TOOLS.has(t.name) && t.name !== 'consultar_outro_agente');

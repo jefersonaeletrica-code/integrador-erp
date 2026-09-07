@@ -9,7 +9,7 @@ const logger = getLogger();
 export const toolDeclarations = [
   {
     name: 'buscar_anuncios_ml',
-    description: 'Busca anúncios do Mercado Livre cadastrados no sistema com base em múltiplos filtros (preço, status, categoria, catálogo, margem de lucro líquida).',
+    description: 'Busca anúncios do Mercado Livre com TODOS os dados financeiros e de concorrência já calculados e consolidados (preço, taxas ML, frete, valor líquido, margem de lucro %, status Buy Box e preço vencedor). Use esta ferramenta para consultas, auditorias e listagens. Ela já contém todos os dados necessários para sua análise completa.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -120,7 +120,7 @@ export const toolDeclarations = [
   },
   {
     name: 'consultar_outro_agente',
-    description: 'Permite consultar e solicitar a análise técnica de outro agente especialista cadastrado no sistema (ex: "auditor-taxas", "estrategista-buybox", "otimizador-seo", "guardiao-estoque" ou novos agentes criados) enviando contexto ou perguntas para enriquecer sua própria análise.',
+    description: 'Permite consultar outro agente especialista caso o usuário solicite expressamente a opinião de outro colega ou caso falte dados de outra área. Não use de forma redundante em perguntas comuns para manter alta velocidade.',
     parameters: {
       type: 'OBJECT',
       properties: {

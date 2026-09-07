@@ -251,10 +251,16 @@ export async function generateGeminiContent({
           throw new Error(`Erro de autenticação Gemini (${statusCode}): ${errorDetail}`);
         }
 
-        // Se for 503 (alta demanda temporária) ou 429 (taxa) e ainda tiver tentativa, aguarda e tenta novamente
-        if ((statusCode === 503 || statusCode === 429 || error.code === 'ECONNABORTED') && attempts < maxModelAttempts) {
-          logger.warn(`[GeminiService] Modelo "${candidateModel}" retornou status ${statusCode || error.code}. Aguardando 1.5s para re-tentar...`);
-          await new Promise(r => setTimeout(r, 1500));
+        // Se for 429 (cota do modelo esgotada), pula imediatamente para o próximo modelo do pool de fallback
+        if (statusCode === 429) {
+          logger.warn(`[GeminiService] Cota esgotada (429) no modelo "${candidateModel}". Alternando instantaneamente para o próximo modelo disponível...`);
+          break;
+        }
+
+        // Se for 503 (alta demanda temporária no Google) ou timeout e ainda tiver tentativa:
+        if ((statusCode === 503 || error.code === 'ECONNABORTED') && attempts < maxModelAttempts) {
+          logger.warn(`[GeminiService] Modelo "${candidateModel}" retornou status ${statusCode || error.code}. Aguardando 1s para re-tentar...`);
+          await new Promise(r => setTimeout(r, 1000));
           continue;
         }
 
