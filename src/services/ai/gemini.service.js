@@ -137,6 +137,10 @@ export async function testGeminiApiKey(apiKey, model = 'gemini-3.6-flash') {
  * @param {number} params.maxOutputTokens - Limite de tokens de saída
  * @returns {Promise<object>} Resposta bruta do modelo contendo text e functionCalls
  */
+// Controle de intervalo mínimo entre requisições para evitar rate limit de burst (2 RPS do Google)
+let lastGeminiRequestTime = 0;
+const MIN_REQUEST_INTERVAL_MS = 1200; // 1.2 segundos de espaçamento
+
 export async function generateGeminiContent({
   apiKey,
   model = 'gemini-3.6-flash',
@@ -177,56 +181,81 @@ export async function generateGeminiContent({
     ];
   }
 
-  try {
-    const url = `${GEMINI_API_BASE}/models/${targetModel}:generateContent?key=${cleanKey}`;
-    const response = await axios.post(url, requestBody, {
-      headers: { 'Content-Type': 'application/json' },
-      timeout: 10000 // 10s timeout máximo direto sem alternar modelos
-    });
+  let attempts = 0;
+  const maxAttempts = 2;
 
-    const candidate = response.data?.candidates?.[0];
-    if (!candidate) {
-      throw new Error('Nenhuma resposta gerada pelo modelo Gemini.');
+  while (attempts < maxAttempts) {
+    attempts++;
+
+    // Garante intervalo mínimo entre chamadas à API do Gemini
+    const now = Date.now();
+    const elapsed = now - lastGeminiRequestTime;
+    if (elapsed < MIN_REQUEST_INTERVAL_MS) {
+      await new Promise(resolve => setTimeout(resolve, MIN_REQUEST_INTERVAL_MS - elapsed));
     }
+    lastGeminiRequestTime = Date.now();
 
-    const parts = candidate.content?.parts || [];
-    let textContent = '';
-    const functionCalls = [];
+    try {
+      const url = `${GEMINI_API_BASE}/models/${targetModel}:generateContent?key=${cleanKey}`;
+      const response = await axios.post(url, requestBody, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 12000
+      });
 
-    for (const part of parts) {
-      if (part.text) {
-        textContent += part.text;
+      const candidate = response.data?.candidates?.[0];
+      if (!candidate) {
+        throw new Error('Nenhuma resposta gerada pelo modelo Gemini.');
       }
-      if (part.functionCall) {
-        functionCalls.push({
-          name: part.functionCall.name,
-          args: part.functionCall.args || {}
-        });
+
+      const parts = candidate.content?.parts || [];
+      let textContent = '';
+      const functionCalls = [];
+
+      for (const part of parts) {
+        if (part.text) {
+          textContent += part.text;
+        }
+        if (part.functionCall) {
+          functionCalls.push({
+            name: part.functionCall.name,
+            args: part.functionCall.args || {}
+          });
+        }
       }
+
+      return {
+        text: textContent,
+        functionCalls,
+        modelUsed: targetModel,
+        finishReason: candidate.finishReason,
+        usageMetadata: response.data?.usageMetadata || null,
+        rawCandidate: candidate
+      };
+    } catch (error) {
+      const statusCode = error.response?.status;
+      const errorDetail = error.response?.data?.error?.message || error.message;
+
+      if (statusCode === 401 || statusCode === 403 || errorDetail.includes('API_KEY_INVALID')) {
+        throw new Error(`Erro de autenticação Gemini (${statusCode}): ${errorDetail}`);
+      }
+
+      // Se atingir 429 de burst/concorrência e ainda tiver tentativa, aguarda o tempo informado e re-tenta
+      if (statusCode === 429 && attempts < maxAttempts) {
+        const match = errorDetail.match(/retry in ([0-9.]+)s/i);
+        const retryWaitMs = match ? Math.min(Math.ceil(parseFloat(match[1]) * 1000), 2500) : 1500;
+        logger.warn(`[GeminiService] Limite de burst atingido (429). Aguardando ${retryWaitMs}ms para re-tentar automaticamente...`);
+        await new Promise(r => setTimeout(r, retryWaitMs));
+        lastGeminiRequestTime = Date.now();
+        continue;
+      }
+
+      if (statusCode === 429) {
+        logger.warn(`[GeminiService] Limite de requisições por minuto atingido (429) no modelo "${targetModel}".`);
+        throw new Error(`Limite de requisições atingido (429) no modelo ${targetModel}.`);
+      }
+
+      logger.warn(`[GeminiService] Modelo "${targetModel}" retornou erro (${statusCode || 'Timeout'}): ${errorDetail}`);
+      throw new Error(`Erro na API do Gemini (${statusCode || 'Erro'}): ${errorDetail}`);
     }
-
-    return {
-      text: textContent,
-      functionCalls,
-      modelUsed: targetModel,
-      finishReason: candidate.finishReason,
-      usageMetadata: response.data?.usageMetadata || null,
-      rawCandidate: candidate
-    };
-  } catch (error) {
-    const statusCode = error.response?.status;
-    const errorDetail = error.response?.data?.error?.message || error.message;
-
-    if (statusCode === 401 || statusCode === 403 || errorDetail.includes('API_KEY_INVALID')) {
-      throw new Error(`Erro de autenticação Gemini (${statusCode}): ${errorDetail}`);
-    }
-
-    if (statusCode === 429) {
-      logger.warn(`[GeminiService] Limite de requisições por minuto atingido (429) no modelo "${targetModel}".`);
-      throw new Error(`Limite de requisições atingido (429) no modelo ${targetModel}.`);
-    }
-
-    logger.warn(`[GeminiService] Modelo "${targetModel}" retornou erro (${statusCode || 'Timeout'}): ${errorDetail}`);
-    throw new Error(`Erro na API do Gemini (${statusCode || 'Erro'}): ${errorDetail}`);
   }
 }
