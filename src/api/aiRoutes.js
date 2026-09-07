@@ -93,6 +93,23 @@ export default function createAIRoutes(db) {
   });
 
   /**
+   * GET /ai/models - Retorna lista de modelos Gemini ativos para a chave configurada
+   */
+  router.get('/ai/models', async (req, res) => {
+    try {
+      const settings = await dbManager.getAISettings();
+      const apiKey = settings.gemini_api_key || process.env.GEMINI_API_KEY;
+      if (!apiKey) {
+        return res.json({ sucesso: true, models: [] });
+      }
+      const models = await geminiService.listAvailableGeminiModels(apiKey);
+      res.json({ sucesso: true, models });
+    } catch (error) {
+      res.status(500).json({ sucesso: false, erro: error.message });
+    }
+  });
+
+  /**
    * GET /ai/agents - Lista todos os agentes cadastrados
    */
   router.get('/ai/agents', async (req, res) => {

@@ -12,10 +12,41 @@ export const SUPPORTED_MODELS = [
   'gemini-1.5-flash',
   'gemini-2.0-flash',
   'gemini-1.5-pro',
-  'gemini-2.0-flash-lite',
-  'gemini-3.6-flash',
-  'gemini-3.6-pro'
+  'gemini-2.0-flash-lite'
 ];
+
+/**
+ * Consulta a lista de modelos ativos e suportados diretamente da API do Gemini para a chave informada
+ * @param {string} apiKey - Chave da API
+ * @returns {Promise<Array<object>>} Lista de modelos com generateContent habilitado
+ */
+export async function listAvailableGeminiModels(apiKey) {
+  if (!apiKey || !apiKey.trim()) return [];
+  const cleanKey = apiKey.trim();
+  try {
+    const url = `${GEMINI_API_BASE}/models?key=${cleanKey}`;
+    const res = await axios.get(url, { timeout: 12000 });
+    const models = res.data?.models || [];
+    
+    // Filtra apenas modelos que suportam generateContent
+    return models
+      .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
+      .map(m => {
+        const id = m.name ? m.name.replace(/^models\//, '') : '';
+        return {
+          id,
+          name: m.displayName || id,
+          description: m.description || '',
+          inputTokenLimit: m.inputTokenLimit,
+          outputTokenLimit: m.outputTokenLimit
+        };
+      })
+      .filter(m => m.id && !m.id.includes('embedding') && !m.id.includes('aqa') && !m.id.includes('imagen'));
+  } catch (error) {
+    logger.warn(`[GeminiService] Não foi possível consultar ListModels da API Gemini (${error.message}).`);
+    return [];
+  }
+}
 
 /**
  * Testa a validade de uma chave de API do Gemini fazendo uma requisição rápida de ping
@@ -29,8 +60,14 @@ export async function testGeminiApiKey(apiKey, model = 'gemini-1.5-flash') {
   }
 
   const cleanKey = apiKey.trim();
+  
+  // Tenta obter os modelos habilitados para esta chave
+  const availableModels = await listAvailableGeminiModels(cleanKey);
+  const availableIds = availableModels.map(m => m.id);
+
   const modelsToTry = [
     model.trim(),
+    ...availableIds,
     'gemini-1.5-flash',
     'gemini-2.0-flash',
     'gemini-1.5-pro'
@@ -64,19 +101,18 @@ export async function testGeminiApiKey(apiKey, model = 'gemini-1.5-flash') {
         sucesso: true,
         modelo: candidateModel,
         resposta: reply.trim(),
-        mensagem: `Conexão com a API do Google Gemini validada com sucesso no modelo ${candidateModel}!`
+        available_models: availableModels,
+        mensagem: `Conexão com a API do Google Gemini validada com sucesso no modelo "${candidateModel}"!`
       };
     } catch (error) {
       lastError = error;
       const statusCode = error.response?.status;
-      // Se for erro de autenticação (400 ou 403 API Key inválida), para imediatamente
       if (statusCode === 400 && error.response?.data?.error?.message?.includes('API_KEY_INVALID')) {
         throw new Error('Chave de API do Google Gemini inválida. Verifique se copiou a chave correta no Google AI Studio.');
       }
       if (statusCode === 403) {
         throw new Error(`Permissão negada (403): ${error.response?.data?.error?.message || error.message}`);
       }
-      // Se for 404 de modelo não encontrado, tenta o próximo modelo da lista
       logger.warn(`[GeminiService] Modelo ${candidateModel} retornou erro ${statusCode || error.message}. Tentando próximo modelo...`);
     }
   }
@@ -113,8 +149,14 @@ export async function generateGeminiContent({
   }
 
   const cleanKey = apiKey.trim();
+
+  // Consulta modelos disponíveis dinamicamente se necessário
+  const availableModels = await listAvailableGeminiModels(cleanKey);
+  const availableIds = availableModels.map(m => m.id);
+
   const modelsToTry = [
     model.trim(),
+    ...availableIds,
     'gemini-1.5-flash',
     'gemini-2.0-flash',
     'gemini-1.5-pro'
@@ -128,10 +170,9 @@ export async function generateGeminiContent({
     }
   };
 
-  // Adiciona System Instruction se fornecida
+  // Adiciona System Instruction sem o campo 'role' (compatível com OpenAPI Gemini)
   if (systemPrompt && systemPrompt.trim()) {
     requestBody.systemInstruction = {
-      role: 'system',
       parts: [{ text: systemPrompt.trim() }]
     };
   }
@@ -152,7 +193,7 @@ export async function generateGeminiContent({
       const url = `${GEMINI_API_BASE}/models/${candidateModel}:generateContent?key=${cleanKey}`;
       const response = await axios.post(url, requestBody, {
         headers: { 'Content-Type': 'application/json' },
-        timeout: 60000
+        timeout: 25000
       });
 
       const candidate = response.data?.candidates?.[0];
@@ -187,9 +228,9 @@ export async function generateGeminiContent({
     } catch (error) {
       lastError = error;
       const statusCode = error.response?.status;
-      if (statusCode === 400 || statusCode === 401 || statusCode === 403) {
+      if (statusCode === 401 || statusCode === 403 || error.response?.data?.error?.message?.includes('API_KEY_INVALID')) {
         const errorMsg = error.response?.data?.error?.message || error.message;
-        throw new Error(`Erro de autenticação/permissão Gemini (${statusCode}): ${errorMsg}`);
+        throw new Error(`Erro de autenticação Gemini (${statusCode}): ${errorMsg}`);
       }
       logger.warn(`[GeminiService] Modelo ${candidateModel} falhou com status ${statusCode || error.message}. Tentando próximo...`);
     }
