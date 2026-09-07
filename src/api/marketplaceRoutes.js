@@ -1264,12 +1264,18 @@ export default (db) => {
         const { connectionId, itemId, price, listing_type_id, category_id } = req.body;
         try {
             let conn = null;
+            let categoryId = category_id || null;
             if (connectionId) {
                 conn = await findMarketplaceConnectionById(connectionId);
             } else if (itemId) {
                 const pool = db.getPool();
-                const [rows] = await pool.execute('SELECT connection_id FROM mercado_livre_anuncios WHERE item_id = ?', [itemId]);
-                if (rows[0]) conn = await findMarketplaceConnectionById(rows[0].connection_id);
+                const [rows] = await pool.execute('SELECT connection_id, category_id FROM mercado_livre_anuncios WHERE item_id = ?', [itemId]);
+                if (rows[0]) {
+                    conn = await findMarketplaceConnectionById(rows[0].connection_id);
+                    if (!categoryId && rows[0].category_id) {
+                        categoryId = rows[0].category_id;
+                    }
+                }
             }
             if (!conn) {
                 const pool = db.getPool();
@@ -1285,7 +1291,7 @@ export default (db) => {
                 item_id: itemId,
                 price: parseFloat(price),
                 listing_type_id: listing_type_id || 'gold_special',
-                category_id
+                category_id: categoryId
             }, db);
 
             res.json({ sucesso: true, financial });

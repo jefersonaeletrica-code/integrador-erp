@@ -1426,10 +1426,22 @@ export async function calculateItemFeesAndNet(connection, itemData, db) {
     }
 
     const listingTypeId = itemData.listing_type_id || 'gold_special';
-    const categoryId = itemData.category_id || null;
+    let categoryId = itemData.category_id || null;
     const itemId = itemData.item_id || itemData.id || null;
     const siteId = connection.site_id || 'MLB';
     const userId = connection.credentials?.user_id || connection.user_id || null;
+
+    if (!categoryId && itemId && db) {
+        try {
+            const pool = db.getPool();
+            const [cRows] = await pool.execute('SELECT category_id FROM mercado_livre_anuncios WHERE item_id = ?', [itemId]);
+            if (cRows[0]?.category_id) {
+                categoryId = cRows[0].category_id;
+            }
+        } catch (catResErr) {
+            // Silencioso
+        }
+    }
 
     let saleFeeAmount = 0;
     let percentageFee = null;
@@ -1443,7 +1455,8 @@ export async function calculateItemFeesAndNet(connection, itemData, db) {
         const lpData = await executeMeliRequest(connection, db, async (token) => {
             const params = {
                 price,
-                listing_type_id: listingTypeId
+                listing_type_id: listingTypeId,
+                currency_id: 'BRL'
             };
             if (categoryId) params.category_id = categoryId;
 
