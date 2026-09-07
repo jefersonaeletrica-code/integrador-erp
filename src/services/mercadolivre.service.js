@@ -1804,6 +1804,310 @@ export async function syncAllItemsFeesAndNet(db, connectionId = null) {
     }
 }
 
+/**
+ * Consulta pedidos e métricas de faturamento do vendedor no Mercado Livre
+ * @param {object} connection - Conexão do Mercado Livre
+ * @param {object} db - Instância do banco de dados
+ * @param {object} options - Opções de busca (limit, status, dateFrom)
+ * @returns {Promise<object>}
+ */
+export async function getSellerOrders(connection, db, options = {}) {
+    const userId = connection.credentials?.user_id;
+    if (!userId) {
+        throw new Error('User ID do vendedor não encontrado na conexão.');
+    }
+
+    const limit = Math.min(parseInt(options.limit || 30, 10), 50);
+    const status = options.status || 'paid';
+
+    return await executeMeliRequest(connection, db, async (token) => {
+        let url = `/orders/search?seller=${userId}&sort=date_desc&limit=${limit}`;
+        if (status && status !== 'all') {
+            url += `&order.status=${status}`;
+        }
+        if (options.dateFrom) {
+            url += `&order.date_created.from=${options.dateFrom}`;
+        }
+
+        const response = await meliAxios.get(url, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const orders = response.data?.results || [];
+        const paging = response.data?.paging || {};
+
+        let totalRevenue = 0;
+        const itemSalesMap = {};
+
+        const formattedOrders = orders.map(o => {
+            const total = parseFloat(o.total_amount || 0);
+            totalRevenue += total;
+
+            const orderItems = (o.order_items || []).map(oi => {
+                const title = oi.item?.title || 'Item';
+                const id = oi.item?.id || '';
+                const qty = parseInt(oi.quantity || 1, 10);
+                const unitPrice = parseFloat(oi.unit_price || 0);
+
+                if (!itemSalesMap[id]) {
+                    itemSalesMap[id] = { item_id: id, titulo: title, quantidade_vendida: 0, faturamento: 0 };
+                }
+                itemSalesMap[id].quantidade_vendida += qty;
+                itemSalesMap[id].faturamento += (unitPrice * qty);
+
+                return {
+                    item_id: id,
+                    titulo: title,
+                    quantidade: qty,
+                    preco_unitario: unitPrice,
+                    subtotal: unitPrice * qty
+                };
+            });
+
+            return {
+                id_pedido: o.id,
+                data_criacao: o.date_created,
+                status: o.status,
+                valor_total: total,
+                comprador: o.buyer?.nickname || 'Comprador',
+                itens: orderItems,
+                status_envio: o.shipping?.status || 'N/A'
+            };
+        });
+
+        const topProducts = Object.values(itemSalesMap)
+            .sort((a, b) => b.faturamento - a.faturamento)
+            .slice(0, 10);
+
+        const averageTicket = formattedOrders.length > 0 ? (totalRevenue / formattedOrders.length) : 0;
+
+        return {
+            total_pedidos_encontrados: paging.total || formattedOrders.length,
+            pedidos_listados: formattedOrders.length,
+            faturamento_total_amostra: parseFloat(totalRevenue.toFixed(2)),
+            ticket_medio: parseFloat(averageTicket.toFixed(2)),
+            produtos_mais_vendidos: topProducts,
+            ultimos_pedidos: formattedOrders
+        };
+    });
+}
+
+/**
+ * Consulta a reputação, nível de MercadoLíder e métricas de qualidade da conta
+ * @param {object} connection - Conexão do Mercado Livre
+ * @param {object} db - Instância do banco de dados
+ * @returns {Promise<object>}
+ */
+export async function getSellerReputation(connection, db) {
+    const userId = connection.credentials?.user_id;
+    if (!userId) {
+        throw new Error('User ID do vendedor não encontrado na conexão.');
+    }
+
+    return await executeMeliRequest(connection, db, async (token) => {
+        const response = await meliAxios.get(`/users/${userId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const rep = response.data?.seller_reputation || {};
+        const levelId = rep.level_id || 'N/A';
+        const powerStatus = rep.power_seller_status || 'Nenhum';
+        const metrics = rep.metrics || {};
+
+        // Extrai taxas oficiais
+        const claimsRate = metrics.claims?.rate ? parseFloat((metrics.claims.rate * 100).toFixed(2)) : 0;
+        const delayedRate = metrics.delayed_handling_time?.rate ? parseFloat((metrics.delayed_handling_time.rate * 100).toFixed(2)) : 0;
+        const cancellationsRate = metrics.cancellations?.rate ? parseFloat((metrics.cancellations.rate * 100).toFixed(2)) : 0;
+
+        // Diagnóstico de saúde da conta
+        let statusGeral = 'EXCELENTE';
+        const alertas = [];
+
+        if (claimsRate > 3) {
+            alertas.push(`Taxa de reclamações está em ${claimsRate}% (limite tolerado é 3%). Risco de perder medalha!`);
+            statusGeral = 'ATENCAO';
+        }
+        if (delayedRate > 15) {
+            alertas.push(`Atraso no despacho está em ${delayedRate}% (limite tolerado é 15%). Impacta o rankeamento dos anúncios!`);
+            statusGeral = 'ATENCAO';
+        }
+        if (cancellationsRate > 1) {
+            alertas.push(`Cancelamentos por culpa do vendedor estão em ${cancellationsRate}% (limite tolerado é 1%).`);
+            statusGeral = 'ATENCAO';
+        }
+        if (levelId.includes('red') || levelId.includes('orange')) {
+            statusGeral = 'CRITICO';
+        }
+
+        return {
+            vendedor_id: userId,
+            apelido: response.data.nickname,
+            nivel_reputacao: levelId,
+            medalha_mercadolider: powerStatus,
+            termometro: levelId,
+            vendas_historico_completadas: rep.transactions?.completed || 0,
+            metricas: {
+                taxa_reclamacoes_percent: claimsRate,
+                taxa_despachos_atrasados_percent: delayedRate,
+                taxa_cancelamentos_percent: cancellationsRate
+            },
+            status_saude_conta: statusGeral,
+            alertas
+        };
+    });
+}
+
+/**
+ * Consulta campanhas e promoções ativas disponíveis para o vendedor
+ * @param {object} connection - Conexão do Mercado Livre
+ * @param {object} db - Instância do banco de dados
+ * @returns {Promise<object>}
+ */
+export async function getSellerPromotions(connection, db) {
+    return await executeMeliRequest(connection, db, async (token) => {
+        try {
+            const response = await meliAxios.get('/seller-promotions/promotions?channel=mktplace', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const promos = response.data?.results || response.data || [];
+            return {
+                total_promocoes_ativas: promos.length,
+                campanhas: promos.map(p => ({
+                    id_promocao: p.id,
+                    nome: p.name,
+                    tipo: p.type,
+                    status: p.status,
+                    data_inicio: p.start_date,
+                    data_fim: p.finish_date,
+                    desconto_minimo_exigido: p.benefits?.min_discount || null,
+                    co_funding_ml: p.benefits?.meli_percent || 0
+                }))
+            };
+        } catch (err) {
+            logger.warn(`[MercadoLivreService] Endpoint de promoções retornou: ${err.message}`);
+            return {
+                total_promocoes_ativas: 0,
+                campanhas: [],
+                observacao: 'Nenhuma campanha oficial de co-funding ativa no momento ou canal não habilitado.'
+            };
+        }
+    });
+}
+
+/**
+ * Consulta métricas de Product Ads (Mercado Ads / Publicidade)
+ * @param {object} connection - Conexão do Mercado Livre
+ * @param {object} db - Instância do banco de dados
+ * @returns {Promise<object>}
+ */
+export async function getProductAdsMetrics(connection, db) {
+    return await executeMeliRequest(connection, db, async (token) => {
+        try {
+            const response = await meliAxios.get('/advertising/product_ads/campaigns', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const campaigns = response.data?.results || response.data || [];
+            return {
+                campanhas_ads_ativas: campaigns.length,
+                campanhas: campaigns.map(c => ({
+                    id: c.id,
+                    nome: c.name,
+                    status: c.status,
+                    orcamento_diario: c.budget,
+                    acos_meta: c.target_acos,
+                    estrategia: c.strategy
+                }))
+            };
+        } catch (err) {
+            logger.warn(`[MercadoLivreService] Product Ads não configurado ou sem campanhas ativas (${err.message}).`);
+            return {
+                campanhas_ads_ativas: 0,
+                campanhas: [],
+                observacao: 'Conta sem campanhas ativas de Mercado Ads / Product Ads no momento.'
+            };
+        }
+    });
+}
+
+/**
+ * Consulta perguntas não respondidas ou mensagens de atendimento
+ * @param {object} connection - Conexão do Mercado Livre
+ * @param {object} db - Instância do banco de dados
+ * @param {string} status - Status das perguntas ('UNANSWERED' ou 'ANSWERED')
+ * @returns {Promise<object>}
+ */
+export async function getSellerQuestions(connection, db, status = 'UNANSWERED') {
+    const userId = connection.credentials?.user_id;
+    if (!userId) {
+        throw new Error('User ID do vendedor não encontrado na conexão.');
+    }
+
+    return await executeMeliRequest(connection, db, async (token) => {
+        const response = await meliAxios.get(`/questions/search?seller_id=${userId}&status=${status}&sort=date_desc&limit=20`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const questions = response.data?.questions || [];
+        return {
+            total_perguntas_pendentes: response.data?.total || questions.length,
+            perguntas: questions.map(q => ({
+                id_pergunta: q.id,
+                item_id: q.item_id,
+                texto: q.text,
+                data_criacao: q.date_created,
+                status: q.status,
+                comprador_id: q.from?.id
+            }))
+        };
+    });
+}
+
+/**
+ * Diagnóstico de Saúde e Visitas de um Anúncio
+ * @param {object} connection - Conexão do Mercado Livre
+ * @param {object} db - Instância do banco de dados
+ * @param {string} itemId - ID do anúncio (MLB...)
+ * @returns {Promise<object>}
+ */
+export async function getItemHealthAndVisits(connection, db, itemId) {
+    return await executeMeliRequest(connection, db, async (token) => {
+        let health = null;
+        let visits = 0;
+
+        try {
+            const hRes = await meliAxios.get(`/items/${itemId}/health_details`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            health = hRes.data;
+        } catch (e) {
+            logger.warn(`[MercadoLivreService] Health details não disponível para ${itemId}: ${e.message}`);
+        }
+
+        try {
+            const vRes = await meliAxios.get(`/items/${itemId}/visits/time_window?last=30&unit=day`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            visits = vRes.data?.total_visits || vRes.data?.results?.reduce((acc, curr) => acc + (curr.total || 0), 0) || 0;
+        } catch (e) {
+            logger.warn(`[MercadoLivreService] Visitas não disponíveis para ${itemId}: ${e.message}`);
+        }
+
+        return {
+            item_id: itemId,
+            saude_anuncio: health ? {
+                percentual_qualidade: health.health ? (health.health * 100).toFixed(0) + '%' : 'N/A',
+                nivel: health.level || 'Padrão',
+                pendencias_melhoria: (health.goals || []).map(g => g.title || g.id)
+            } : 'Não disponível',
+            visitas_ultimos_30_dias: visits,
+            diagnostico_seo: visits < 10 ? 'Tráfego baixo. Recomendado otimizar título, fotos e ficha técnica.' : 'Tráfego ativo.'
+        };
+    });
+}
+
+
 
 
 

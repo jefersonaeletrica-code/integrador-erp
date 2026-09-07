@@ -101,13 +101,20 @@ export async function processAgentMessage({ agentId, conversationId, message, db
   const otherAgents = allAgents.filter(a => a.id !== agent.id && a.is_active);
   let otherAgentsContext = '';
   if (otherAgents.length > 0) {
-    otherAgentsContext = '\n\n--- AGENTES COLEGAS (Use apenas se solicitado expressamente pelo usuário) ---\n' +
-      otherAgents.map(a => `- Slug: "${a.slug}" | Nome: "${a.name}" | Especialidade: "${a.role_title}"`).join('\n');
-  }
+  const apiDomainsContext = '\n\n--- CAPACIDADES DA API DO MERCADO LIVRE DISPONÍVEIS NO SISTEMA ---\n' +
+    'Você tem acesso completo ao ecossistema de dados da conta no Mercado Livre:\n' +
+    '- Anúncios & Buy Box: buscar_anuncios_ml, obter_detalhes_anuncio_ml, analisar_oportunidades_buybox\n' +
+    '- Vendas & Faturamento: consultar_vendas_e_pedidos_ml (pedidos, faturamento bruto, ticket médio, top produtos)\n' +
+    '- Reputação & Qualidade: consultar_reputacao_e_metricas_ml (termômetro, medalha MercadoLíder, taxas de reclamação/atraso)\n' +
+    '- Marketing & Campanhas: consultar_promocoes_e_campanhas_ml (campanhas co-funding e descontos elegíveis)\n' +
+    '- Publicidade (Mercado Ads): consultar_publicidade_ads_ml (campanhas ativas, metas de ACOS, orçamento)\n' +
+    '- Atendimento & SAC: consultar_perguntas_e_atendimento_ml (perguntas pendentes de clientes no pré-venda)\n' +
+    '- Diagnóstico de Anúncio: consultar_saude_e_visitas_anuncio_ml (nota de qualidade 0-100% e histórico de visitas)\n' +
+    '- Mapa de Capacidades: consultar_mapa_capacidades_ml (para inspecionar quais dados cada endpoint entrega antes de buscar)';
 
-  const performanceGuidance = '\n\nDIRETRIZ DE AGILIDADE: Seja direto, ágil e objetivo. A ferramenta buscar_anuncios_ml já calcula e retorna todos os dados financeiros e de concorrência consolidados (preço, taxas ML, frete, líquido, margem % e Buy Box). Sintetize a resposta diretamente para o usuário sem fazer chamadas redundantes.';
+  const performanceGuidance = '\n\nDIRETRIZ DE AGILIDADE: Seja direto, assertivo e ágil. Escolha a ferramenta mais precisa para a solicitação do usuário e responda de forma consolidada e executiva.';
 
-  const systemPrompt = (agent.system_prompt || '') + otherAgentsContext + performanceGuidance;
+  const systemPrompt = (agent.system_prompt || '') + otherAgentsContext + apiDomainsContext + performanceGuidance;
 
   // 3. Salva a mensagem do usuário no banco
   await dbManager.saveAIMessage({

@@ -119,6 +119,75 @@ export const toolDeclarations = [
     }
   },
   {
+    name: 'consultar_mapa_capacidades_ml',
+    description: 'Consulta o catálogo e mapa completo de todas as capacidades, dados e métricas disponibilizados pela API do Mercado Livre (anúncios, vendas, reputação, promoções, publicidade Ads, SAC). Use antes de fazer buscas para saber qual ferramenta atende com máxima assertividade.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        dominio: {
+          type: 'STRING',
+          description: 'Opcional: filtrar por domínio específico ("anuncios_catalogo", "vendas_pedidos", "reputacao_qualidade", "marketing_promocoes", "publicidade_ads", "atendimento_sac")'
+        }
+      }
+    }
+  },
+  {
+    name: 'consultar_vendas_e_pedidos_ml',
+    description: 'Consulta o faturamento bruto total da conta, ticket médio, histórico de pedidos recentes e ranking dos produtos mais vendidos no Mercado Livre.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        status: { type: 'STRING', description: 'Status dos pedidos: "paid" (pagos), "cancelled" (cancelados), "all" (todos). Padrão: "paid"' },
+        limit: { type: 'INTEGER', description: 'Quantidade de pedidos a analisar (padrão: 30, máximo: 50)' }
+      }
+    }
+  },
+  {
+    name: 'consultar_reputacao_e_metricas_ml',
+    description: 'Consulta o termômetro de reputação da conta no Mercado Livre, medalha MercadoLíder (Gold/Platinum), taxa de reclamações, mediações, atrasos no envio e cancelamentos com diagnóstico de saúde da conta.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {}
+    }
+  },
+  {
+    name: 'consultar_promocoes_e_campanhas_ml',
+    description: 'Consulta as campanhas de marketing, promoções ativas e oportunidades de descontos co-financiados pelo Mercado Livre disponíveis para a conta.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {}
+    }
+  },
+  {
+    name: 'consultar_publicidade_ads_ml',
+    description: 'Consulta o desempenho de campanhas de publicidade do Mercado Ads / Product Ads (orçamento diário, campanhas ativas e estratégias de ACOS).',
+    parameters: {
+      type: 'OBJECT',
+      properties: {}
+    }
+  },
+  {
+    name: 'consultar_perguntas_e_atendimento_ml',
+    description: 'Consulta perguntas não respondidas de clientes na pré-venda e histórico de atendimento no Mercado Livre.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        status: { type: 'STRING', description: '"UNANSWERED" (perguntas pendentes) ou "ANSWERED" (já respondidas)' }
+      }
+    }
+  },
+  {
+    name: 'consultar_saude_e_visitas_anuncio_ml',
+    description: 'Diagnostica a nota de saúde (qualidade do anúncio de 0 a 100%), pendências de SEO/ficha técnica e volume de visitas dos últimos 30 dias de um anúncio específico.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        item_id: { type: 'STRING', description: 'ID do anúncio no Mercado Livre (ex: "MLB5236177178")' }
+      },
+      required: ['item_id']
+    }
+  },
+  {
     name: 'consultar_outro_agente',
     description: 'Permite consultar outro agente especialista caso o usuário solicite expressamente a opinião de outro colega ou caso falte dados de outra área. Não use de forma redundante em perguntas comuns para manter alta velocidade.',
     parameters: {
@@ -532,6 +601,95 @@ export const toolExecutors = {
         produtos_importados_cadastrados: supplierRows[0]?.total_fornecedor || 0
       }
     };
+  },
+
+  /**
+   * Consulta o Mapa Semântico de Capacidades da API do Mercado Livre
+   */
+  async consultar_mapa_capacidades_ml(args) {
+    const { getMeliApiCatalog } = await import('./meliApiMap.js');
+    return getMeliApiCatalog(args.dominio);
+  },
+
+  /**
+   * Consulta histórico de vendas, faturamento e pedidos
+   */
+  async consultar_vendas_e_pedidos_ml(args, { db }) {
+    const pool = db.getPool();
+    const [rows] = await pool.execute('SELECT * FROM marketplace_connections WHERE type = "mercadolivre" LIMIT 1');
+    if (rows.length === 0) {
+      return { erro: 'Nenhuma conexão ativa com o Mercado Livre encontrada.' };
+    }
+    const connection = { ...rows[0], credentials: typeof rows[0].credentials === 'string' ? JSON.parse(rows[0].credentials) : rows[0].credentials };
+    return await meliService.getSellerOrders(connection, db, args);
+  },
+
+  /**
+   * Consulta a reputação e saúde da conta no Mercado Livre
+   */
+  async consultar_reputacao_e_metricas_ml(args, { db }) {
+    const pool = db.getPool();
+    const [rows] = await pool.execute('SELECT * FROM marketplace_connections WHERE type = "mercadolivre" LIMIT 1');
+    if (rows.length === 0) {
+      return { erro: 'Nenhuma conexão ativa com o Mercado Livre encontrada.' };
+    }
+    const connection = { ...rows[0], credentials: typeof rows[0].credentials === 'string' ? JSON.parse(rows[0].credentials) : rows[0].credentials };
+    return await meliService.getSellerReputation(connection, db);
+  },
+
+  /**
+   * Consulta promoções e campanhas de marketing disponíveis
+   */
+  async consultar_promocoes_e_campanhas_ml(args, { db }) {
+    const pool = db.getPool();
+    const [rows] = await pool.execute('SELECT * FROM marketplace_connections WHERE type = "mercadolivre" LIMIT 1');
+    if (rows.length === 0) {
+      return { erro: 'Nenhuma conexão ativa com o Mercado Livre encontrada.' };
+    }
+    const connection = { ...rows[0], credentials: typeof rows[0].credentials === 'string' ? JSON.parse(rows[0].credentials) : rows[0].credentials };
+    return await meliService.getSellerPromotions(connection, db);
+  },
+
+  /**
+   * Consulta métricas de Product Ads e publicidade
+   */
+  async consultar_publicidade_ads_ml(args, { db }) {
+    const pool = db.getPool();
+    const [rows] = await pool.execute('SELECT * FROM marketplace_connections WHERE type = "mercadolivre" LIMIT 1');
+    if (rows.length === 0) {
+      return { erro: 'Nenhuma conexão ativa com o Mercado Livre encontrada.' };
+    }
+    const connection = { ...rows[0], credentials: typeof rows[0].credentials === 'string' ? JSON.parse(rows[0].credentials) : rows[0].credentials };
+    return await meliService.getProductAdsMetrics(connection, db);
+  },
+
+  /**
+   * Consulta perguntas e atendimento pré-venda
+   */
+  async consultar_perguntas_e_atendimento_ml(args, { db }) {
+    const pool = db.getPool();
+    const [rows] = await pool.execute('SELECT * FROM marketplace_connections WHERE type = "mercadolivre" LIMIT 1');
+    if (rows.length === 0) {
+      return { erro: 'Nenhuma conexão ativa com o Mercado Livre encontrada.' };
+    }
+    const connection = { ...rows[0], credentials: typeof rows[0].credentials === 'string' ? JSON.parse(rows[0].credentials) : rows[0].credentials };
+    return await meliService.getSellerQuestions(connection, db, args.status || 'UNANSWERED');
+  },
+
+  /**
+   * Diagnóstico de qualidade e visitas do anúncio
+   */
+  async consultar_saude_e_visitas_anuncio_ml(args, { db }) {
+    if (!args.item_id) {
+      return { erro: 'Parâmetro item_id é obrigatório para diagnóstico de saúde e visitas.' };
+    }
+    const pool = db.getPool();
+    const [rows] = await pool.execute('SELECT * FROM marketplace_connections WHERE type = "mercadolivre" LIMIT 1');
+    if (rows.length === 0) {
+      return { erro: 'Nenhuma conexão ativa com o Mercado Livre encontrada.' };
+    }
+    const connection = { ...rows[0], credentials: typeof rows[0].credentials === 'string' ? JSON.parse(rows[0].credentials) : rows[0].credentials };
+    return await meliService.getItemHealthAndVisits(connection, db, args.item_id);
   },
 
   /**
