@@ -28,19 +28,28 @@ function formatMessagesForGemini(dbMessages) {
       });
     } else if (msg.sender === 'assistant') {
       const parts = [];
-      if (msg.content) {
-        parts.push({ text: msg.content });
-      }
       if (Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
         for (const tc of msg.tool_calls) {
-          parts.push({
-            functionCall: {
-              name: tc.name,
-              args: tc.args || {}
-            }
-          });
+          if (tc.functionCall || tc.text !== undefined || tc.thought) {
+            // Raw Gemini candidate part (preserves thought_signature, functionCall, etc.)
+            parts.push(tc);
+          } else if (tc.name) {
+            parts.push({
+              functionCall: {
+                name: tc.name,
+                args: tc.args || {}
+              }
+            });
+          }
         }
       }
+      // Se houver texto e não estiver já nos parts
+      if (parts.length === 0 && msg.content) {
+        parts.push({ text: msg.content });
+      } else if (parts.length > 0 && msg.content && !parts.some(p => p.text === msg.content)) {
+        parts.unshift({ text: msg.content });
+      }
+
       if (parts.length > 0) {
         contents.push({ role: 'model', parts });
       }
@@ -51,7 +60,7 @@ function formatMessagesForGemini(dbMessages) {
           response: { result: tr.result !== undefined ? tr.result : null }
         }
       }));
-      contents.push({ role: 'function', parts });
+      contents.push({ role: 'user', parts });
     }
   }
 
@@ -144,21 +153,26 @@ export async function processAgentMessage({ agentId, conversationId, message, db
 
     logger.info(`[AgentManager] Agente chamou ${functionCalls.length} ferramenta(s): ${functionCalls.map(f => f.name).join(', ')}`);
 
-    // Registra a mensagem do modelo com as chamadas de função no histórico
+    // Registra a mensagem do modelo com as chamadas de função no histórico (preservando raw parts/thought_signature)
+    const rawParts = geminiRes.rawCandidate?.content?.parts;
     await dbManager.saveAIMessage({
       conversation_id: conversationId,
       sender: 'assistant',
       content: geminiRes.text || '',
-      tool_calls: functionCalls
+      tool_calls: (rawParts && rawParts.length > 0) ? rawParts : functionCalls
     });
 
     // Adiciona ao contents para o próximo ciclo
-    const modelParts = [];
-    if (geminiRes.text) modelParts.push({ text: geminiRes.text });
-    for (const fc of functionCalls) {
-      modelParts.push({ functionCall: { name: fc.name, args: fc.args } });
+    if (rawParts && rawParts.length > 0) {
+      contents.push({ role: 'model', parts: rawParts });
+    } else {
+      const modelParts = [];
+      if (geminiRes.text) modelParts.push({ text: geminiRes.text });
+      for (const fc of functionCalls) {
+        modelParts.push({ functionCall: { name: fc.name, args: fc.args } });
+      }
+      contents.push({ role: 'model', parts: modelParts });
     }
-    contents.push({ role: 'model', parts: modelParts });
 
     const toolResults = [];
     let hasPendingWrite = false;
@@ -245,14 +259,14 @@ export async function processAgentMessage({ agentId, conversationId, message, db
       tool_results: toolResults
     });
 
-    // Formata o retorno das ferramentas para enviar de volta ao Gemini
+    // Formata o retorno das ferramentas para enviar de volta ao Gemini (role DEVE ser 'user')
     const userToolParts = toolResults.map(tr => ({
       functionResponse: {
         name: tr.name,
         response: { result: tr.result !== undefined ? tr.result : null }
       }
     }));
-    contents.push({ role: 'function', parts: userToolParts });
+    contents.push({ role: 'user', parts: userToolParts });
   }
 
   // 6. Salva a resposta final do assistente se ainda não foi salva
@@ -470,13 +484,21 @@ export async function delegateToAgent({ targetSlug, prompt, callingAgentId, db, 
       }
     }
 
-    subContents.push({
-      role: 'model',
-      parts: [
-        ...(geminiRes.text ? [{ text: geminiRes.text }] : []),
-        ...fcs.map(fc => ({ functionCall: { name: fc.name, args: fc.args } }))
-      ]
-    });
+    const subRawParts = geminiRes.rawCandidate?.content?.parts;
+    if (subRawParts && subRawParts.length > 0) {
+      subContents.push({
+        role: 'model',
+        parts: subRawParts
+      });
+    } else {
+      subContents.push({
+        role: 'model',
+        parts: [
+          ...(geminiRes.text ? [{ text: geminiRes.text }] : []),
+          ...fcs.map(fc => ({ functionCall: { name: fc.name, args: fc.args } }))
+        ]
+      });
+    }
 
     subContents.push({
       role: 'user',
