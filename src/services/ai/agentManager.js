@@ -101,6 +101,10 @@ export async function processAgentMessage({ agentId, conversationId, message, db
   const otherAgents = allAgents.filter(a => a.id !== agent.id && a.is_active);
   let otherAgentsContext = '';
   if (otherAgents.length > 0) {
+    otherAgentsContext = '\n\n--- AGENTES COLEGAS (Use apenas se solicitado expressamente pelo usuário) ---\n' +
+      otherAgents.map(a => `- Slug: "${a.slug}" | Nome: "${a.name}" | Especialidade: "${a.role_title}"`).join('\n');
+  }
+
   const apiDomainsContext = '\n\n--- CAPACIDADES DA API DO MERCADO LIVRE DISPONÍVEIS NO SISTEMA ---\n' +
     'Você tem acesso completo ao ecossistema de dados da conta no Mercado Livre:\n' +
     '- Anúncios & Buy Box: buscar_anuncios_ml, obter_detalhes_anuncio_ml, analisar_oportunidades_buybox\n' +
