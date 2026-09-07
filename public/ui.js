@@ -4833,8 +4833,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <div class="form-group">
                                     <label for="ai-default-model">Modelo Padrão do Gemini</label>
                                     <select id="ai-default-model" class="form-control">
-                                        <option value="gemini-1.5-flash" ${(!settings.default_model || settings.default_model.includes('flash')) ? 'selected' : ''}>gemini-1.5-flash (Mais Rápido & Econômico - Recomendado)</option>
+                                        <option value="gemini-1.5-flash" ${(!settings.default_model || settings.default_model === 'gemini-1.5-flash') ? 'selected' : ''}>gemini-1.5-flash (Mais Rápido & Econômico - Padrão)</option>
                                         <option value="gemini-2.0-flash" ${settings.default_model === 'gemini-2.0-flash' ? 'selected' : ''}>gemini-2.0-flash (Nova Geração 2.0 Flash)</option>
+                                        <option value="gemini-3.6-flash" ${settings.default_model === 'gemini-3.6-flash' ? 'selected' : ''}>gemini-3.6-flash (Sugerido pelo Google / Nova Versão)</option>
                                         <option value="gemini-1.5-pro" ${settings.default_model === 'gemini-1.5-pro' ? 'selected' : ''}>gemini-1.5-pro (Raciocínio Profundo & Avançado)</option>
                                         <option value="gemini-2.0-flash-lite" ${settings.default_model === 'gemini-2.0-flash-lite' ? 'selected' : ''}>gemini-2.0-flash-lite (Ultra Leve)</option>
                                     </select>
