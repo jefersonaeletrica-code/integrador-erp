@@ -3,6 +3,7 @@
     "**/.git/**": true,
     "**/node_modules/**": true
   },
+  "git.autofetch": false,
   "git.autorefresh": true,
   "git.confirmSync": false
 }
