@@ -82,12 +82,22 @@ export async function processAgentMessage({ agentId, conversationId, message, db
   }
 
   const model = agent.model || aiSettings.default_model || 'gemini-1.5-flash';
-  const systemPrompt = agent.system_prompt;
   const requireConfirmation = agent.require_confirmation;
 
-  // 2. Filtra as ferramentas permitidas para este agente
-  const allowedToolNames = new Set(agent.allowed_tools || []);
-  const availableTools = toolDeclarations.filter(t => allowedToolNames.has(t.name));
+  // 2. Disponibiliza todas as ferramentas do sistema para a IA orquestrar autonomamente
+  const availableTools = toolDeclarations;
+
+  // Carrega outros agentes disponíveis para colaboração inter-agentes
+  const allAgents = await dbManager.getAIAgents();
+  const otherAgents = allAgents.filter(a => a.id !== agent.id && a.is_active);
+  let otherAgentsContext = '';
+  if (otherAgents.length > 0) {
+    otherAgentsContext = `\n\n--- AGENTES COLEGAS DISPONÍVEIS NO SISTEMA PARA CONSULTA ---\nVocê pode interagir e consultar outros agentes especialistas do sistema usando a ferramenta 'consultar_outro_agente' quando precisar de análises complementares ou especializadas:\n` +
+      otherAgents.map(a => `- Slug: "${a.slug}" | Nome: "${a.name}" | Especialidade: "${a.role_title}"`).join('\n') +
+      `\nAo usar 'consultar_outro_agente', envie perguntas claras com dados contextuais relevantes e depois consolide a resposta do colega na sua análise final ao usuário.`;
+  }
+
+  const systemPrompt = (agent.system_prompt || '') + otherAgentsContext;
 
   // 3. Salva a mensagem do usuário no banco
   await dbManager.saveAIMessage({
@@ -189,14 +199,19 @@ export async function processAgentMessage({ agentId, conversationId, message, db
           }
         });
       } else {
-        // Ferramenta de leitura ou execução autônoma permitida
+        // Ferramenta de leitura, análise ou colaboração inter-agentes
         const executor = toolExecutors[fc.name];
         let result;
         let status = 'executed';
 
         if (typeof executor === 'function') {
           try {
-            result = await executor(fc.args, { db });
+            result = await executor(fc.args, {
+              db,
+              agentId: agent.id,
+              conversationId,
+              consultationDepth: 0
+            });
             executedActions.push({ tool_name: fc.name, args: fc.args, result });
           } catch (execErr) {
             status = 'failed';
@@ -361,6 +376,133 @@ export async function rejectPendingAction(actionId, db) {
     sucesso: true,
     action_id: actionId,
     mensagem: 'Ação rejeitada com sucesso.'
+  };
+}
+
+/**
+ * Executa delegação/consulta entre agentes especialistas (Colaboração Multi-Agente)
+ * @param {object} params
+ * @param {string} params.targetSlug - Slug do agente especialista consultado
+ * @param {string} params.prompt - Pergunta ou contexto técnico enviado
+ * @param {number} params.callingAgentId - ID do agente solicitante
+ * @param {object} params.db - Instância do banco de dados
+ * @param {number} params.depth - Profundidade de consulta para evitar loops
+ * @returns {Promise<object>} Resposta técnica do agente consultado
+ */
+export async function delegateToAgent({ targetSlug, prompt, callingAgentId, db, depth = 1 }) {
+  if (depth > 2) {
+    return {
+      sucesso: false,
+      erro: 'Limite de profundidade de colaboração entre agentes atingido.'
+    };
+  }
+
+  const targetAgent = await dbManager.getAIAgentBySlug(targetSlug);
+  if (!targetAgent) {
+    return {
+      sucesso: false,
+      erro: `Agente especialista com identificador "${targetSlug}" não foi encontrado no sistema.`
+    };
+  }
+
+  const aiSettings = await dbManager.getAISettings();
+  const apiKey = aiSettings.gemini_api_key || process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return {
+      sucesso: false,
+      erro: 'Chave da API do Gemini não configurada.'
+    };
+  }
+
+  const callingAgent = callingAgentId ? await dbManager.getAIAgentById(callingAgentId) : null;
+  const callingName = callingAgent?.name || 'Agente Colega';
+
+  logger.info(`[AgentCollaboration] Agente "${callingName}" está consultando especialista "${targetAgent.name}" (Slug: ${targetSlug})...`);
+
+  const targetModel = targetAgent.model || aiSettings.default_model || 'gemini-1.5-flash';
+  
+  // Disponibiliza as ferramentas de leitura e análise para o especialista
+  const readTools = toolDeclarations.filter(t => !WRITE_TOOLS.has(t.name) && t.name !== 'consultar_outro_agente');
+
+  let subContents = [
+    {
+      role: 'user',
+      parts: [
+        {
+          text: `Você foi consultado pelo ${callingName} para fornecer sua análise técnica especializada com a seguinte solicitação:\n\n"${prompt}"\n\nPor favor, faça sua análise detalhada e forneça um parecer técnico estruturado, claro e objetivo com recomendações baseadas no seu conhecimento especializado.`
+        }
+      ]
+    }
+  ];
+
+  let replyText = '';
+  let cycles = 0;
+
+  while (cycles < 3) {
+    cycles++;
+    const geminiRes = await generateGeminiContent({
+      apiKey,
+      model: targetModel,
+      systemPrompt: targetAgent.system_prompt,
+      contents: subContents,
+      tools: readTools,
+      temperature: 0.2,
+      maxOutputTokens: 2048
+    });
+
+    if (geminiRes.text) {
+      replyText = geminiRes.text;
+    }
+
+    const fcs = geminiRes.functionCalls || [];
+    if (fcs.length === 0) break;
+
+    const subToolResults = [];
+    for (const fc of fcs) {
+      const exec = toolExecutors[fc.name];
+      if (exec) {
+        try {
+          const res = await exec(fc.args, { db, consultationDepth: depth });
+          subToolResults.push({ name: fc.name, result: res });
+        } catch (e) {
+          subToolResults.push({ name: fc.name, result: { erro: e.message } });
+        }
+      }
+    }
+
+    subContents.push({
+      role: 'model',
+      parts: [
+        ...(geminiRes.text ? [{ text: geminiRes.text }] : []),
+        ...fcs.map(fc => ({ functionCall: { name: fc.name, args: fc.args } }))
+      ]
+    });
+
+    subContents.push({
+      role: 'user',
+      parts: subToolResults.map(tr => ({
+        functionResponse: { name: tr.name, response: { result: tr.result } }
+      }))
+    });
+  }
+
+  // Registra no log de auditoria
+  await dbManager.logAIAction({
+    agent_id: targetAgent.id,
+    conversation_id: null,
+    tool_name: 'consultar_outro_agente',
+    tool_args: { solicitante: callingName, consulta: prompt },
+    tool_result: { parecer: (replyText || '').substring(0, 300) },
+    status: 'executed',
+    executed_by: `inter_agent:${callingAgent?.slug || 'unknown'}`
+  });
+
+  return {
+    sucesso: true,
+    agente_consultado: targetAgent.name,
+    slug: targetAgent.slug,
+    cargo: targetAgent.role_title,
+    parecer_tecnico: replyText || 'Análise concluída sem observações adicionais.'
   };
 }
 

@@ -706,6 +706,117 @@
         </div>
     </div>
 
+    <!-- Modal de Criação / Edição de Agente IA -->
+    <div id="ai-agent-modal" class="modal-backdrop" style="display: none;">
+        <div class="modal-container" style="max-width: 720px;">
+            <div class="modal-header">
+                <div class="modal-header-left">
+                    <div class="modal-icon-badge" id="ai-agent-modal-icon-badge" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6;">
+                        <i class="fas fa-robot" id="ai-agent-modal-header-icon"></i>
+                    </div>
+                    <div>
+                        <h2 class="modal-title" id="ai-agent-modal-title">Configurar Agente Inteligente</h2>
+                        <p class="modal-subtitle" id="ai-agent-modal-subtitle">Defina o modelo de IA, especialidade e instruções operacionais (Prompt)</p>
+                    </div>
+                </div>
+                <button type="button" class="modal-close ai-agent-modal-close" aria-label="Fechar Modal">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" style="max-height: calc(85vh - 140px); overflow-y: auto;">
+                <form id="ai-agent-form">
+                    <input type="hidden" id="ai-agent-form-id">
+                    
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label for="ai-agent-form-name">Nome do Agente <span style="color: var(--color-danger);">*</span></label>
+                            <input type="text" id="ai-agent-form-name" class="form-control" placeholder="Ex: Auditor de Rentabilidade & Taxas" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="ai-agent-form-role">Cargo / Especialidade <span style="color: var(--color-danger);">*</span></label>
+                            <input type="text" id="ai-agent-form-role" class="form-control" placeholder="Ex: Especialista em Custos e Margem Líquida" required>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div class="form-group">
+                            <label for="ai-agent-form-slug">Identificador Único (Slug)</label>
+                            <input type="text" id="ai-agent-form-slug" class="form-control" placeholder="Ex: auditor-taxas (auto-gerado se vazio)">
+                            <span style="font-size: 0.72rem; color: var(--color-text-offset);">Utilizado para outros agentes consultarem este especialista</span>
+                        </div>
+                        <div class="form-group">
+                            <label for="ai-agent-form-model">Versão de IA (Modelo Gemini) <span style="color: var(--color-danger);">*</span></label>
+                            <select id="ai-agent-form-model" class="form-control">
+                                <option value="gemini-1.5-flash">gemini-1.5-flash (Rápido & Econômico - Padrão)</option>
+                                <option value="gemini-2.0-flash">gemini-2.0-flash (Nova Geração 2.0 Flash)</option>
+                                <option value="gemini-3.6-flash">gemini-3.6-flash (Sugerido pelo Google / Nova Versão)</option>
+                                <option value="gemini-1.5-pro">gemini-1.5-pro (Raciocínio Profundo & Avançado)</option>
+                                <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (Ultra Leve)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="display: grid; grid-template-columns: 1fr auto; gap: 1rem; align-items: end;">
+                        <div class="form-group">
+                            <label for="ai-agent-form-icon">Ícone FontAwesome</label>
+                            <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                <input type="text" id="ai-agent-form-icon" class="form-control" value="fa-robot" placeholder="fa-robot">
+                                <div id="ai-agent-icon-preview" style="width: 38px; height: 38px; border-radius: var(--border-radius-sm); background: var(--color-surface); border: 1px solid var(--color-border); display: flex; align-items: center; justify-content: center; font-size: 1.1rem; color: #3b82f6;">
+                                    <i class="fas fa-robot"></i>
+                                </div>
+                            </div>
+                            <div style="display: flex; gap: 0.4rem; margin-top: 0.4rem; flex-wrap: wrap;">
+                                <span class="ai-icon-chip" data-icon="fa-robot" style="cursor: pointer; font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; background: var(--color-surface); border: 1px solid var(--color-border);"><i class="fas fa-robot"></i> robô</span>
+                                <span class="ai-icon-chip" data-icon="fa-calculator" style="cursor: pointer; font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; background: var(--color-surface); border: 1px solid var(--color-border);"><i class="fas fa-calculator"></i> calc</span>
+                                <span class="ai-icon-chip" data-icon="fa-trophy" style="cursor: pointer; font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; background: var(--color-surface); border: 1px solid var(--color-border);"><i class="fas fa-trophy"></i> troféu</span>
+                                <span class="ai-icon-chip" data-icon="fa-wand-magic-sparkles" style="cursor: pointer; font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; background: var(--color-surface); border: 1px solid var(--color-border);"><i class="fas fa-wand-magic-sparkles"></i> magia</span>
+                                <span class="ai-icon-chip" data-icon="fa-shield-halved" style="cursor: pointer; font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; background: var(--color-surface); border: 1px solid var(--color-border);"><i class="fas fa-shield-halved"></i> escudo</span>
+                                <span class="ai-icon-chip" data-icon="fa-chart-line" style="cursor: pointer; font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; background: var(--color-surface); border: 1px solid var(--color-border);"><i class="fas fa-chart-line"></i> gráfico</span>
+                                <span class="ai-icon-chip" data-icon="fa-tags" style="cursor: pointer; font-size: 0.75rem; padding: 2px 8px; border-radius: 4px; background: var(--color-surface); border: 1px solid var(--color-border);"><i class="fas fa-tags"></i> tags</span>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="ai-agent-form-color">Cor</label>
+                            <input type="color" id="ai-agent-form-color" value="#3b82f6" style="height: 38px; width: 60px; padding: 2px; cursor: pointer; border-radius: 4px; border: 1px solid var(--color-border); background: var(--color-surface);">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ai-agent-form-desc">Descrição Curta</label>
+                        <input type="text" id="ai-agent-form-desc" class="form-control" placeholder="Resumo de 1 frase explicando o objetivo do agente">
+                    </div>
+
+                    <div class="form-group">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.35rem;">
+                            <label for="ai-agent-form-prompt" style="margin: 0;">Instruções Operacionais e Persona (System Prompt) <span style="color: var(--color-danger);">*</span></label>
+                            <span style="font-size: 0.72rem; color: var(--color-text-offset);">A IA usará estas instruções para raciocinar e interagir</span>
+                        </div>
+                        <textarea id="ai-agent-form-prompt" class="form-control" rows="8" style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.45;" placeholder="Você é o especialista em... Suas regras de atuação são:&#10;1. Ao analisar anúncios...&#10;2. Sempre forneça..." required></textarea>
+                    </div>
+
+                    <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--color-border); border-radius: var(--border-radius-sm); padding: 0.85rem 1rem; margin-top: 1rem; display: flex; flex-direction: column; gap: 0.65rem;">
+                        <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
+                            <input type="checkbox" id="ai-agent-form-confirm" checked>
+                            <span><strong>Exigir Confirmação Manual</strong> antes de alterar anúncios ou estoque no Mercado Livre (Human-in-the-Loop)</span>
+                        </label>
+                        <label class="checkbox-label" style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer; font-size: 0.85rem;">
+                            <input type="checkbox" id="ai-agent-form-active" checked>
+                            <span><strong>Agente Ativo</strong> (disponível no Chat e para consultas inter-agentes)</span>
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary ai-agent-modal-close">
+                    <i class="fas fa-times"></i> Cancelar
+                </button>
+                <button type="submit" form="ai-agent-form" class="btn btn-primary" id="ai-agent-save-btn">
+                    <i class="fas fa-check"></i> Salvar Agente
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="ui.js?v=__CACHE_BUSTER__" defer></script>
 </body>
 </html>

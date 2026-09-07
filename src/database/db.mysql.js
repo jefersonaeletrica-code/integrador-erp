@@ -740,6 +740,8 @@ export const saveOrUpdateAIAgent = async (agent) => {
   const conn = await getPool().getConnection();
   try {
     const { id, name, slug, avatar_icon, avatar_color, role_title, description, system_prompt, model, allowed_tools, require_confirmation, is_active } = agent;
+    const toolsJson = Array.isArray(allowed_tools) ? JSON.stringify(allowed_tools) : (allowed_tools || '[]');
+    
     if (id) {
       await conn.execute(`
         UPDATE ai_agents 
@@ -749,35 +751,54 @@ export const saveOrUpdateAIAgent = async (agent) => {
         name,
         avatar_icon || 'fa-robot',
         avatar_color || '#3b82f6',
-        role_title,
-        description,
+        role_title || 'Agente Especialista',
+        description || '',
         system_prompt,
         model || 'gemini-1.5-flash',
-        Array.isArray(allowed_tools) ? JSON.stringify(allowed_tools) : allowed_tools,
+        toolsJson,
         require_confirmation !== undefined ? (require_confirmation ? 1 : 0) : 1,
         is_active !== undefined ? (is_active ? 1 : 0) : 1,
         id
       ]);
       return { ...agent };
     } else {
+      const cleanSlug = slug || name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
       const [res] = await conn.execute(`
         INSERT INTO ai_agents (name, slug, avatar_icon, avatar_color, role_title, description, system_prompt, model, allowed_tools, require_confirmation, is_active)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         name,
-        slug,
+        cleanSlug,
         avatar_icon || 'fa-robot',
         avatar_color || '#3b82f6',
-        role_title,
-        description,
+        role_title || 'Agente Especialista',
+        description || '',
         system_prompt,
         model || 'gemini-1.5-flash',
-        Array.isArray(allowed_tools) ? JSON.stringify(allowed_tools) : allowed_tools,
+        toolsJson,
         require_confirmation !== undefined ? (require_confirmation ? 1 : 0) : 1,
         is_active !== undefined ? (is_active ? 1 : 0) : 1
       ]);
-      return { id: res.insertId, ...agent };
+      return { id: res.insertId, slug: cleanSlug, ...agent };
     }
+  } finally {
+    conn.release();
+  }
+};
+
+export const deleteAIAgent = async (id) => {
+  await ensureInitialized();
+  const conn = await getPool().getConnection();
+  try {
+    await conn.execute('DELETE FROM ai_action_logs WHERE agent_id = ?', [id]);
+    // Remove mensagens das conversas deste agente
+    await conn.execute(`
+      DELETE FROM ai_messages 
+      WHERE conversation_id IN (SELECT id FROM ai_conversations WHERE agent_id = ?)
+    `, [id]);
+    await conn.execute('DELETE FROM ai_conversations WHERE agent_id = ?', [id]);
+    const [result] = await conn.execute('DELETE FROM ai_agents WHERE id = ?', [id]);
+    return result.affectedRows > 0;
   } finally {
     conn.release();
   }

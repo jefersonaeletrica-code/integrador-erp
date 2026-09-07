@@ -332,6 +332,100 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     /**
+     * Modal de Criação e Edição de Agentes IA
+     */
+    const aiAgentModal = document.getElementById('ai-agent-modal');
+    const openAIAgentModal = (agent = null) => {
+        if (!aiAgentModal) return;
+        const form = document.getElementById('ai-agent-form');
+        if (form) form.reset();
+
+        const titleEl = document.getElementById('ai-agent-modal-title');
+        const subtitleEl = document.getElementById('ai-agent-modal-subtitle');
+        const iconBadge = document.getElementById('ai-agent-modal-icon-badge');
+        const headerIcon = document.getElementById('ai-agent-modal-header-icon');
+        const previewIcon = document.getElementById('ai-agent-icon-preview');
+
+        const idInput = document.getElementById('ai-agent-form-id');
+        const nameInput = document.getElementById('ai-agent-form-name');
+        const roleInput = document.getElementById('ai-agent-form-role');
+        const slugInput = document.getElementById('ai-agent-form-slug');
+        const modelSelect = document.getElementById('ai-agent-form-model');
+        const iconInput = document.getElementById('ai-agent-form-icon');
+        const colorInput = document.getElementById('ai-agent-form-color');
+        const descInput = document.getElementById('ai-agent-form-desc');
+        const promptInput = document.getElementById('ai-agent-form-prompt');
+        const confirmCheck = document.getElementById('ai-agent-form-confirm');
+        const activeCheck = document.getElementById('ai-agent-form-active');
+
+        if (agent) {
+            if (titleEl) titleEl.textContent = `Editar Agente: ${agent.name}`;
+            if (subtitleEl) subtitleEl.textContent = 'Ajuste o modelo de IA, especialidade ou refine as regras e o Prompt de Sistema';
+            if (idInput) idInput.value = agent.id;
+            if (nameInput) nameInput.value = agent.name || '';
+            if (roleInput) roleInput.value = agent.role_title || '';
+            if (slugInput) {
+                slugInput.value = agent.slug || '';
+                slugInput.readOnly = true;
+                slugInput.style.opacity = '0.7';
+            }
+            if (modelSelect) modelSelect.value = agent.model || 'gemini-1.5-flash';
+            if (iconInput) iconInput.value = agent.avatar_icon || 'fa-robot';
+            if (colorInput) colorInput.value = agent.avatar_color || '#3b82f6';
+            if (descInput) descInput.value = agent.description || '';
+            if (promptInput) promptInput.value = agent.system_prompt || '';
+            if (confirmCheck) confirmCheck.checked = !!agent.require_confirmation;
+            if (activeCheck) activeCheck.checked = agent.is_active !== undefined ? !!agent.is_active : true;
+
+            if (headerIcon) headerIcon.className = `fas ${agent.avatar_icon || 'fa-robot'}`;
+            if (iconBadge) {
+                iconBadge.style.color = agent.avatar_color || '#3b82f6';
+                iconBadge.style.background = `${agent.avatar_color || '#3b82f6'}22`;
+            }
+            if (previewIcon) {
+                previewIcon.innerHTML = `<i class="fas ${agent.avatar_icon || 'fa-robot'}"></i>`;
+                previewIcon.style.color = agent.avatar_color || '#3b82f6';
+            }
+        } else {
+            if (titleEl) titleEl.textContent = 'Criar Novo Agente Inteligente';
+            if (subtitleEl) subtitleEl.textContent = 'Configure um novo especialista autônomo com diretrizes personalizadas de negócio';
+            if (idInput) idInput.value = '';
+            if (nameInput) nameInput.value = '';
+            if (roleInput) roleInput.value = '';
+            if (slugInput) {
+                slugInput.value = '';
+                slugInput.readOnly = false;
+                slugInput.style.opacity = '1';
+            }
+            if (modelSelect) modelSelect.value = 'gemini-1.5-flash';
+            if (iconInput) iconInput.value = 'fa-robot';
+            if (colorInput) colorInput.value = '#3b82f6';
+            if (descInput) descInput.value = '';
+            if (promptInput) {
+                promptInput.value = `Você é um agente especialista do Integrador ERP.\nSua missão é atuar com precisão e ajudar o vendedor a tomar as melhores decisões.\n\nRegras de atuação:\n1. Analise dados reais antes de sugerir alterações.\n2. Seja claro, direto e use tabelas estruturadas quando apropriado.\n3. Sempre que necessário, consulte outros agentes especialistas do sistema.`;
+            }
+            if (confirmCheck) confirmCheck.checked = true;
+            if (activeCheck) activeCheck.checked = true;
+
+            if (headerIcon) headerIcon.className = 'fas fa-robot';
+            if (iconBadge) {
+                iconBadge.style.color = '#3b82f6';
+                iconBadge.style.background = 'rgba(59, 130, 246, 0.15)';
+            }
+            if (previewIcon) {
+                previewIcon.innerHTML = '<i class="fas fa-robot"></i>';
+                previewIcon.style.color = '#3b82f6';
+            }
+        }
+
+        aiAgentModal.style.display = 'flex';
+    };
+
+    const closeAIAgentModal = () => {
+        if (aiAgentModal) aiAgentModal.style.display = 'none';
+    };
+
+    /**
      * Helpers para Gerenciamento de Fotos, Upload de Arquivos e Drag & Drop
      */
     const updateTitleCounter = (inputEl, counterEl, warningEl) => {
@@ -1240,6 +1334,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (meliEditModalCloseBtns) {
         meliEditModalCloseBtns.forEach(btn => btn.addEventListener('click', closeMeliEditModal));
     }
+    document.querySelectorAll('.ai-agent-modal-close').forEach(btn => {
+        btn.addEventListener('click', closeAIAgentModal);
+    });
 
     // Fechar modais ao clicar no backdrop ou pressionar ESC
     window.addEventListener('click', (e) => {
@@ -1255,6 +1352,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target === meliEditModal || (e.target.classList && e.target.classList.contains('modal-backdrop') && e.target.closest('#meli-edit-modal'))) {
             closeMeliEditModal();
         }
+        if (e.target === aiAgentModal || (e.target.classList && e.target.classList.contains('modal-backdrop') && e.target.closest('#ai-agent-modal'))) {
+            closeAIAgentModal();
+        }
     });
 
     document.addEventListener('keydown', (e) => {
@@ -1263,7 +1363,87 @@ document.addEventListener('DOMContentLoaded', () => {
             if (supplierTestModal && supplierTestModal.style.display === 'flex') closeSupplierTestModal();
             if (meliCreateModal && meliCreateModal.style.display === 'flex') closeMeliCreateModal();
             if (meliEditModal && meliEditModal.style.display === 'flex') closeMeliEditModal();
+            if (aiAgentModal && aiAgentModal.style.display === 'flex') closeAIAgentModal();
         }
+    });
+
+    // Submissão do Formulário de Agente IA
+    const aiAgentForm = document.getElementById('ai-agent-form');
+    if (aiAgentForm) {
+        aiAgentForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('ai-agent-form-id')?.value;
+            const name = document.getElementById('ai-agent-form-name')?.value?.trim();
+            const role_title = document.getElementById('ai-agent-form-role')?.value?.trim();
+            const slug = document.getElementById('ai-agent-form-slug')?.value?.trim();
+            const model = document.getElementById('ai-agent-form-model')?.value;
+            const avatar_icon = document.getElementById('ai-agent-form-icon')?.value?.trim() || 'fa-robot';
+            const avatar_color = document.getElementById('ai-agent-form-color')?.value || '#3b82f6';
+            const description = document.getElementById('ai-agent-form-desc')?.value?.trim() || '';
+            const system_prompt = document.getElementById('ai-agent-form-prompt')?.value?.trim();
+            const require_confirmation = document.getElementById('ai-agent-form-confirm')?.checked;
+            const is_active = document.getElementById('ai-agent-form-active')?.checked;
+
+            if (!name || !system_prompt) {
+                showToast('Preencha o Nome e o Prompt de Sistema do Agente.', 'warning');
+                return;
+            }
+
+            const saveBtn = document.getElementById('ai-agent-save-btn');
+            if (saveBtn) {
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Salvando...';
+            }
+
+            try {
+                const payload = {
+                    id: id ? parseInt(id, 10) : undefined,
+                    name,
+                    role_title,
+                    slug: slug || undefined,
+                    model,
+                    avatar_icon,
+                    avatar_color,
+                    description,
+                    system_prompt,
+                    require_confirmation,
+                    is_active
+                };
+
+                const res = await api('/api/ai/agents', 'POST', payload);
+                showToast(res.mensagem || 'Agente salvo com sucesso!', 'success');
+                closeAIAgentModal();
+                renderAIAgentsHubView();
+            } catch (err) {
+                showToast(`Erro ao salvar agente: ${err.message}`, 'error');
+            } finally {
+                if (saveBtn) {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="fas fa-check"></i> Salvar Agente';
+                }
+            }
+        });
+    }
+
+    // Chips de ícones rápidos e cor no modal de agente
+    document.querySelectorAll('.ai-icon-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+            const iconName = chip.dataset.icon;
+            const iconInput = document.getElementById('ai-agent-form-icon');
+            const previewIcon = document.getElementById('ai-agent-icon-preview');
+            if (iconInput) iconInput.value = iconName;
+            if (previewIcon) previewIcon.innerHTML = `<i class="fas ${iconName}"></i>`;
+        });
+    });
+
+    document.getElementById('ai-agent-form-icon')?.addEventListener('input', (e) => {
+        const previewIcon = document.getElementById('ai-agent-icon-preview');
+        if (previewIcon) previewIcon.innerHTML = `<i class="fas ${e.target.value}"></i>`;
+    });
+
+    document.getElementById('ai-agent-form-color')?.addEventListener('input', (e) => {
+        const previewIcon = document.getElementById('ai-agent-icon-preview');
+        if (previewIcon) previewIcon.style.color = e.target.value;
     });
 
     /**
@@ -4393,9 +4573,9 @@ document.addEventListener('DOMContentLoaded', () => {
                                 </div>
                                 <div class="ai-message-bubble">
                                     <p>Olá! Eu sou o <strong>${activeAgent.name}</strong>.</p>
-                                    <p>${activeAgent.description}</p>
+                                    <p>${activeAgent.description || 'Especialista pronto para realizar análises e automações.'}</p>
                                     <p style="margin-top: 0.5rem; font-size: 0.82rem; color: var(--color-text-offset);">
-                                        <i class="fas fa-wrench"></i> <strong>Ferramentas conectadas:</strong> ${(activeAgent.allowed_tools || []).join(', ')}
+                                        <i class="fas fa-brain"></i> <strong>Autonomia de IA:</strong> Analiso e executo ferramentas automaticamente e posso consultar outros especialistas do sistema.
                                     </p>
                                     <p style="margin-top: 0.4rem;">Como posso ajudar você agora?</p>
                                 </div>
@@ -4456,11 +4636,19 @@ document.addEventListener('DOMContentLoaded', () => {
                                         ${m.content ? formatMarkdownText(m.content) : ''}
                                         ${Array.isArray(m.tool_calls) && m.tool_calls.length > 0 ? `
                                             <div style="margin-top: 0.5rem;">
-                                                ${m.tool_calls.map(tc => `
+                                                ${m.tool_calls.map(tc => tc.name === 'consultar_outro_agente' ? `
+                                                    <div class="ai-tool-call-card" style="background: rgba(99, 102, 241, 0.12); border-color: rgba(99, 102, 241, 0.35);">
+                                                        <div class="ai-tool-call-info">
+                                                            <i class="fas fa-handshake" style="color: #6366f1;"></i>
+                                                            <span><strong>Colaboração Inter-Agentes:</strong> Consultou <code>${tc.args?.agent_slug || 'especialista'}</code></span>
+                                                        </div>
+                                                        <span class="ai-tool-call-badge" style="background: rgba(99, 102, 241, 0.25); color: #818cf8;">Parecer Recebido</span>
+                                                    </div>
+                                                ` : `
                                                     <div class="ai-tool-call-card">
                                                         <div class="ai-tool-call-info">
-                                                            <i class="fas fa-gear" style="color: var(--color-primary);"></i>
-                                                            <span><strong>Ferramenta:</strong> <code>${tc.name}</code></span>
+                                                            <i class="fas fa-check-circle" style="color: var(--color-success);"></i>
+                                                            <span><strong>Ferramenta Autônoma:</strong> <code>${tc.name}</code></span>
                                                         </div>
                                                         <span class="ai-tool-call-badge success">Executado</span>
                                                     </div>
@@ -4598,11 +4786,19 @@ document.addEventListener('DOMContentLoaded', () => {
                                 
                                 ${Array.isArray(res.executed_actions) && res.executed_actions.length > 0 ? `
                                     <div style="margin-top: 0.75rem;">
-                                        ${res.executed_actions.map(ea => `
+                                        ${res.executed_actions.map(ea => ea.tool_name === 'consultar_outro_agente' ? `
+                                            <div class="ai-tool-call-card" style="background: rgba(99, 102, 241, 0.12); border-color: rgba(99, 102, 241, 0.35);">
+                                                <div class="ai-tool-call-info">
+                                                    <i class="fas fa-handshake" style="color: #6366f1;"></i>
+                                                    <span><strong>Colaboração Inter-Agentes:</strong> Consultou <code>${ea.args?.agent_slug || 'especialista'}</code></span>
+                                                </div>
+                                                <span class="ai-tool-call-badge" style="background: rgba(99, 102, 241, 0.25); color: #818cf8;">Parecer Recebido</span>
+                                            </div>
+                                        ` : `
                                             <div class="ai-tool-call-card">
                                                 <div class="ai-tool-call-info">
                                                     <i class="fas fa-check-circle" style="color: var(--color-success);"></i>
-                                                    <span><strong>Ação Executada:</strong> <code>${ea.tool_name}</code></span>
+                                                    <span><strong>Ferramenta Autônoma:</strong> <code>${ea.tool_name}</code></span>
                                                 </div>
                                                 <span class="ai-tool-call-badge success">Concluído</span>
                                             </div>
@@ -4730,8 +4926,12 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function renderAIAgentsHubView() {
         mainTitle.textContent = 'Hub de Agentes Inteligentes';
-        mainSubtitle.textContent = 'Agentes autônomos treinados para executar funções de negócio no ERP e Mercado Livre';
-        headerActions.innerHTML = '';
+        mainSubtitle.textContent = 'Crie e configure agentes especialistas autônomos com modelos dedicados do Gemini';
+        headerActions.innerHTML = `
+            <button type="button" class="btn btn-primary" id="btn-create-agent-header">
+                <i class="fas fa-plus"></i> Novo Agente
+            </button>
+        `;
         showLoading('Carregando agentes...');
 
         try {
@@ -4741,8 +4941,8 @@ document.addEventListener('DOMContentLoaded', () => {
             pageContent.innerHTML = `
                 <div class="ai-page-header">
                     <div>
-                        <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--color-text);">Agentes Especialistas Disponíveis</h2>
-                        <p style="font-size: 0.85rem; color: var(--color-text-offset);">Selecione um agente para iniciar uma análise ou automação</p>
+                        <h2 style="font-size: 1.25rem; font-weight: 700; color: var(--color-text);">Especialistas Cadastrados (${agents.length})</h2>
+                        <p style="font-size: 0.85rem; color: var(--color-text-offset);">Os agentes usam IA para identificar as ferramentas necessárias e podem colaborar entre si</p>
                     </div>
                 </div>
 
@@ -4755,25 +4955,37 @@ document.addEventListener('DOMContentLoaded', () => {
                                         <i class="fas ${a.avatar_icon || 'fa-robot'}"></i>
                                     </div>
                                     <div class="ai-agent-card-info">
-                                        <h3>${a.name}</h3>
+                                        <div style="display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap;">
+                                            <h3 style="margin: 0;">${a.name}</h3>
+                                            ${!a.is_active ? '<span class="badge badge-secondary" style="font-size: 0.65rem;">Inativo</span>' : ''}
+                                        </div>
                                         <div class="role">${a.role_title}</div>
-                                        <div class="desc">${a.description}</div>
+                                        <div class="desc">${a.description || 'Sem descrição cadastrada.'}</div>
                                     </div>
                                 </div>
-                                <div style="margin-top: 1rem;">
-                                    <div style="font-size: 0.75rem; font-weight: 700; color: var(--color-text-muted); text-transform: uppercase; margin-bottom: 0.4rem;">
-                                        Ferramentas Habilitadas:
-                                    </div>
-                                    <div class="ai-agent-card-tools">
-                                        ${(a.allowed_tools || []).map(t => `<span class="ai-tool-tag"><i class="fas fa-wrench"></i> ${t}</span>`).join('')}
-                                    </div>
+
+                                <div style="margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center;">
+                                    <span class="badge badge-info" style="font-size: 0.72rem; font-family: monospace; display: inline-flex; align-items: center; gap: 0.35rem;">
+                                        <i class="fas fa-microchip"></i> ${a.model || 'gemini-1.5-flash'}
+                                    </span>
+                                    <span class="badge ${a.require_confirmation ? 'badge-warning' : 'badge-success'}" style="font-size: 0.72rem; display: inline-flex; align-items: center; gap: 0.35rem;">
+                                        <i class="fas ${a.require_confirmation ? 'fa-user-check' : 'fa-bolt'}"></i> ${a.require_confirmation ? 'Confirmação Manual' : 'Autônomo'}
+                                    </span>
+                                    <span class="badge badge-secondary" style="font-size: 0.72rem; display: inline-flex; align-items: center; gap: 0.35rem;">
+                                        <i class="fas fa-code-branch"></i> ${a.slug}
+                                    </span>
                                 </div>
                             </div>
 
-                            <div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center;">
-                                <span class="badge ${a.require_confirmation ? 'badge-warning' : 'badge-success'}" style="font-size: 0.72rem;">
-                                    ${a.require_confirmation ? 'Confirmação Manual' : 'Autônomo'}
-                                </span>
+                            <div style="margin-top: 1.25rem; padding-top: 1rem; border-top: 1px solid var(--color-border); display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                                <div style="display: flex; gap: 0.35rem;">
+                                    <button type="button" class="btn btn-secondary btn-sm btn-edit-agent" data-agent-id="${a.id}" title="Editar Prompt, Modelo ou Configurações">
+                                        <i class="fas fa-edit"></i> Editar
+                                    </button>
+                                    <button type="button" class="btn btn-danger btn-sm btn-delete-agent" data-agent-id="${a.id}" data-agent-name="${a.name}" title="Excluir este agente">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
                                 <button type="button" class="btn btn-primary btn-sm btn-open-agent-chat" data-agent-id="${a.id}">
                                     <i class="fas fa-comments"></i> Conversar
                                 </button>
@@ -4783,11 +4995,39 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
             `;
 
+            document.getElementById('btn-create-agent-header')?.addEventListener('click', () => {
+                openAIAgentModal(null);
+            });
+
             document.querySelectorAll('.btn-open-agent-chat').forEach(btn => {
                 btn.addEventListener('click', () => {
                     const agentId = btn.dataset.agentId;
                     setActiveNavLink('nav-ai-chat');
                     renderAIChatView(parseInt(agentId, 10), null);
+                });
+            });
+
+            document.querySelectorAll('.btn-edit-agent').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const agentId = parseInt(btn.dataset.agentId, 10);
+                    const target = agents.find(ag => ag.id === agentId);
+                    if (target) openAIAgentModal(target);
+                });
+            });
+
+            document.querySelectorAll('.btn-delete-agent').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const agentId = btn.dataset.agentId;
+                    const agentName = btn.dataset.agentName;
+                    if (confirm(`Tem certeza que deseja excluir o agente "${agentName}"?\nTodas as conversas associadas a ele serão removidas.`)) {
+                        try {
+                            const delRes = await api(`/api/ai/agents/${agentId}`, 'DELETE');
+                            showToast(delRes.mensagem || 'Agente excluído com sucesso!', 'success');
+                            renderAIAgentsHubView();
+                        } catch (delErr) {
+                            showToast(`Erro ao excluir agente: ${delErr.message}`, 'error');
+                        }
+                    }
                 });
             });
 

@@ -117,6 +117,24 @@ export const toolDeclarations = [
       type: 'OBJECT',
       properties: {}
     }
+  },
+  {
+    name: 'consultar_outro_agente',
+    description: 'Permite consultar e solicitar a análise técnica de outro agente especialista cadastrado no sistema (ex: "auditor-taxas", "estrategista-buybox", "otimizador-seo", "guardiao-estoque" ou novos agentes criados) enviando contexto ou perguntas para enriquecer sua própria análise.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        agent_slug: {
+          type: 'STRING',
+          description: 'Identificador único (slug) do agente especialista a ser consultado (ex: "auditor-taxas", "estrategista-buybox", "otimizador-seo", "guardiao-estoque")'
+        },
+        pergunta_ou_contexto: {
+          type: 'STRING',
+          description: 'Instrução clara, pergunta técnica ou contexto de dados que o agente especialista deve analisar'
+        }
+      },
+      required: ['agent_slug', 'pergunta_ou_contexto']
+    }
   }
 ];
 
@@ -508,6 +526,29 @@ export const toolExecutors = {
         produtos_importados_cadastrados: supplierRows[0]?.total_fornecedor || 0
       }
     };
+  },
+
+  /**
+   * Colaboração Inter-Agentes (Consulta técnica a outro agente especialista)
+   */
+  async consultar_outro_agente(args, context) {
+    const { agent_slug, pergunta_ou_contexto } = args;
+    if (!agent_slug || !pergunta_ou_contexto) {
+      return { erro: 'Identificador do agente (agent_slug) e pergunta_ou_contexto são obrigatórios.' };
+    }
+
+    if (context?.consultationDepth && context.consultationDepth >= 2) {
+      return { erro: 'Limite máximo de consultas entre agentes atingido para evitar ciclos.' };
+    }
+
+    const { delegateToAgent } = await import('./agentManager.js');
+    return await delegateToAgent({
+      targetSlug: agent_slug,
+      prompt: pergunta_ou_contexto,
+      callingAgentId: context?.agentId,
+      db: context?.db,
+      depth: (context?.consultationDepth || 0) + 1
+    });
   }
 };
 

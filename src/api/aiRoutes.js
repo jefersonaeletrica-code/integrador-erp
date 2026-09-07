@@ -133,8 +133,12 @@ export default function createAIRoutes(db) {
   router.post('/ai/agents', async (req, res) => {
     try {
       const agentData = req.body;
-      if (!agentData.name || !agentData.slug || !agentData.system_prompt) {
-        return res.status(400).json({ sucesso: false, erro: 'Nome, Identificador (slug) e Prompt de Sistema são obrigatórios.' });
+      if (!agentData.name || !agentData.system_prompt) {
+        return res.status(400).json({ sucesso: false, erro: 'Nome e Prompt de Sistema são obrigatórios.' });
+      }
+
+      if (!agentData.slug) {
+        agentData.slug = agentData.name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
       }
 
       const saved = await dbManager.saveOrUpdateAIAgent(agentData);
@@ -145,6 +149,28 @@ export default function createAIRoutes(db) {
       });
     } catch (error) {
       logger.error(`[AIRoutes] Erro ao salvar agente: ${error.message}`);
+      res.status(500).json({ sucesso: false, erro: error.message });
+    }
+  });
+
+  /**
+   * DELETE /ai/agents/:id - Exclui um agente
+   */
+  router.delete('/ai/agents/:id', async (req, res) => {
+    try {
+      const agentId = parseInt(req.params.id, 10);
+      const existing = await dbManager.getAIAgentById(agentId);
+      if (!existing) {
+        return res.status(404).json({ sucesso: false, erro: 'Agente não encontrado.' });
+      }
+
+      await dbManager.deleteAIAgent(agentId);
+      res.json({
+        sucesso: true,
+        mensagem: `Agente "${existing.name}" excluído com sucesso.`
+      });
+    } catch (error) {
+      logger.error(`[AIRoutes] Erro ao excluir agente: ${error.message}`);
       res.status(500).json({ sucesso: false, erro: error.message });
     }
   });
