@@ -281,6 +281,36 @@ export async function processAgentMessage({ agentId, conversationId, message, db
     contents.push({ role: 'user', parts: userToolParts });
   }
 
+  // Se executou ferramentas e ainda não gerou o texto final estruturado para o usuário:
+  if (!finalAssistantText && executedActions.length > 0) {
+    logger.info(`[AgentManager] Sintetizando resposta final com base nos dados obtidos...`);
+    try {
+      const finalRes = await generateGeminiContent({
+        apiKey,
+        model,
+        systemPrompt: systemPrompt + '\n\nIMPORTANTE: Forneça agora uma resposta completa, rica e detalhada em Markdown para o usuário, organizando e sintetizando todas as informações e dados obtidos nas ferramentas acima com tabelas e listas claras.',
+        contents,
+        tools: [], // Sem tools para forçar texto final consolidado
+        temperature: aiSettings.temperature || 0.3,
+        maxOutputTokens: aiSettings.max_output_tokens || 4096
+      });
+      if (finalRes && finalRes.text) {
+        finalAssistantText = finalRes.text;
+      }
+    } catch (synthErr) {
+      logger.error(`[AgentManager] Erro na síntese final: ${synthErr.message}`);
+    }
+  }
+
+  // Fallback garantido se ainda não tiver texto final
+  if (!finalAssistantText) {
+    if (executedActions.length > 0) {
+      finalAssistantText = `Concluí a consulta e execução das ferramentas com sucesso. Foram executadas: ${executedActions.map(a => `\`${a.tool_name}\``).join(', ')}.`;
+    } else {
+      finalAssistantText = 'Não foi possível gerar uma resposta detalhada para sua solicitação no momento. Por favor, tente novamente.';
+    }
+  }
+
   // 6. Salva a resposta final do assistente se ainda não foi salva
   if (finalAssistantText) {
     await dbManager.saveAIMessage({

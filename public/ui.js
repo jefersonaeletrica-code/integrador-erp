@@ -4412,37 +4412,94 @@ document.addEventListener('DOMContentLoaded', () => {
      */
 
     /**
-     * Helper para formatar Markdown simples em HTML seguro
+     * Helper para formatar Markdown avançado em HTML seguro (incluindo tabelas, listas e blocos de código)
      */
     function formatMarkdownText(text) {
         if (!text) return '';
-        let html = text
+
+        // 1. Extrai blocos de código com ``` para proteger seu conteúdo
+        const codeBlocks = [];
+        let processed = String(text).replace(/```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g, (match, lang, code) => {
+            const placeholder = `__CODE_BLOCK_${codeBlocks.length}__`;
+            const escapedCode = code
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+            codeBlocks.push(`<pre class="ai-code-block" style="background: rgba(0,0,0,0.06); padding: 0.75rem; border-radius: 6px; overflow-x: auto; margin: 0.5rem 0;"><code class="language-${lang || 'text'}">${escapedCode}</code></pre>`);
+            return placeholder;
+        });
+
+        // 2. Escapa caracteres HTML no texto restante
+        processed = processed
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
 
-        // Headers
-        html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
-        html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
-        html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+        // 3. Processa tabelas em Markdown (| Col 1 | Col 2 | \n | --- | --- | \n | Val 1 | Val 2 |)
+        processed = processed.replace(/((?:\|[^\n]+\|\r?\n?)+)/g, (match) => {
+            const lines = match.trim().split(/\r?\n/).map(l => l.trim()).filter(l => l.startsWith('|') && l.endsWith('|'));
+            if (lines.length < 2) return match;
 
-        // Bold & Italic
-        html = html.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
-        html = html.replace(/\*(.*?)\*/gim, '<em>$1</em>');
+            const isHeaderSep = /^\|(?:\s*:?-+:?\s*\|)+$/.test(lines[1]);
+            let tableHtml = '<div class="table-responsive" style="overflow-x: auto; margin: 0.75rem 0;"><table class="ai-table" style="width:100%; border-collapse: collapse; font-size: 0.82rem;">';
+            let startRow = 0;
 
-        // Inline code
-        html = html.replace(/`([^`]+)`/gim, '<code>$1</code>');
+            if (isHeaderSep) {
+                const headerCells = lines[0].slice(1, -1).split('|').map(c => c.trim());
+                tableHtml += '<thead style="background: rgba(0,0,0,0.06);"><tr>';
+                headerCells.forEach(c => {
+                    tableHtml += `<th style="padding: 6px 10px; border: 1px solid var(--color-border); text-align: left; font-weight: 600;">${c}</th>`;
+                });
+                tableHtml += '</tr></thead>';
+                startRow = 2;
+            }
 
-        // Listas não ordenadas
-        html = html.replace(/^\s*[-*]\s+(.*$)/gim, '<li>$1</li>');
-        html = html.replace(/(<li>.*<\/li>)/gim, '<ul>$1</ul>');
-        html = html.replace(/<\/ul>\s*<ul>/gim, '');
+            tableHtml += '<tbody>';
+            for (let i = startRow; i < lines.length; i++) {
+                if (/^\|(?:\s*:?-+:?\s*\|)+$/.test(lines[i])) continue;
+                const cells = lines[i].slice(1, -1).split('|').map(c => c.trim());
+                tableHtml += '<tr>';
+                cells.forEach(c => {
+                    tableHtml += `<td style="padding: 6px 10px; border: 1px solid var(--color-border);">${c}</td>`;
+                });
+                tableHtml += '</tr>';
+            }
+            tableHtml += '</tbody></table></div>';
+            return tableHtml;
+        });
 
-        // Quebras de linha normais
-        html = html.replace(/\n\n/gim, '</p><p>');
-        html = html.replace(/\n/gim, '<br>');
+        // 4. Headers
+        processed = processed.replace(/^### (.*$)/gim, '<h3 style="margin: 0.75rem 0 0.35rem; font-size: 0.95rem; font-weight: 700;">$1</h3>');
+        processed = processed.replace(/^## (.*$)/gim, '<h2 style="margin: 0.9rem 0 0.4rem; font-size: 1.05rem; font-weight: 700;">$1</h2>');
+        processed = processed.replace(/^# (.*$)/gim, '<h1 style="margin: 1rem 0 0.5rem; font-size: 1.15rem; font-weight: 700;">$1</h1>');
 
-        return `<p>${html}</p>`;
+        // 5. Blockquotes (> texto)
+        processed = processed.replace(/^>\s+(.*$)/gim, '<blockquote style="border-left: 3px solid var(--color-primary); padding-left: 0.75rem; margin: 0.5rem 0; color: var(--color-text-offset); font-style: italic;">$1</blockquote>');
+
+        // 6. Bold & Italic
+        processed = processed.replace(/\*\*\*(.*?)\*\*\*/gim, '<strong><em>$1</em></strong>');
+        processed = processed.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
+        processed = processed.replace(/\*(.*?)\*/gim, '<em>$1</em>');
+        processed = processed.replace(/~~(.*?)~~/gim, '<del>$1</del>');
+
+        // 7. Inline code (`code`)
+        processed = processed.replace(/`([^`]+)`/gim, '<code>$1</code>');
+
+        // 8. Listas não ordenadas (* item ou - item)
+        processed = processed.replace(/^\s*[-*]\s+(.*$)/gim, '<li>$1</li>');
+        processed = processed.replace(/(<li>.*<\/li>)/gim, '<ul style="margin: 0.4rem 0 0.6rem 1.25rem; padding-left: 0;">$1</ul>');
+        processed = processed.replace(/<\/ul>\s*<ul[^>]*>/gim, '');
+
+        // 9. Quebras de linha e parágrafos
+        processed = processed.replace(/\n\n/gim, '</p><p style="margin-bottom: 0.5rem;">');
+        processed = processed.replace(/\n/gim, '<br>');
+
+        // 10. Restaura blocos de código
+        codeBlocks.forEach((block, idx) => {
+            processed = processed.replace(`__CODE_BLOCK_${idx}__`, block);
+        });
+
+        return `<div class="ai-rendered-markdown"><p style="margin-bottom: 0.5rem;">${processed}</p></div>`;
     }
 
     /**
@@ -4636,11 +4693,14 @@ document.addEventListener('DOMContentLoaded', () => {
                                         ${m.content ? formatMarkdownText(m.content) : ''}
                                         ${Array.isArray(m.tool_calls) && m.tool_calls.length > 0 ? `
                                             <div style="margin-top: 0.5rem;">
-                                                ${m.tool_calls.map(tc => tc.name === 'consultar_outro_agente' ? `
+                                                ${m.tool_calls.map(tc => {
+                                                    const toolName = tc.name || tc.functionCall?.name || 'ferramenta';
+                                                    const toolArgs = tc.args || tc.functionCall?.args || {};
+                                                    return toolName === 'consultar_outro_agente' ? `
                                                     <div class="ai-tool-call-card" style="background: rgba(99, 102, 241, 0.12); border-color: rgba(99, 102, 241, 0.35);">
                                                         <div class="ai-tool-call-info">
                                                             <i class="fas fa-handshake" style="color: #6366f1;"></i>
-                                                            <span><strong>Colaboração Inter-Agentes:</strong> Consultou <code>${tc.args?.agent_slug || 'especialista'}</code></span>
+                                                            <span><strong>Colaboração Inter-Agentes:</strong> Consultou <code>${toolArgs.agent_slug || 'especialista'}</code></span>
                                                         </div>
                                                         <span class="ai-tool-call-badge" style="background: rgba(99, 102, 241, 0.25); color: #818cf8;">Parecer Recebido</span>
                                                     </div>
@@ -4648,11 +4708,12 @@ document.addEventListener('DOMContentLoaded', () => {
                                                     <div class="ai-tool-call-card">
                                                         <div class="ai-tool-call-info">
                                                             <i class="fas fa-check-circle" style="color: var(--color-success);"></i>
-                                                            <span><strong>Ferramenta Autônoma:</strong> <code>${tc.name}</code></span>
+                                                            <span><strong>Ferramenta Autônoma:</strong> <code>${toolName}</code></span>
                                                         </div>
                                                         <span class="ai-tool-call-badge success">Executado</span>
                                                     </div>
-                                                `).join('')}
+                                                `;
+                                                }).join('')}
                                             </div>
                                         ` : ''}
                                     </div>
@@ -4786,11 +4847,14 @@ document.addEventListener('DOMContentLoaded', () => {
                                 
                                 ${Array.isArray(res.executed_actions) && res.executed_actions.length > 0 ? `
                                     <div style="margin-top: 0.75rem;">
-                                        ${res.executed_actions.map(ea => ea.tool_name === 'consultar_outro_agente' ? `
+                                        ${res.executed_actions.map(ea => {
+                                            const toolName = ea.tool_name || ea.name || 'ferramenta';
+                                            const toolArgs = ea.args || {};
+                                            return toolName === 'consultar_outro_agente' ? `
                                             <div class="ai-tool-call-card" style="background: rgba(99, 102, 241, 0.12); border-color: rgba(99, 102, 241, 0.35);">
                                                 <div class="ai-tool-call-info">
                                                     <i class="fas fa-handshake" style="color: #6366f1;"></i>
-                                                    <span><strong>Colaboração Inter-Agentes:</strong> Consultou <code>${ea.args?.agent_slug || 'especialista'}</code></span>
+                                                    <span><strong>Colaboração Inter-Agentes:</strong> Consultou <code>${toolArgs.agent_slug || 'especialista'}</code></span>
                                                 </div>
                                                 <span class="ai-tool-call-badge" style="background: rgba(99, 102, 241, 0.25); color: #818cf8;">Parecer Recebido</span>
                                             </div>
@@ -4798,11 +4862,12 @@ document.addEventListener('DOMContentLoaded', () => {
                                             <div class="ai-tool-call-card">
                                                 <div class="ai-tool-call-info">
                                                     <i class="fas fa-check-circle" style="color: var(--color-success);"></i>
-                                                    <span><strong>Ferramenta Autônoma:</strong> <code>${ea.tool_name}</code></span>
+                                                    <span><strong>Ferramenta Autônoma:</strong> <code>${toolName}</code></span>
                                                 </div>
                                                 <span class="ai-tool-call-badge success">Concluído</span>
                                             </div>
-                                        `).join('')}
+                                        `;
+                                        }).join('')}
                                     </div>
                                 ` : ''}
 

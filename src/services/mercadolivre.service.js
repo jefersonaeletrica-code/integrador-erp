@@ -1084,7 +1084,7 @@ export async function checkClipStatus(connection, clipId, itemId, db) {
  */
 export async function getItemPriceToWin(connection, itemId, db) {
     try {
-        logger.info(`[MercadoLivreService] Consultando price_to_win para o anúncio ${itemId}...`);
+        logger.debug(`[MercadoLivreService] Consultando price_to_win para o anúncio ${itemId}...`);
         
         let ptwData = null;
         try {
@@ -1323,10 +1323,10 @@ export async function syncAllCatalogItemsStatus(db, connectionId = null) {
             }
         }
 
-        logger.info(`[MercadoLivreService] Sincronização de catálogo concluída: ${updated} atualizados (${winners} vencendo, ${losers} perdendo).`);
+        logger.info(`[MercadoLivreService:Job-Background] Sincronização periódica da Buy Box concluída: ${updated} anúncios analisados (${winners} vencendo, ${losers} perdendo).`);
         return { total: items.length, updated, winners, losers, competing };
     } catch (error) {
-        logger.error(`[MercadoLivreService] Erro na sincronização geral de catálogo: ${error.message}`, error);
+        logger.error(`[MercadoLivreService:Job-Background] Erro na sincronização geral de catálogo: ${error.message}`, error);
         return { total: 0, updated: 0, winners: 0, losers: 0, competing: 0, erro: error.message };
     }
 }
@@ -1345,25 +1345,25 @@ export function startCatalogStatusSyncJob(db, intervalMinutes = 10) {
     }
 
     const intervalMs = Math.max(1, intervalMinutes) * 60 * 1000;
-    logger.info(`[MercadoLivreService] Job periódico de sincronização da Buy Box configurado para rodar a cada ${intervalMinutes} minuto(s).`);
+    logger.info(`[MercadoLivreService:Job-Background] Job periódico de sincronização da Buy Box configurado para rodar a cada ${intervalMinutes} minuto(s).`);
 
     // Executa uma sincronização inicial em background após 20 segundos da inicialização do servidor
     setTimeout(async () => {
         try {
-            logger.info('[MercadoLivreService] Executando sincronização inicial de status de catálogo...');
+            logger.info('[MercadoLivreService:Job-Background] Executando sincronização inicial de status da Buy Box (Job periódico)...');
             await syncAllCatalogItemsStatus(db);
         } catch (initErr) {
-            logger.warn(`[MercadoLivreService] Aviso na sincronização inicial de catálogo: ${initErr.message}`);
+            logger.warn(`[MercadoLivreService:Job-Background] Aviso na sincronização inicial de catálogo: ${initErr.message}`);
         }
     }, 20000);
 
     // Agenda execuções periódicas a cada intervalMinutes
     catalogSyncTimer = setInterval(async () => {
         try {
-            logger.info('[MercadoLivreService] Executando ciclo periódico de sincronização de catálogo (Buy Box)...');
+            logger.info('[MercadoLivreService:Job-Background] Executando ciclo periódico de sincronização de catálogo (Buy Box)...');
             await syncAllCatalogItemsStatus(db);
         } catch (periodicErr) {
-            logger.error(`[MercadoLivreService] Erro no ciclo periódico de catálogo: ${periodicErr.message}`);
+            logger.error(`[MercadoLivreService:Job-Background] Erro no ciclo periódico de catálogo: ${periodicErr.message}`);
         }
     }, intervalMs);
 
