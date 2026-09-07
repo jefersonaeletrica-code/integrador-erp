@@ -6,15 +6,19 @@ const logger = getLogger();
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 /**
- * Lista de modelos oficiais recomendados pelo Gemini (geração 3.x)
+ * Lista de modelos oficiais recomendados pelo Gemini com alta disponibilidade e cotas estáveis
  */
 export const SUPPORTED_MODELS = [
+  'gemini-2.5-flash',
+  'gemini-2.0-flash',
+  'gemini-1.5-flash',
+  'gemini-2.0-flash-lite',
+  'gemini-1.5-pro',
+  'gemini-2.5-pro',
+  'gemini-flash-latest',
   'gemini-3.6-flash',
-  'gemini-3.5-flash-lite',
   'gemini-3.5-flash',
-  'gemini-3.7-flash',
-  'gemini-3.1-pro-preview',
-  'gemini-flash-latest'
+  'gemini-3.5-flash-lite'
 ];
 
 /**
@@ -30,16 +34,16 @@ export async function listAvailableGeminiModels(apiKey) {
     const res = await axios.get(url, { timeout: 12000 });
     const models = res.data?.models || [];
     
-    // Filtra apenas modelos de conversação/geração geral ativos (3.x / flash-latest)
+    // Filtra apenas modelos de conversação/geração geral ativos
     const isChatGeminiModel = (id) => {
       if (!id || !id.startsWith('gemini-')) return false;
       const lower = id.toLowerCase();
-      // Ignora modelos obsoletos/descontinuados ou especializados não-conversacionais
-      if (lower.startsWith('gemini-1.') || lower.startsWith('gemini-2.5-') || lower.startsWith('gemini-1.0-') ||
-          lower.includes('image') || lower.includes('tts') || lower.includes('transcribe') || 
+      // Ignora modelos especializados não-conversacionais ou embeddings
+      if (lower.includes('image') || lower.includes('tts') || lower.includes('transcribe') || 
           lower.includes('audio') || lower.includes('robotics') || lower.includes('computer-use') ||
           lower.includes('embedding') || lower.includes('aqa') || lower.includes('imagen') ||
-          lower.includes('banana') || lower.includes('customtools') || lower.includes('clip')) {
+          lower.includes('banana') || lower.includes('customtools') || lower.includes('clip') ||
+          lower.includes('vision') || lower.includes('pro-vision')) {
         return false;
       }
       return true;
@@ -201,77 +205,68 @@ export async function generateGeminiContent({
   let lastError = null;
 
   for (const candidateModel of modelsToTry) {
-    let attempts = 0;
-    const maxModelAttempts = 2; // Tenta até 2 vezes caso ocorra 503 temporário
+    try {
+      const url = `${GEMINI_API_BASE}/models/${candidateModel}:generateContent?key=${cleanKey}`;
+      const response = await axios.post(url, requestBody, {
+        headers: { 'Content-Type': 'application/json' },
+        timeout: 20000 // 20 segundos máx por modelo para evitar travamentos
+      });
 
-    while (attempts < maxModelAttempts) {
-      attempts++;
-      try {
-        const url = `${GEMINI_API_BASE}/models/${candidateModel}:generateContent?key=${cleanKey}`;
-        const response = await axios.post(url, requestBody, {
-          headers: { 'Content-Type': 'application/json' },
-          timeout: 45000 // 45 segundos para dar tempo a raciocínio complexo + function calling
-        });
+      const candidate = response.data?.candidates?.[0];
+      if (!candidate) {
+        throw new Error('Nenhuma resposta gerada pelo modelo Gemini.');
+      }
 
-        const candidate = response.data?.candidates?.[0];
-        if (!candidate) {
-          throw new Error('Nenhuma resposta gerada pelo modelo Gemini.');
+      const parts = candidate.content?.parts || [];
+      let textContent = '';
+      const functionCalls = [];
+
+      for (const part of parts) {
+        if (part.text) {
+          textContent += part.text;
         }
-
-        const parts = candidate.content?.parts || [];
-        let textContent = '';
-        const functionCalls = [];
-
-        for (const part of parts) {
-          if (part.text) {
-            textContent += part.text;
-          }
-          if (part.functionCall) {
-            functionCalls.push({
-              name: part.functionCall.name,
-              args: part.functionCall.args || {}
-            });
-          }
+        if (part.functionCall) {
+          functionCalls.push({
+            name: part.functionCall.name,
+            args: part.functionCall.args || {}
+          });
         }
+      }
 
-        return {
-          text: textContent,
-          functionCalls,
-          modelUsed: candidateModel,
-          finishReason: candidate.finishReason,
-          usageMetadata: response.data?.usageMetadata || null,
-          rawCandidate: candidate
-        };
-      } catch (error) {
-        lastError = error;
-        const statusCode = error.response?.status;
-        const errorDetail = error.response?.data?.error?.message || error.message;
+      return {
+        text: textContent,
+        functionCalls,
+        modelUsed: candidateModel,
+        finishReason: candidate.finishReason,
+        usageMetadata: response.data?.usageMetadata || null,
+        rawCandidate: candidate
+      };
+    } catch (error) {
+      lastError = error;
+      const statusCode = error.response?.status;
+      const errorDetail = error.response?.data?.error?.message || error.message;
 
-        if (statusCode === 401 || statusCode === 403 || errorDetail.includes('API_KEY_INVALID')) {
-          throw new Error(`Erro de autenticação Gemini (${statusCode}): ${errorDetail}`);
-        }
+      if (statusCode === 401 || statusCode === 403 || errorDetail.includes('API_KEY_INVALID')) {
+        throw new Error(`Erro de autenticação Gemini (${statusCode}): ${errorDetail}`);
+      }
 
-        // Se for 429 (cota do modelo esgotada), pula imediatamente para o próximo modelo do pool de fallback
-        if (statusCode === 429) {
-          logger.warn(`[GeminiService] Cota esgotada (429) no modelo "${candidateModel}". Alternando instantaneamente para o próximo modelo disponível...`);
-          break;
-        }
+      // Se for 429 (cota do modelo esgotada), pula imediatamente para o próximo modelo do pool de fallback
+      if (statusCode === 429) {
+        logger.warn(`[GeminiService] Cota esgotada (429) no modelo "${candidateModel}". Alternando instantaneamente para o próximo modelo disponível...`);
+        continue;
+      }
 
-        // Se for 503 (alta demanda temporária no Google) ou timeout e ainda tiver tentativa:
-        if ((statusCode === 503 || error.code === 'ECONNABORTED') && attempts < maxModelAttempts) {
-          logger.warn(`[GeminiService] Modelo "${candidateModel}" retornou status ${statusCode || error.code}. Aguardando 1s para re-tentar...`);
-          await new Promise(r => setTimeout(r, 1000));
-          continue;
-        }
+      // Se for 503 (alta demanda temporária no Google) ou timeout, tenta o próximo modelo do pool
+      if (statusCode === 503 || error.code === 'ECONNABORTED' || errorDetail.includes('high demand') || errorDetail.includes('unavailable')) {
+        logger.warn(`[GeminiService] Modelo "${candidateModel}" indisponível/sobrecarregado (${statusCode || error.code}). Alternando para o próximo modelo disponível...`);
+        continue;
+      }
 
-        logger.warn(`[GeminiService] Modelo "${candidateModel}" falhou (Status: ${statusCode || 'Erro'}): ${errorDetail}`);
+      logger.warn(`[GeminiService] Modelo "${candidateModel}" falhou (Status: ${statusCode || 'Erro'}): ${errorDetail}`);
 
-        // Se o erro for 400 Bad Request que não seja relacionado ao nome do modelo, propaga para não esgotar cotas desnecessariamente
-        if (statusCode === 400 && !errorDetail.toLowerCase().includes('model')) {
-          throw new Error(`Erro nos parâmetros enviados para o Gemini (400): ${errorDetail}`);
-        }
-
-        break; // Sai do while para tentar o próximo modelo do fallback
+      // Se o erro for 400 Bad Request que não seja relacionado ao nome do modelo, propaga
+      if (statusCode === 400 && !errorDetail.toLowerCase().includes('model') && !errorDetail.toLowerCase().includes('not found')) {
+        throw new Error(`Erro nos parâmetros enviados para o Gemini (400): ${errorDetail}`);
       }
     }
   }

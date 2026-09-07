@@ -298,14 +298,15 @@ export async function processAgentMessage({ agentId, conversationId, message, db
         finalAssistantText = finalRes.text;
       }
     } catch (synthErr) {
-      logger.error(`[AgentManager] Erro na síntese final: ${synthErr.message}`);
+      logger.error(`[AgentManager] Erro na síntese via IA (${synthErr.message}). Gerando síntese estruturada a partir dos dados...`);
+      finalAssistantText = generateStructuredFallbackSummary(executedActions, message);
     }
   }
 
   // Fallback garantido se ainda não tiver texto final
   if (!finalAssistantText) {
     if (executedActions.length > 0) {
-      finalAssistantText = `Concluí a consulta e execução das ferramentas com sucesso. Foram executadas: ${executedActions.map(a => `\`${a.tool_name}\``).join(', ')}.`;
+      finalAssistantText = generateStructuredFallbackSummary(executedActions, message);
     } else {
       finalAssistantText = 'Não foi possível gerar uma resposta detalhada para sua solicitação no momento. Por favor, tente novamente.';
     }
@@ -568,5 +569,75 @@ export async function delegateToAgent({ targetSlug, prompt, callingAgentId, db, 
     cargo: targetAgent.role_title,
     parecer_tecnico: replyText || 'Análise concluída sem observações adicionais.'
   };
+}
+
+/**
+ * Gera um resumo executivo estruturado em Markdown a partir dos dados retornados pelas ferramentas
+ * caso a API de geração de texto enfrente sobrecarga ou indisponibilidade temporária
+ * @param {Array} executedActions - Lista de ações executadas
+ * @param {string} userMessage - Mensagem do usuário
+ * @returns {string} Resumo formatado em Markdown
+ */
+function generateStructuredFallbackSummary(executedActions, userMessage = '') {
+  if (!Array.isArray(executedActions) || executedActions.length === 0) {
+    return 'Concluí a consulta aos dados, mas não foi possível gerar o texto sintetizado no momento. Por favor, repita a pergunta.';
+  }
+
+  let text = '### 📊 Relatório Consolidado de Dados do Mercado Livre\n\n';
+
+  for (const action of executedActions) {
+    const { tool_name, result } = action;
+    if (!result || result.erro) continue;
+
+    if (tool_name === 'consultar_vendas_e_pedidos_ml') {
+      text += '#### 🛒 Resumo de Vendas & Faturamento\n';
+      text += `- **Total de Pedidos:** ${result.pedidos_listados || result.total_pedidos_encontrados || 0}\n`;
+      text += `- **Faturamento da Amostra:** R$ ${(result.faturamento_total_amostra || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+      text += `- **Ticket Médio:** R$ ${(result.ticket_medio || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\n`;
+
+      if (Array.isArray(result.produtos_mais_vendidos) && result.produtos_mais_vendidos.length > 0) {
+        text += '##### 🏆 Ranking de Produtos Mais Vendidos & Margens:\n';
+        text += '| Anúncio / Produto | Qtd Vendida | Faturamento | Preço Unit. | Valor Líquido | Margem Líquida |\n';
+        text += '| :--- | :--- | :--- | :--- | :--- | :--- |\n';
+        for (const p of result.produtos_mais_vendidos) {
+          const preco = p.preco_atual ? `R$ ${p.preco_atual.toFixed(2)}` : '-';
+          const liquido = p.valor_liquido ? `R$ ${p.valor_liquido.toFixed(2)}` : '-';
+          const margem = p.margem_liquida_percent !== undefined ? `${p.margem_liquida_percent}%` : '-';
+          text += `| **${p.titulo}** (\`${p.item_id}\`) | ${p.quantidade_vendida} un. | R$ ${p.faturamento.toFixed(2)} | ${preco} | ${liquido} | **${margem}** |\n`;
+        }
+        text += '\n';
+      }
+    } else if (tool_name === 'buscar_anuncios_ml' && Array.isArray(result.anuncios)) {
+      text += `#### 📦 Anúncios Encontrados (${result.total || result.anuncios.length})\n`;
+      text += '| Item ID | Título | Preço | Estoque | Status | Margem Líquida |\n';
+      text += '| :--- | :--- | :--- | :--- | :--- | :--- |\n';
+      for (const a of result.anuncios.slice(0, 10)) {
+        const margem = a.financeiro?.margem_percent !== undefined ? `${a.financeiro.margem_percent}%` : '-';
+        text += `| \`${a.item_id}\` | ${a.titulo} | R$ ${a.preco?.toFixed(2) || '0.00'} | ${a.estoque} un. | ${a.status} | **${margem}** |\n`;
+      }
+      text += '\n';
+    } else if (tool_name === 'obter_detalhes_anuncio_ml') {
+      text += `#### 🔍 Detalhes do Anúncio: **${result.titulo}** (\`${result.item_id}\`)\n`;
+      text += `- **Preço:** R$ ${result.preco?.toFixed(2) || '0.00'}\n`;
+      text += `- **Estoque:** ${result.estoque} unidades (${result.status})\n`;
+      if (result.financeiro) {
+        text += `- **Comissão Mercado Livre:** R$ ${result.financeiro.taxa_ml_total?.toFixed(2) || '0.00'}\n`;
+        text += `- **Frete Vendedor:** R$ ${result.financeiro.frete_vendedor?.toFixed(2) || '0.00'}\n`;
+        text += `- **Valor Líquido Recebido:** R$ ${result.financeiro.valor_liquido?.toFixed(2) || '0.00'}\n`;
+        text += `- **Margem Líquida Estimada:** **${result.financeiro.margem_percent || 0}%**\n`;
+      }
+      text += '\n';
+    } else if (tool_name === 'consultar_reputacao_e_metricas_ml') {
+      text += '#### 🏅 Reputação & Saúde da Conta\n';
+      text += `- **Vendedor:** ${result.apelido || 'N/A'} (Nível: \`${result.nivel_reputacao}\`)\n`;
+      text += `- **Medalha:** ${result.medalha_mercadolider || 'Nenhuma'}\n`;
+      text += `- **Status de Saúde:** **${result.status_saude_conta}**\n`;
+      text += `- **Reclamações:** ${result.metricas?.taxa_reclamacoes_percent || 0}%\n`;
+      text += `- **Atraso no Envio:** ${result.metricas?.taxa_despachos_atrasados_percent || 0}%\n`;
+      text += `- **Cancelamentos:** ${result.metricas?.taxa_cancelamentos_percent || 0}%\n\n`;
+    }
+  }
+
+  return text;
 }
 

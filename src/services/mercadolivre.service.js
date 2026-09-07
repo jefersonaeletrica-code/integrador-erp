@@ -1879,6 +1879,40 @@ export async function getSellerOrders(connection, db, options = {}) {
             .sort((a, b) => b.faturamento - a.faturamento)
             .slice(0, 10);
 
+        // Enriquece os produtos mais vendidos com os dados financeiros (taxas, valor líquido e margem) do banco local
+        if (topProducts.length > 0 && db) {
+            try {
+                const pool = db.getPool();
+                const itemIds = topProducts.map(p => p.item_id).filter(Boolean);
+                if (itemIds.length > 0) {
+                    const placeholders = itemIds.map(() => '?').join(',');
+                    const [localRows] = await pool.query(
+                        `SELECT item_id, price, sale_fee_amount, shipping_cost, net_amount, catalog_status, catalog_listing
+                         FROM mercado_livre_anuncios 
+                         WHERE item_id IN (${placeholders})`,
+                        itemIds
+                    );
+                    const localMap = {};
+                    for (const r of localRows) {
+                        localMap[r.item_id] = r;
+                    }
+                    for (const p of topProducts) {
+                        const l = localMap[p.item_id];
+                        if (l) {
+                            p.preco_atual = parseFloat(l.price || 0);
+                            p.taxa_ml = parseFloat(l.sale_fee_amount || 0);
+                            p.frete_vendedor = parseFloat(l.shipping_cost || 0);
+                            p.valor_liquido = parseFloat(l.net_amount || 0);
+                            p.margem_liquida_percent = l.price > 0 && l.net_amount ? Math.round(((l.net_amount / l.price) * 100) * 10) / 10 : 0;
+                            p.status_catalogo = l.catalog_listing ? (l.catalog_status || 'ativo') : 'anuncio_padrao';
+                        }
+                    }
+                }
+            } catch (enrichErr) {
+                logger.warn(`[MercadoLivreService] Aviso ao enriquecer produtos mais vendidos com margem: ${enrichErr.message}`);
+            }
+        }
+
         const averageTicket = formattedOrders.length > 0 ? (totalRevenue / formattedOrders.length) : 0;
 
         return {
