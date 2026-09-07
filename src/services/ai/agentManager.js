@@ -116,7 +116,10 @@ export async function processAgentMessage({ agentId, conversationId, message, db
     '- Diagnóstico de Anúncio: consultar_saude_e_visitas_anuncio_ml (nota de qualidade 0-100% e histórico de visitas)\n' +
     '- Mapa de Capacidades: consultar_mapa_capacidades_ml (para inspecionar quais dados cada endpoint entrega antes de buscar)';
 
-  const performanceGuidance = '\n\nDIRETRIZ DE AGILIDADE: Seja direto, assertivo e ágil. Escolha a ferramenta mais precisa para a solicitação do usuário e responda de forma consolidada e executiva.';
+  const performanceGuidance = '\n\nDIRETRIZ DE AGILIDADE MÁXIMA:\n' +
+    '- Seja ultra-direto, assertivo e ágil. Responda com foco total na pergunta do usuário.\n' +
+    '- A ferramenta `consultar_vendas_e_pedidos_ml` JÁ RETORNA faturamento, quantidade vendida, preço, taxas e MARGEM LÍQUIDA % dos produtos mais vendidos.\n' +
+    '- Responda em 1 ÚNICO ciclo assim que obtiver os dados da ferramenta principal, sem fazer chamadas secundárias repetitivas.';
 
   const systemPrompt = (agent.system_prompt || '') + otherAgentsContext + apiDomainsContext + performanceGuidance;
 
@@ -132,153 +135,161 @@ export async function processAgentMessage({ agentId, conversationId, message, db
   let contents = formatMessagesForGemini(dbMessages);
 
   let loopCount = 0;
-  const maxLoops = 3; // Máximo de 3 iterações para resposta rápida e evitar loops excessivos
+  const maxLoops = 2; // Máximo de 2 iterações para resposta ágil e evitar chamadas redundantes
   let finalAssistantText = '';
   const executedActions = [];
   const pendingActions = [];
 
   // 5. Loop de Function Calling (Execução iterativa das ferramentas)
-  while (loopCount < maxLoops) {
-    loopCount++;
-    logger.info(`[AgentManager] Ciclo ${loopCount} do Agente "${agent.name}" (Modelo: ${model})...`);
+  try {
+    while (loopCount < maxLoops) {
+      loopCount++;
+      logger.info(`[AgentManager] Ciclo ${loopCount} do Agente "${agent.name}" (Modelo: ${model})...`);
 
-    const geminiRes = await generateGeminiContent({
-      apiKey,
-      model,
-      systemPrompt,
-      contents,
-      tools: availableTools,
-      temperature: aiSettings.temperature || 0.2,
-      maxOutputTokens: aiSettings.max_output_tokens || 4096
-    });
+      const geminiRes = await generateGeminiContent({
+        apiKey,
+        model,
+        systemPrompt,
+        contents,
+        tools: availableTools,
+        temperature: aiSettings.temperature || 0.2,
+        maxOutputTokens: aiSettings.max_output_tokens || 4096
+      });
 
-    if (geminiRes.text) {
-      finalAssistantText = geminiRes.text;
-    }
-
-    const functionCalls = geminiRes.functionCalls || [];
-
-    // Se o Gemini não chamou nenhuma ferramenta, a resposta final está pronta!
-    if (functionCalls.length === 0) {
-      break;
-    }
-
-    logger.info(`[AgentManager] Agente chamou ${functionCalls.length} ferramenta(s): ${functionCalls.map(f => f.name).join(', ')}`);
-
-    // Registra a mensagem do modelo com as chamadas de função no histórico (preservando raw parts/thought_signature)
-    const rawParts = geminiRes.rawCandidate?.content?.parts;
-    await dbManager.saveAIMessage({
-      conversation_id: conversationId,
-      sender: 'assistant',
-      content: geminiRes.text || '',
-      tool_calls: (rawParts && rawParts.length > 0) ? rawParts : functionCalls
-    });
-
-    // Adiciona ao contents para o próximo ciclo
-    if (rawParts && rawParts.length > 0) {
-      contents.push({ role: 'model', parts: rawParts });
-    } else {
-      const modelParts = [];
-      if (geminiRes.text) modelParts.push({ text: geminiRes.text });
-      for (const fc of functionCalls) {
-        modelParts.push({ functionCall: { name: fc.name, args: fc.args } });
+      if (geminiRes.text) {
+        finalAssistantText = geminiRes.text;
       }
-      contents.push({ role: 'model', parts: modelParts });
-    }
 
-    const toolResults = [];
-    let hasPendingWrite = false;
+      const functionCalls = geminiRes.functionCalls || [];
 
-    // Executa cada ferramenta chamada
-    for (const fc of functionCalls) {
-      const isWriteTool = WRITE_TOOLS.has(fc.name);
+      // Se o Gemini não chamou nenhuma ferramenta, a resposta final está pronta!
+      if (functionCalls.length === 0) {
+        break;
+      }
 
-      // Se for ferramenta de escrita e o agente requer confirmação:
-      if (isWriteTool && requireConfirmation) {
-        hasPendingWrite = true;
-        const loggedAction = await dbManager.logAIAction({
-          agent_id: agent.id,
-          conversation_id: conversationId,
-          tool_name: fc.name,
-          tool_args: fc.args,
-          tool_result: null,
-          status: 'pending_approval',
-          executed_by: 'gemini_agent'
-        });
+      logger.info(`[AgentManager] Agente chamou ${functionCalls.length} ferramenta(s): ${functionCalls.map(f => f.name).join(', ')}`);
 
-        pendingActions.push({
-          action_id: loggedAction.id,
-          tool_name: fc.name,
-          args: fc.args,
-          descricao: `Alteração solicitada no anúncio ${fc.args.item_id}: ` + 
-            (fc.args.novo_preco ? `Novo Preço R$ ${parseFloat(fc.args.novo_preco).toFixed(2)}` : '') +
-            (fc.args.novo_estoque ? `Novo Estoque ${fc.args.novo_estoque} un.` : '') +
-            (fc.args.novo_titulo ? `Novo Título "${fc.args.novo_titulo}"` : '')
-        });
+      // Registra a mensagem do modelo com as chamadas de função no histórico (preservando raw parts/thought_signature)
+      const rawParts = geminiRes.rawCandidate?.content?.parts;
+      await dbManager.saveAIMessage({
+        conversation_id: conversationId,
+        sender: 'assistant',
+        content: geminiRes.text || '',
+        tool_calls: (rawParts && rawParts.length > 0) ? rawParts : functionCalls
+      });
 
-        toolResults.push({
-          name: fc.name,
-          result: {
-            status: 'pending_approval',
-            action_id: loggedAction.id,
-            mensagem: 'Ação registrada e aguardando confirmação explícita do vendedor na tela.'
-          }
-        });
+      // Adiciona ao contents para o próximo ciclo
+      if (rawParts && rawParts.length > 0) {
+        contents.push({ role: 'model', parts: rawParts });
       } else {
-        // Ferramenta de leitura, análise ou colaboração inter-agentes
-        const executor = toolExecutors[fc.name];
-        let result;
-        let status = 'executed';
-
-        if (typeof executor === 'function') {
-          try {
-            result = await executor(fc.args, {
-              db,
-              agentId: agent.id,
-              conversationId,
-              consultationDepth: 0
-            });
-            executedActions.push({ tool_name: fc.name, args: fc.args, result });
-          } catch (execErr) {
-            status = 'failed';
-            result = { erro: execErr.message };
-            logger.error(`[AgentManager] Erro ao executar tool ${fc.name}: ${execErr.message}`);
-          }
-        } else {
-          status = 'failed';
-          result = { erro: `Ferramenta ${fc.name} não implementada no sistema.` };
+        const modelParts = [];
+        if (geminiRes.text) modelParts.push({ text: geminiRes.text });
+        for (const fc of functionCalls) {
+          modelParts.push({ functionCall: { name: fc.name, args: fc.args } });
         }
-
-        await dbManager.logAIAction({
-          agent_id: agent.id,
-          conversation_id: conversationId,
-          tool_name: fc.name,
-          tool_args: fc.args,
-          tool_result: result,
-          status,
-          executed_by: 'gemini_agent'
-        });
-
-        toolResults.push({ name: fc.name, result });
+        contents.push({ role: 'model', parts: modelParts });
       }
+
+      const toolResults = [];
+      let hasPendingWrite = false;
+
+      // Executa cada ferramenta chamada
+      for (const fc of functionCalls) {
+        const isWriteTool = WRITE_TOOLS.has(fc.name);
+
+        // Se for ferramenta de escrita e o agente requer confirmação:
+        if (isWriteTool && requireConfirmation) {
+          hasPendingWrite = true;
+          const loggedAction = await dbManager.logAIAction({
+            agent_id: agent.id,
+            conversation_id: conversationId,
+            tool_name: fc.name,
+            tool_args: fc.args,
+            tool_result: null,
+            status: 'pending_approval',
+            executed_by: 'gemini_agent'
+          });
+
+          pendingActions.push({
+            action_id: loggedAction.id,
+            tool_name: fc.name,
+            args: fc.args,
+            descricao: `Alteração solicitada no anúncio ${fc.args.item_id}: ` + 
+              (fc.args.novo_preco ? `Novo Preço R$ ${parseFloat(fc.args.novo_preco).toFixed(2)}` : '') +
+              (fc.args.novo_estoque ? `Novo Estoque ${fc.args.novo_estoque} un.` : '') +
+              (fc.args.novo_titulo ? `Novo Título "${fc.args.novo_titulo}"` : '')
+          });
+
+          toolResults.push({
+            name: fc.name,
+            result: {
+              status: 'pending_approval',
+              action_id: loggedAction.id,
+              mensagem: 'Ação registrada e aguardando confirmação explícita do vendedor na tela.'
+            }
+          });
+        } else {
+          // Ferramenta de leitura, análise ou colaboração inter-agentes
+          const executor = toolExecutors[fc.name];
+          let result;
+          let status = 'executed';
+
+          if (typeof executor === 'function') {
+            try {
+              result = await executor(fc.args, {
+                db,
+                agentId: agent.id,
+                conversationId,
+                consultationDepth: 0
+              });
+              executedActions.push({ tool_name: fc.name, args: fc.args, result });
+            } catch (execErr) {
+              status = 'failed';
+              result = { erro: execErr.message };
+              logger.error(`[AgentManager] Erro ao executar tool ${fc.name}: ${execErr.message}`);
+            }
+          } else {
+            status = 'failed';
+            result = { erro: `Ferramenta ${fc.name} não implementada no sistema.` };
+          }
+
+          await dbManager.logAIAction({
+            agent_id: agent.id,
+            conversation_id: conversationId,
+            tool_name: fc.name,
+            tool_args: fc.args,
+            tool_result: result,
+            status,
+            executed_by: 'gemini_agent'
+          });
+
+          toolResults.push({ name: fc.name, result });
+        }
+      }
+
+      // Salva o resultado das ferramentas no banco
+      await dbManager.saveAIMessage({
+        conversation_id: conversationId,
+        sender: 'tool',
+        content: '',
+        tool_results: toolResults
+      });
+
+      // Formata o retorno das ferramentas para enviar de volta ao Gemini (role DEVE ser 'user')
+      const userToolParts = toolResults.map(tr => ({
+        functionResponse: {
+          name: tr.name,
+          response: { result: tr.result !== undefined ? tr.result : null }
+        }
+      }));
+      contents.push({ role: 'user', parts: userToolParts });
     }
-
-    // Salva o resultado das ferramentas no banco
-    await dbManager.saveAIMessage({
-      conversation_id: conversationId,
-      sender: 'tool',
-      content: '',
-      tool_results: toolResults
-    });
-
-    // Formata o retorno das ferramentas para enviar de volta ao Gemini (role DEVE ser 'user')
-    const userToolParts = toolResults.map(tr => ({
-      functionResponse: {
-        name: tr.name,
-        response: { result: tr.result !== undefined ? tr.result : null }
-      }
-    }));
-    contents.push({ role: 'user', parts: userToolParts });
+  } catch (loopErr) {
+    logger.error(`[AgentManager] Erro no loop de raciocínio da IA (${loopErr.message}). Ativando contingência direta...`);
+    if (executedActions.length === 0) {
+      const fallbackActions = await executeHeuristicToolFallback(message, db, agent);
+      executedActions.push(...fallbackActions);
+    }
   }
 
   // Se executou ferramentas e ainda não gerou o texto final estruturado para o usuário:
@@ -639,5 +650,34 @@ function generateStructuredFallbackSummary(executedActions, userMessage = '') {
   }
 
   return text;
+}
+
+/**
+ * Executa heuristicamente a ferramenta adequada com base na intenção da pergunta
+ * caso a API do Gemini esteja temporariamente com cota esgotada (429) ou instabilidade (503)
+ */
+async function executeHeuristicToolFallback(userMessage, db, agent) {
+  const lower = (userMessage || '').toLowerCase();
+  const executedActions = [];
+
+  try {
+    if (lower.includes('venda') || lower.includes('pedido') || lower.includes('vendido') || lower.includes('faturamento') || lower.includes('ticket') || lower.includes('margem')) {
+      logger.info('[AgentManager:Contingência] Executando consulta direta de vendas, faturamento e margens...');
+      const res = await toolExecutors.consultar_vendas_e_pedidos_ml({}, { db, agentId: agent?.id });
+      executedActions.push({ tool_name: 'consultar_vendas_e_pedidos_ml', args: {}, result: res });
+    } else if (lower.includes('anuncio') || lower.includes('anúncio') || lower.includes('estoque') || lower.includes('preço') || lower.includes('preco')) {
+      logger.info('[AgentManager:Contingência] Executando consulta direta de anúncios e estoque...');
+      const res = await toolExecutors.buscar_anuncios_ml({ limit: 30 }, { db, agentId: agent?.id });
+      executedActions.push({ tool_name: 'buscar_anuncios_ml', args: { limit: 30 }, result: res });
+    } else if (lower.includes('reputa') || lower.includes('saude') || lower.includes('saúde') || lower.includes('reclam')) {
+      logger.info('[AgentManager:Contingência] Executando consulta direta de reputação e métricas...');
+      const res = await toolExecutors.consultar_reputacao_e_metricas_ml({}, { db, agentId: agent?.id });
+      executedActions.push({ tool_name: 'consultar_reputacao_e_metricas_ml', args: {}, result: res });
+    }
+  } catch (err) {
+    logger.warn(`[AgentManager:Contingência] Erro na execução heurística: ${err.message}`);
+  }
+
+  return executedActions;
 }
 

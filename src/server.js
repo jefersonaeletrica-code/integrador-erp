@@ -17,13 +17,6 @@ async function startServer() {
     // Agora que dotenv.config() foi executado primeiro, a inicialização do DB funcionará.
     await db.initializeDatabase(); 
 
-    // Inicializa o job periódico de sincronização de status de Catálogo / Buy Box a cada 10 minutos
-    try {
-        meliService.startCatalogStatusSyncJob(db, 10);
-    } catch (jobErr) {
-        logger.warn(`[Server] Falha ao agendar job de sincronização de catálogo: ${jobErr.message}`);
-    }
-
     // Inicializa o banco de dados e carrega os dados iniciais
     const { app } = await createApp(db);
 

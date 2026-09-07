@@ -6,19 +6,14 @@ const logger = getLogger();
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
 /**
- * Lista de modelos oficiais recomendados pelo Gemini com alta disponibilidade e cotas estáveis
+ * Lista de modelos oficiais ativos suportados pelo Gemini no endpoint v1beta
  */
 export const SUPPORTED_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-2.0-flash',
-  'gemini-1.5-flash',
-  'gemini-2.0-flash-lite',
-  'gemini-1.5-pro',
-  'gemini-2.5-pro',
-  'gemini-flash-latest',
   'gemini-3.6-flash',
+  'gemini-3.5-flash-lite',
   'gemini-3.5-flash',
-  'gemini-3.5-flash-lite'
+  'gemini-3.7-flash',
+  'gemini-3.1-pro-preview'
 ];
 
 /**
@@ -34,12 +29,13 @@ export async function listAvailableGeminiModels(apiKey) {
     const res = await axios.get(url, { timeout: 12000 });
     const models = res.data?.models || [];
     
-    // Filtra apenas modelos de conversação/geração geral ativos
+    // Filtra apenas modelos de conversação/geração geral ativos (geração 3.x)
     const isChatGeminiModel = (id) => {
       if (!id || !id.startsWith('gemini-')) return false;
       const lower = id.toLowerCase();
-      // Ignora modelos especializados não-conversacionais ou embeddings
-      if (lower.includes('image') || lower.includes('tts') || lower.includes('transcribe') || 
+      // Ignora versões descontinuadas (1.x, 2.x, 2.5) e modelos não conversacionais
+      if (lower.startsWith('gemini-1.') || lower.startsWith('gemini-2.') || lower.startsWith('gemini-2.5-') ||
+          lower.includes('image') || lower.includes('tts') || lower.includes('transcribe') || 
           lower.includes('audio') || lower.includes('robotics') || lower.includes('computer-use') ||
           lower.includes('embedding') || lower.includes('aqa') || lower.includes('imagen') ||
           lower.includes('banana') || lower.includes('customtools') || lower.includes('clip') ||
