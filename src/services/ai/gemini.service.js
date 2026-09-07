@@ -16,7 +16,7 @@ export const SUPPORTED_MODELS = [
 ];
 
 /**
- * Consulta a lista de modelos ativos e suportados diretamente da API do Gemini para a chave informada
+ * Consulta a lista de modelos de chat ativos e suportados diretamente da API do Gemini para a chave informada
  * @param {string} apiKey - Chave da API
  * @returns {Promise<Array<object>>} Lista de modelos com generateContent habilitado
  */
@@ -28,7 +28,19 @@ export async function listAvailableGeminiModels(apiKey) {
     const res = await axios.get(url, { timeout: 12000 });
     const models = res.data?.models || [];
     
-    // Filtra apenas modelos que suportam generateContent
+    // Filtra apenas modelos de conversação/geração geral Gemini, ignorando modelos de áudio/tts/imagem/robótica
+    const isChatGeminiModel = (id) => {
+      if (!id || !id.startsWith('gemini-')) return false;
+      const lower = id.toLowerCase();
+      if (lower.includes('image') || lower.includes('tts') || lower.includes('transcribe') || 
+          lower.includes('audio') || lower.includes('robotics') || lower.includes('computer-use') ||
+          lower.includes('embedding') || lower.includes('aqa') || lower.includes('imagen') ||
+          lower.includes('banana') || lower.includes('customtools') || lower.includes('clip')) {
+        return false;
+      }
+      return true;
+    };
+
     return models
       .filter(m => Array.isArray(m.supportedGenerationMethods) && m.supportedGenerationMethods.includes('generateContent'))
       .map(m => {
@@ -41,7 +53,7 @@ export async function listAvailableGeminiModels(apiKey) {
           outputTokenLimit: m.outputTokenLimit
         };
       })
-      .filter(m => m.id && !m.id.includes('embedding') && !m.id.includes('aqa') && !m.id.includes('imagen'));
+      .filter(m => isChatGeminiModel(m.id));
   } catch (error) {
     logger.warn(`[GeminiService] Não foi possível consultar ListModels da API Gemini (${error.message}).`);
     return [];
@@ -65,12 +77,18 @@ export async function testGeminiApiKey(apiKey, model = 'gemini-1.5-flash') {
   const availableModels = await listAvailableGeminiModels(cleanKey);
   const availableIds = availableModels.map(m => m.id);
 
+  let requestedModel = (model || '').trim();
+  if (requestedModel.includes('3.6') || !requestedModel) {
+    requestedModel = 'gemini-1.5-flash';
+  }
+
   const modelsToTry = [
-    model.trim(),
-    ...availableIds,
+    requestedModel,
     'gemini-1.5-flash',
     'gemini-2.0-flash',
-    'gemini-1.5-pro'
+    'gemini-1.5-pro',
+    'gemini-2.0-flash-lite',
+    ...availableIds
   ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
   let lastError = null;
@@ -101,7 +119,7 @@ export async function testGeminiApiKey(apiKey, model = 'gemini-1.5-flash') {
         sucesso: true,
         modelo: candidateModel,
         resposta: reply.trim(),
-        available_models: availableModels,
+        available_models: availableModels.length > 0 ? availableModels : SUPPORTED_MODELS.map(id => ({ id, name: id })),
         mensagem: `Conexão com a API do Google Gemini validada com sucesso no modelo "${candidateModel}"!`
       };
     } catch (error) {
@@ -150,16 +168,18 @@ export async function generateGeminiContent({
 
   const cleanKey = apiKey.trim();
 
-  // Consulta modelos disponíveis dinamicamente se necessário
-  const availableModels = await listAvailableGeminiModels(cleanKey);
-  const availableIds = availableModels.map(m => m.id);
+  // Normaliza o modelo solicitado se for inválido
+  let requestedModel = (model || '').trim();
+  if (requestedModel.includes('3.6') || !requestedModel) {
+    requestedModel = 'gemini-1.5-flash';
+  }
 
   const modelsToTry = [
-    model.trim(),
-    ...availableIds,
+    requestedModel,
     'gemini-1.5-flash',
     'gemini-2.0-flash',
-    'gemini-1.5-pro'
+    'gemini-1.5-pro',
+    'gemini-2.0-flash-lite'
   ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
 
   const requestBody = {
@@ -228,11 +248,18 @@ export async function generateGeminiContent({
     } catch (error) {
       lastError = error;
       const statusCode = error.response?.status;
-      if (statusCode === 401 || statusCode === 403 || error.response?.data?.error?.message?.includes('API_KEY_INVALID')) {
-        const errorMsg = error.response?.data?.error?.message || error.message;
-        throw new Error(`Erro de autenticação Gemini (${statusCode}): ${errorMsg}`);
+      const errorDetail = error.response?.data?.error?.message || error.message;
+
+      if (statusCode === 401 || statusCode === 403 || errorDetail.includes('API_KEY_INVALID')) {
+        throw new Error(`Erro de autenticação Gemini (${statusCode}): ${errorDetail}`);
       }
-      logger.warn(`[GeminiService] Modelo ${candidateModel} falhou com status ${statusCode || error.message}. Tentando próximo...`);
+
+      logger.warn(`[GeminiService] Modelo "${candidateModel}" falhou (Status: ${statusCode || 'Erro'}): ${errorDetail}`);
+
+      // Se o erro for 400 Bad Request que não seja relacionado ao nome do modelo, propaga para não esgotar cotas desnecessariamente
+      if (statusCode === 400 && !errorDetail.toLowerCase().includes('model')) {
+        throw new Error(`Erro nos parâmetros enviados para o Gemini (400): ${errorDetail}`);
+      }
     }
   }
 

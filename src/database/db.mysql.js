@@ -363,6 +363,10 @@ Regras de atuação:
       console.log('4 Agentes de IA padrão criados com sucesso!');
     }
 
+    // Migração automática para atualizar qualquer referência ao modelo inexistente 'gemini-3.6-flash'
+    await connection.query(`UPDATE ai_agents SET model = 'gemini-1.5-flash' WHERE model LIKE '%3.6%' OR model IS NULL OR model = ''`);
+    await connection.query(`UPDATE ai_settings SET default_model = 'gemini-1.5-flash' WHERE default_model LIKE '%3.6%' OR default_model IS NULL OR default_model = ''`);
+
     console.log('Banco de dados MySQL pronto.');
   } finally {
     connection.release();

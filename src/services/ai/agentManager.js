@@ -48,10 +48,10 @@ function formatMessagesForGemini(dbMessages) {
       const parts = msg.tool_results.map(tr => ({
         functionResponse: {
           name: tr.name,
-          response: { result: tr.result }
+          response: { result: tr.result !== undefined ? tr.result : null }
         }
       }));
-      contents.push({ role: 'user', parts });
+      contents.push({ role: 'function', parts });
     }
   }
 
@@ -249,10 +249,10 @@ export async function processAgentMessage({ agentId, conversationId, message, db
     const userToolParts = toolResults.map(tr => ({
       functionResponse: {
         name: tr.name,
-        response: { result: tr.result }
+        response: { result: tr.result !== undefined ? tr.result : null }
       }
     }));
-    contents.push({ role: 'user', parts: userToolParts });
+    contents.push({ role: 'function', parts: userToolParts });
   }
 
   // 6. Salva a resposta final do assistente se ainda não foi salva

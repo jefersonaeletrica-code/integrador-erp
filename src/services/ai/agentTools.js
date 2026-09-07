@@ -219,7 +219,13 @@ export const toolExecutors = {
       return { erro: `Anúncio com ID ${args.item_id} não foi encontrado no banco de dados local.` };
     }
     const item = rows[0];
-    const safeJson = (d) => (typeof d === 'string' ? JSON.parse(d) : d);
+    const safeJson = (d) => {
+      if (!d) return null;
+      if (typeof d === 'string') {
+        try { return JSON.parse(d); } catch { return d; }
+      }
+      return d;
+    };
 
     return {
       item_id: item.item_id,
