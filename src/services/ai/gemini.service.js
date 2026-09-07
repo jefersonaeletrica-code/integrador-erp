@@ -149,3 +149,4 @@ export async function generateGeminiContent({
     throw new Error(`Erro na API do Gemini (${statusCode || 'Erro'}): ${errorMsg}`);
   }
 }
+

@@ -363,3 +363,4 @@ export async function rejectPendingAction(actionId, db) {
     mensagem: 'Ação rejeitada com sucesso.'
   };
 }
+
