@@ -1817,57 +1817,81 @@ export async function getSellerOrders(connection, db, options = {}) {
         throw new Error('User ID do vendedor não encontrado na conexão.');
     }
 
-    const status = options.status || 'paid';
+    const status = options.status || null;
     
-    // Determina o período de busca (padrão: últimos 30 dias)
-    let dateFrom = options.dateFrom;
+    // Determina o período de busca se solicitado (ex: dias: 30, dias: 60)
+    let dateFrom = options.dateFrom || null;
     if (!dateFrom && options.dias) {
         const d = new Date(Date.now() - parseInt(options.dias, 10) * 24 * 60 * 60 * 1000);
         dateFrom = d.toISOString();
-    } else if (!dateFrom) {
-        const d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-        dateFrom = d.toISOString();
     }
 
-    const maxOrders = Math.min(parseInt(options.max_pedidos || options.maxOrders || options.limit || 200, 10), 1000);
-    const pageSize = 50;
+    // Se max_pedidos for especificado explicitamente, respeitamos. Caso contrário, busca TODOS os pedidos disponíveis sem teto artificial.
+    const maxOrders = options.max_pedidos ? parseInt(options.max_pedidos, 10) : (options.maxOrders ? parseInt(options.maxOrders, 10) : Infinity);
+    const pageSize = 50; // Limite máximo permitido por página na API do Mercado Livre
+
+    const maxDesc = maxOrders === Infinity ? 'Ilimitado (todos)' : maxOrders;
+    logger.info(`[MercadoLivreService:Orders] Iniciando busca paginada de pedidos sem teto. maxOrders=${maxDesc}, pageSize=${pageSize}, status=${status || 'todos'}, dias=${options.dias || 'não especificado'}, dateFrom=${dateFrom || 'Nenhum'}`);
 
     return await executeMeliRequest(connection, db, async (token) => {
         let allOrders = [];
         let offset = 0;
-        let totalAvailable = 0;
+        let totalAvailable = null;
+        let pageNum = 0;
 
         while (allOrders.length < maxOrders) {
-            let url = `/orders/search?seller=${userId}&sort=date_desc&limit=${pageSize}&offset=${offset}`;
+            pageNum++;
+            const params = {
+                seller: userId,
+                sort: 'date_desc',
+                limit: pageSize,
+                offset: offset
+            };
+
             if (status && status !== 'all') {
-                url += `&order.status=${status}`;
+                params['order.status'] = status;
             }
             if (dateFrom) {
-                url += `&order.date_created.from=${dateFrom}`;
+                params['order.date_created.from'] = dateFrom;
             }
             if (options.dateTo) {
-                url += `&order.date_created.to=${options.dateTo}`;
+                params['order.date_created.to'] = options.dateTo;
             }
 
-            const response = await meliAxios.get(url, {
+            logger.info(`[MercadoLivreService:Orders] Buscando Página #${pageNum} (offset=${offset}, limit=${pageSize})...`);
+
+            const response = await meliAxios.get('/orders/search', {
+                params,
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
             const ordersPage = response.data?.results || [];
             const paging = response.data?.paging || {};
-            totalAvailable = paging.total !== undefined ? paging.total : totalAvailable;
+            if (paging.total !== undefined) {
+                totalAvailable = paging.total;
+            }
 
-            if (ordersPage.length === 0) break;
-            allOrders.push(...ordersPage);
+            logger.info(`[MercadoLivreService:Orders] Página #${pageNum} retornou ${ordersPage.length} pedidos. (Total disponível na API ML: ${totalAvailable ?? 'N/A'}, Acumulado: ${allOrders.length + ordersPage.length}/${maxDesc})`);
 
-            offset += ordersPage.length;
-            if (offset >= (paging.total || 0) || ordersPage.length < pageSize) {
+            if (ordersPage.length === 0) {
+                logger.info(`[MercadoLivreService:Orders] Página vazia retornada. Encerrando paginação.`);
                 break;
             }
 
-            // Pausa de 60ms entre páginas para respeitar taxa de requisições
-            await new Promise(r => setTimeout(r, 60));
+            allOrders.push(...ordersPage);
+            offset += ordersPage.length;
+
+            // Se atingiu o total disponível no Mercado Livre ou a página veio com menos de 50 itens (última página)
+            if ((totalAvailable !== null && offset >= totalAvailable) || ordersPage.length < pageSize) {
+                logger.info(`[MercadoLivreService:Orders] Coleta concluída: offset (${offset}) alcançou total disponível (${totalAvailable ?? allOrders.length}) ou página incompleta (${ordersPage.length} < ${pageSize}).`);
+                break;
+            }
+
+            // Pausa de 80ms entre páginas para respeitar taxa de requisições do Mercado Livre
+            await new Promise(r => setTimeout(r, 80));
         }
+
+        logger.info(`[MercadoLivreService:Orders] Paginação finalizada. Total consolidado: ${allOrders.length} pedidos em ${pageNum} requisição(ões).`);
 
         let totalRevenue = 0;
         const itemSalesMap = {};
@@ -1910,7 +1934,7 @@ export async function getSellerOrders(connection, db, options = {}) {
 
         const topProducts = Object.values(itemSalesMap)
             .sort((a, b) => b.quantidade_vendida - a.quantidade_vendida || b.faturamento - a.faturamento)
-            .slice(0, 15);
+            .slice(0, 20);
 
         // Enriquece os produtos mais vendidos com os dados financeiros (taxas, valor líquido e margem) do banco local
         if (topProducts.length > 0 && db) {
@@ -1949,13 +1973,13 @@ export async function getSellerOrders(connection, db, options = {}) {
         const averageTicket = formattedOrders.length > 0 ? (totalRevenue / formattedOrders.length) : 0;
 
         return {
-            periodo_dias_analisado: options.dias || 30,
+            periodo_dias_analisado: options.dias || (dateFrom ? 'personalizado' : 'completo'),
             total_pedidos_encontrados: totalAvailable || formattedOrders.length,
             pedidos_consolidados: formattedOrders.length,
             faturamento_total: parseFloat(totalRevenue.toFixed(2)),
             ticket_medio: parseFloat(averageTicket.toFixed(2)),
             produtos_mais_vendidos: topProducts,
-            ultimos_pedidos: formattedOrders.slice(0, 30)
+            ultimos_pedidos: formattedOrders.slice(0, 50)
         };
     });
 }

@@ -688,9 +688,9 @@ async function executeHeuristicToolFallback(userMessage, db, agent) {
 
   try {
     if (lower.includes('venda') || lower.includes('pedido') || lower.includes('vendido') || lower.includes('faturamento') || lower.includes('ticket') || lower.includes('margem')) {
-      logger.info('[AgentManager:Contingência] Executando consulta direta de vendas, faturamento e margens...');
-      const res = await toolExecutors.consultar_vendas_e_pedidos_ml({ dias: 30, max_pedidos: 200 }, { db, agentId: agent?.id });
-      executedActions.push({ tool_name: 'consultar_vendas_e_pedidos_ml', args: { dias: 30, max_pedidos: 200 }, result: res });
+      logger.info('[AgentManager:Contingência] Executando consulta direta de vendas, faturamento e margens sem limite...');
+      const res = await toolExecutors.consultar_vendas_e_pedidos_ml({}, { db, agentId: agent?.id });
+      executedActions.push({ tool_name: 'consultar_vendas_e_pedidos_ml', args: {}, result: res });
     } else if (lower.includes('anuncio') || lower.includes('anúncio') || lower.includes('estoque') || lower.includes('preço') || lower.includes('preco')) {
       logger.info('[AgentManager:Contingência] Executando consulta direta de anúncios e estoque...');
       const res = await toolExecutors.buscar_anuncios_ml({ limit: 30 }, { db, agentId: agent?.id });
