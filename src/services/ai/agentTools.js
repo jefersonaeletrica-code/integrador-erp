@@ -9,7 +9,7 @@ const logger = getLogger();
 export const toolDeclarations = [
   {
     name: 'buscar_anuncios_ml',
-    description: 'Busca anúncios do Mercado Livre com TODOS os dados financeiros e de concorrência já calculados e consolidados (preço, taxas ML, frete, valor líquido, margem de lucro %, status Buy Box e preço vencedor). Use esta ferramenta para consultas, auditorias e listagens. Ela já contém todos os dados necessários para sua análise completa.',
+    description: 'Busca anúncios ativos/pausados no catálogo local da loja (preço atual, estoque, taxas ML, status Buy Box). ATENÇÃO: NÃO USE esta ferramenta para ranking de vendas, produtos mais vendidos, faturamento ou histórico de pedidos (para vendas e pedidos use SEMPRE consultar_vendas_e_pedidos_ml).',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -133,12 +133,12 @@ export const toolDeclarations = [
   },
   {
     name: 'consultar_vendas_e_pedidos_ml',
-    description: 'Consulta o faturamento bruto total da conta, ticket médio, histórico de pedidos (com paginação automática multitelas completa sem limite) e ranking consolidado dos produtos mais vendidos com margens de lucro no Mercado Livre.',
+    description: 'OBRIGATÓRIO para consultar histórico de vendas, faturamento bruto, ticket médio e RANKING EXATO DOS PRODUTOS MAIS VENDIDOS em qualquer período (hoje, 7 dias, 30 dias, 60 dias, 12 meses / 365 dias ou histórico completo). SEMPRE use esta ferramenta para perguntas sobre: "produto mais vendido", "campeão de vendas", "volume de vendas", "faturamento dos últimos X meses/dias" ou "pedidos". Retorna faturamento, unidades vendidas e margem líquida calculada por produto.',
     parameters: {
       type: 'OBJECT',
       properties: {
-        dias: { type: 'INTEGER', description: 'Quantidade de dias retroativos para analisar vendas (ex: 30 para últimos 30 dias, 60, 90). Deixe vazio para pegar todos os pedidos.' },
-        max_pedidos: { type: 'INTEGER', description: 'Limite opcional de pedidos a coletar. Padrão: sem limite (busca todos os pedidos existentes via paginação).' },
+        dias: { type: 'INTEGER', description: 'Quantidade de dias retroativos para analisar vendas (ex: 365 para últimos 12 meses/1 ano, 180 para 6 meses, 90 para 3 meses, 30 para 30 dias). Deixe vazio para pegar todo o histórico disponível.' },
+        max_pedidos: { type: 'INTEGER', description: 'Limite opcional de pedidos a coletar. Padrão: sem limite (busca todos os pedidos existentes via paginação completa).' },
         status: { type: 'STRING', description: 'Status dos pedidos: "paid" (pagos), "cancelled" (cancelados), "all" (todos). Padrão: "paid"' }
       }
     }

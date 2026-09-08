@@ -116,11 +116,12 @@ export async function processAgentMessage({ agentId, conversationId, message, db
     '- Diagnóstico de Anúncio: consultar_saude_e_visitas_anuncio_ml (nota de qualidade 0-100% e histórico de visitas)\n' +
     '- Mapa de Capacidades: consultar_mapa_capacidades_ml (para inspecionar quais dados cada endpoint entrega antes de buscar)';
 
-  const performanceGuidance = '\n\nDIRETRIZ DE OBJETIVIDADE ANALÍTICA E RACIOCÍNIO:\n' +
-    '1. Responda DIRETAMENTE e OBJETIVAMENTE à pergunta exata do usuário logo na primeira linha, destacando o anúncio/produto principal, número de vendas, faturamento e sua margem líquida exata.\n' +
-    '2. Apresente os dados de forma consultiva e executiva (destaque o item campeão, comissão ML, frete e margem líquida percentual).\n' +
-    '3. A ferramenta `consultar_vendas_e_pedidos_ml` JÁ RETORNA faturamento, quantidade vendida, preço, taxas e MARGEM LÍQUIDA % dos produtos mais vendidos.\n' +
-    '4. Responda em 1 ÚNICO ciclo assim que obtiver os dados, sem fazer chamadas secundárias repetitivas.';
+  const performanceGuidance = '\n\nDIRETRIZ DE SELEÇÃO DE FERRAMENTAS E RACIOCÍNIO:\n' +
+    '1. REGRA CRÍTICA DE ROTEAMENTO: Para qualquer pergunta sobre "vendas", "mais vendido", "campeão de vendas", "volume vendido", "faturamento", "receita" ou "pedidos" em qualquer período (ex: últimos 30 dias, 60 dias, 12 meses / 1 ano), VOCÊ DEVE OBRIGATORIAMENTE CHAMAR `consultar_vendas_e_pedidos_ml` (passando o parâmetro `dias` correspondente, ex: `dias: 365` para 12 meses/1 ano, `dias: 30` para 30 dias). NUNCA chame `buscar_anuncios_ml` para perguntas de vendas/pedidos, pois `buscar_anuncios_ml` busca apenas o catálogo cadastrado de estoque e não possui histórico de vendas.\n' +
+    '2. Responda DIRETAMENTE e OBJETIVAMENTE à pergunta exata do usuário logo na primeira linha, destacando o anúncio/produto principal, número de vendas, faturamento e sua margem líquida exata.\n' +
+    '3. Apresente os dados de forma consultiva e executiva (destaque o item campeão, comissão ML, frete e margem líquida percentual).\n' +
+    '4. A ferramenta `consultar_vendas_e_pedidos_ml` JÁ RETORNA faturamento, quantidade vendida, preço, taxas e MARGEM LÍQUIDA % dos produtos mais vendidos.\n' +
+    '5. Responda em 1 ÚNICO ciclo assim que obtiver os dados, sem fazer chamadas secundárias repetitivas.';
 
   const systemPrompt = (agent.system_prompt || '') + otherAgentsContext + apiDomainsContext + performanceGuidance;
 
@@ -686,11 +687,27 @@ async function executeHeuristicToolFallback(userMessage, db, agent) {
   const lower = (userMessage || '').toLowerCase();
   const executedActions = [];
 
+  let dias = null;
+  if (lower.includes('12 meses') || lower.includes('1 ano') || lower.includes('um ano') || lower.includes('365 dias')) {
+    dias = 365;
+  } else if (lower.includes('6 meses') || lower.includes('180 dias')) {
+    dias = 180;
+  } else if (lower.includes('3 meses') || lower.includes('90 dias')) {
+    dias = 90;
+  } else if (lower.includes('2 meses') || lower.includes('60 dias')) {
+    dias = 60;
+  } else if (lower.includes('30 dias') || lower.includes('1 mes') || lower.includes('um mes') || lower.includes('último mês')) {
+    dias = 30;
+  } else if (lower.includes('7 dias') || lower.includes('1 semana') || lower.includes('uma semana')) {
+    dias = 7;
+  }
+
   try {
-    if (lower.includes('venda') || lower.includes('pedido') || lower.includes('vendido') || lower.includes('faturamento') || lower.includes('ticket') || lower.includes('margem')) {
-      logger.info('[AgentManager:Contingência] Executando consulta direta de vendas, faturamento e margens sem limite...');
-      const res = await toolExecutors.consultar_vendas_e_pedidos_ml({}, { db, agentId: agent?.id });
-      executedActions.push({ tool_name: 'consultar_vendas_e_pedidos_ml', args: {}, result: res });
+    if (lower.includes('venda') || lower.includes('pedido') || lower.includes('vendido') || lower.includes('faturamento') || lower.includes('ticket') || lower.includes('margem') || lower.includes('mais vendid') || lower.includes('campeão') || lower.includes('campeao')) {
+      logger.info(`[AgentManager:Contingência] Executando consulta direta de vendas, faturamento e margens (dias: ${dias || 'todos'})...`);
+      const args = dias ? { dias } : {};
+      const res = await toolExecutors.consultar_vendas_e_pedidos_ml(args, { db, agentId: agent?.id });
+      executedActions.push({ tool_name: 'consultar_vendas_e_pedidos_ml', args, result: res });
     } else if (lower.includes('anuncio') || lower.includes('anúncio') || lower.includes('estoque') || lower.includes('preço') || lower.includes('preco')) {
       logger.info('[AgentManager:Contingência] Executando consulta direta de anúncios e estoque...');
       const res = await toolExecutors.buscar_anuncios_ml({ limit: 30 }, { db, agentId: agent?.id });
