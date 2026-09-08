@@ -1821,9 +1821,17 @@ export async function getSellerOrders(connection, db, options = {}) {
     
     // Determina o período de busca se solicitado (ex: dias: 30, dias: 60)
     let dateFrom = options.dateFrom || null;
-    if (!dateFrom && options.dias) {
-        const d = new Date(Date.now() - parseInt(options.dias, 10) * 24 * 60 * 60 * 1000);
-        dateFrom = d.toISOString();
+    const diasSolicitados = options.dias ? parseInt(options.dias, 10) : null;
+    if (!dateFrom && diasSolicitados) {
+        // A API do Mercado Livre limita o filtro de data a no máximo 180 dias.
+        // Se solicitado período maior (ex: 365 dias), limitamos dateFrom para evitar erro 400 da API do ML
+        if (diasSolicitados <= 180) {
+            const d = new Date(Date.now() - diasSolicitados * 24 * 60 * 60 * 1000);
+            dateFrom = d.toISOString();
+        } else {
+            logger.info(`[MercadoLivreService:Orders] Período solicitado (${diasSolicitados} dias) excede o limite de filtro da API do ML (180 dias). Buscando todo o histórico de pedidos disponível via paginação contínua.`);
+            dateFrom = null;
+        }
     }
 
     // Se max_pedidos for especificado explicitamente, respeitamos. Caso contrário, busca TODOS os pedidos disponíveis sem teto artificial.
@@ -1831,7 +1839,7 @@ export async function getSellerOrders(connection, db, options = {}) {
     const pageSize = 50; // Limite máximo permitido por página na API do Mercado Livre
 
     const maxDesc = maxOrders === Infinity ? 'Ilimitado (todos)' : maxOrders;
-    logger.info(`[MercadoLivreService:Orders] Iniciando busca paginada de pedidos sem teto. maxOrders=${maxDesc}, pageSize=${pageSize}, status=${status || 'todos'}, dias=${options.dias || 'não especificado'}, dateFrom=${dateFrom || 'Nenhum'}`);
+    logger.info(`[MercadoLivreService:Orders] Iniciando busca paginada de pedidos sem teto. maxOrders=${maxDesc}, pageSize=${pageSize}, status=${status || 'todos'}, dias=${diasSolicitados || 'não especificado'}, dateFrom=${dateFrom || 'Nenhum'}`);
 
     return await executeMeliRequest(connection, db, async (token) => {
         let allOrders = [];
@@ -1860,10 +1868,26 @@ export async function getSellerOrders(connection, db, options = {}) {
 
             logger.info(`[MercadoLivreService:Orders] Buscando Página #${pageNum} (offset=${offset}, limit=${pageSize})...`);
 
-            const response = await meliAxios.get('/orders/search', {
-                params,
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            let response;
+            try {
+                response = await meliAxios.get('/orders/search', {
+                    params,
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+            } catch (pageErr) {
+                // Se a API do ML rejeitar com 400 devido a filtro de data, remove o filtro e tenta novamente
+                if (params['order.date_created.from']) {
+                    logger.warn(`[MercadoLivreService:Orders] Falha com filtro de data (${pageErr.message}). Tentando novamente sem restrição de data...`);
+                    delete params['order.date_created.from'];
+                    dateFrom = null;
+                    response = await meliAxios.get('/orders/search', {
+                        params,
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                } else {
+                    throw pageErr;
+                }
+            }
 
             const ordersPage = response.data?.results || [];
             const paging = response.data?.paging || {};

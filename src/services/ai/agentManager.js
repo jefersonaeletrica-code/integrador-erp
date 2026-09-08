@@ -596,41 +596,43 @@ function generateStructuredFallbackSummary(executedActions, userMessage = '') {
     return 'Concluí a consulta aos dados, mas não foi possível gerar o texto sintetizado no momento. Por favor, repita a pergunta.';
   }
 
-  const userQuery = (userMessage || '').toLowerCase();
   let text = '';
 
   for (const action of executedActions) {
     const { tool_name, result } = action;
-    if (!result || result.erro) continue;
+    if (!result) continue;
+
+    if (result.erro) {
+      text += `⚠️ **Aviso ao executar ${tool_name}:** ${result.erro}\n\n`;
+      continue;
+    }
 
     if (tool_name === 'consultar_vendas_e_pedidos_ml') {
       const topProducts = Array.isArray(result.produtos_mais_vendidos) ? result.produtos_mais_vendidos : [];
       const top1 = topProducts[0];
 
-      if (userQuery.includes('mais vendid') || userQuery.includes('mais vendas') || userQuery.includes('maior venda') || userQuery.includes('margem') || userQuery.includes('qual anuncio') || userQuery.includes('qual anúncio') || userQuery.includes('teve mais')) {
-        if (top1) {
-          const margemStr = top1.margem_liquida_percent !== undefined ? `${top1.margem_liquida_percent}%` : 'N/A';
-          text += `### 🎯 Anúncio Campeão de Vendas & Rentabilidade\n\n`;
-          text += `O anúncio que teve mais vendas no período analisado é **${top1.titulo}** (ID: \`${top1.item_id}\`).\n\n`;
-          text += `**Métricas Detalhadas do Item:**\n`;
-          text += `- 📦 **Volume Vendido:** **${top1.quantidade_vendida} unidades**\n`;
-          text += `- 💰 **Faturamento Gerado:** **R$ ${top1.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**\n`;
-          text += `- 🏷️ **Preço Atual de Venda:** R$ ${top1.preco_atual ? top1.preco_atual.toFixed(2) : '-'}\n`;
-          text += `- 💸 **Comissão Mercado Livre:** R$ ${top1.taxa_ml ? top1.taxa_ml.toFixed(2) : '-'}\n`;
-          text += `- 🚚 **Frete Pago pelo Vendedor:** R$ ${top1.frete_vendedor ? top1.frete_vendedor.toFixed(2) : '0.00'}\n`;
-          text += `- 💵 **Recebimento Líquido Unitário:** R$ ${top1.valor_liquido ? top1.valor_liquido.toFixed(2) : '-'}\n`;
-          text += `- 📈 **Margem de Lucro Líquida:** **${margemStr}**\n\n`;
+      if (top1) {
+        const margemStr = top1.margem_liquida_percent !== undefined ? `${top1.margem_liquida_percent}%` : 'N/A';
+        text += `### 🎯 Anúncio Campeão de Vendas & Rentabilidade\n\n`;
+        text += `O anúncio com maior número de vendas é **${top1.titulo}** (ID: \`${top1.item_id}\`).\n\n`;
+        text += `**Métricas Detalhadas do Item:**\n`;
+        text += `- 📦 **Volume Vendido:** **${top1.quantidade_vendida} unidades**\n`;
+        text += `- 💰 **Faturamento Gerado:** **R$ ${top1.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}**\n`;
+        text += `- 🏷️ **Preço Atual de Venda:** R$ ${top1.preco_atual ? top1.preco_atual.toFixed(2) : '-'}\n`;
+        text += `- 💸 **Comissão Mercado Livre:** R$ ${top1.taxa_ml ? top1.taxa_ml.toFixed(2) : '-'}\n`;
+        text += `- 🚚 **Frete Pago pelo Vendedor:** R$ ${top1.frete_vendedor ? top1.frete_vendedor.toFixed(2) : '0.00'}\n`;
+        text += `- 💵 **Recebimento Líquido Unitário:** R$ ${top1.valor_liquido ? top1.valor_liquido.toFixed(2) : '-'}\n`;
+        text += `- 📈 **Margem de Lucro Líquida:** **${margemStr}**\n\n`;
 
-          const margemNum = top1.margem_liquida_percent || 0;
-          const statusLucro = margemNum >= 25 ? 'excelente rentabilidade líquida' : margemNum >= 15 ? 'rentabilidade equilibrada e sustentável' : 'margem de lucro reduzida (recomendado reavaliar preço/custos)';
-          text += `> 💡 **Parecer do Auditor:** Este item é o carro-chefe de vendas da sua loja com ${statusLucro}, entregando **${margemStr}** de margem líquida real por unidade vendida.\n\n`;
-        }
+        const margemNum = top1.margem_liquida_percent || 0;
+        const statusLucro = margemNum >= 25 ? 'excelente rentabilidade líquida' : margemNum >= 15 ? 'rentabilidade equilibrada e sustentável' : 'margem de lucro reduzida (recomendado reavaliar preço/custos)';
+        text += `> 💡 **Parecer do Especialista:** Este item é o carro-chefe de vendas da sua loja com ${statusLucro}, entregando **${margemStr}** de margem líquida real por unidade vendida.\n\n`;
       }
 
-      const periodoStr = result.periodo_dias_analisado ? ` (Últimos ${result.periodo_dias_analisado} dias)` : '';
-      text += `#### 🛒 Panorama Geral de Vendas no Mercado Livre${periodoStr}\n`;
+      const periodoStr = result.periodo_dias_analisado ? ` (Período: ${result.periodo_dias_analisado === 'completo_disponivel' ? 'Histórico Completo' : result.periodo_dias_analisado + ' dias'})` : '';
+      text += `#### 🛒 Panorama Consolidado de Vendas no Mercado Livre${periodoStr}\n`;
       text += `- **Total de Pedidos Consolidados:** ${result.pedidos_consolidados || result.pedidos_listados || result.total_pedidos_encontrados || 0}\n`;
-      text += `- **Faturamento Total do Período:** R$ ${(result.faturamento_total || result.faturamento_total_amostra || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+      text += `- **Faturamento Total:** R$ ${(result.faturamento_total || result.faturamento_total_amostra || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
       text += `- **Ticket Médio:** R$ ${(result.ticket_medio || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\n`;
 
       if (topProducts.length > 0) {
@@ -645,6 +647,19 @@ function generateStructuredFallbackSummary(executedActions, userMessage = '') {
         }
         text += '\n';
       }
+    } else if (tool_name === 'resumo_geral_loja') {
+      text += '#### 🏪 Resumo Geral da Loja\n';
+      if (result.metricas_anuncios) {
+        text += `- **Total de Anúncios no ML:** ${result.metricas_anuncios.total_anuncios_ml || 0} (${result.metricas_anuncios.anuncios_ativos || 0} ativos)\n`;
+        text += `- **Anúncios com Margem Crítica (< 15%):** ${result.metricas_anuncios.anuncios_com_margem_critica_menor_15_pct || 0}\n`;
+      }
+      if (result.metricas_buybox) {
+        text += `- **Catálogo Buy Box:** ${result.metricas_buybox.total_anuncios_catalogo || 0} itens (${result.metricas_buybox.ganhando_buybox || 0} ganhando / ${result.metricas_buybox.perdendo_buybox || 0} perdendo)\n`;
+      }
+      if (result.fornecedor) {
+        text += `- **Produtos de Fornecedores Cadastrados:** ${result.fornecedor.produtos_importados_cadastrados || 0}\n`;
+      }
+      text += '\n';
     } else if (tool_name === 'buscar_anuncios_ml' && Array.isArray(result.anuncios)) {
       text += `#### 📦 Anúncios da Conta (${result.total || result.anuncios.length} itens)\n`;
       text += '| Item ID | Título | Preço | Estoque | Status | Margem Líquida |\n';
