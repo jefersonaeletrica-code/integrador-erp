@@ -3363,12 +3363,24 @@ document.addEventListener('DOMContentLoaded', () => {
                                  <span class="sku-badge">${item.sku || 'N/A'}</span>
                              </td>
                              <td style="white-space: nowrap;">
-                                 <div style="display: flex; flex-direction: column; gap: 0.1rem;">
-                                     <span class="price-text" style="font-size: 0.92rem; font-weight: 700;">R$ ${parseFloat(item.price).toFixed(2)}</span>
-                                     ${isActive && item.catalog_price_to_win && item.catalog_price_to_win != item.price && (String(item.catalog_status).toLowerCase() === 'losing' || String(item.catalog_status).toLowerCase() === 'opportunity') ? `<small style="color: #f59e0b; font-weight: 600; font-size: 0.72rem;" title="Preço sugerido para ganhar a Buy Box"><i class="fas fa-bolt"></i> Ganhe: R$ ${parseFloat(item.catalog_price_to_win).toFixed(2)}</small>` : ''}
-                                     ${item.net_amount !== null && item.net_amount !== undefined ? `<span class="net-amount-pill" title="Valor líquido estimado a receber por venda (descontando comissão ML e frete)"><i class="fas fa-coins"></i> Líquido: R$ ${parseFloat(item.net_amount).toFixed(2)}</span>` : ''}
-                                     ${item.markup_percent > 0 ? `<small style="color: var(--color-success); font-size: 0.7rem;">+${item.markup_percent}% markup</small>` : ''}
-                                 </div>
+                                <div style="display: flex; flex-direction: column; gap: 0.15rem;">
+                                    <span class="price-text" style="font-size: 0.92rem; font-weight: 700;">R$ ${parseFloat(item.price).toFixed(2)}</span>
+                                    ${isActive && item.catalog_price_to_win && item.catalog_price_to_win != item.price && (String(item.catalog_status).toLowerCase() === 'losing' || String(item.catalog_status).toLowerCase() === 'opportunity') ? `<small style="color: #f59e0b; font-weight: 600; font-size: 0.72rem;" title="Preço sugerido para ganhar a Buy Box"><i class="fas fa-bolt"></i> Ganhe: R$ ${parseFloat(item.catalog_price_to_win).toFixed(2)}</small>` : ''}
+                                    ${item.net_amount !== null && item.net_amount !== undefined ? `<span class="net-amount-pill" title="Valor líquido estimado a receber por venda (descontando comissão ML e frete)"><i class="fas fa-coins"></i> Líquido: R$ ${parseFloat(item.net_amount).toFixed(2)}</span>` : ''}
+                                    ${(() => {
+                                        const costPrice = parseFloat(item.cost_price || item.source_data?.price || 0);
+                                        const itemPrice = parseFloat(item.price) || 0;
+                                        const netAmt = item.net_amount !== null && item.net_amount !== undefined ? parseFloat(item.net_amount) : null;
+                                        if (netAmt !== null && costPrice > 0 && itemPrice > 0) {
+                                            const netMargin = ((netAmt - costPrice) / itemPrice) * 100;
+                                            const mClass = netMargin >= 25 ? 'margin-badge-high' : (netMargin >= 15 ? 'margin-badge-medium' : 'margin-badge-low');
+                                            return `<span class="margin-badge ${mClass}" title="Margem Líquida estimada (${netMargin.toFixed(1)}%): R$ ${(netAmt - costPrice).toFixed(2)}"><i class="fas fa-chart-pie"></i> ${netMargin.toFixed(1)}% margem</span>`;
+                                        } else if (item.markup_percent > 0) {
+                                            return `<span class="margin-badge margin-badge-medium" title="Markup cadastrado"><i class="fas fa-arrow-trend-up"></i> +${item.markup_percent}% markup</span>`;
+                                        }
+                                        return '';
+                                    })()}
+                                </div>
                             </td>
                             <td style="white-space: nowrap;">
                                 <span class="stock-badge ${inStock ? 'in-stock' : 'out-of-stock'}">
@@ -5355,17 +5367,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Inicialização da interface
     initializeThemeSwitcher();
     initializeSidebar();
-
-    // CORREÇÃO: Atualiza o texto dos links de navegação no menu lateral
-    const navErpLink = document.getElementById('nav-conexoes-erp');
-    if (navErpLink) {
-        navErpLink.textContent = 'ERPs';
-    }
-
-    const navSupplierLink = document.getElementById('nav-conexoes-fornecedores');
-    if (navSupplierLink) {
-        navSupplierLink.textContent = 'Fornecedores';
-    }
 
     // Checar se veio de retorno OAuth do Bling ou Mercado Livre
     const urlParams = new URLSearchParams(window.location.search);

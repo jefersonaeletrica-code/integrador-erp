@@ -110,6 +110,25 @@ body {
     overflow-x: hidden;
 }
 
+/* Slim Custom Scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: var(--border-radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--color-border-hover);
+}
+
 /* ==========================================================================
    2. Layout & Sidebar
    ========================================================================== */
@@ -255,9 +274,11 @@ body {
 }
 
 .menu-links li a.active {
-    background-color: var(--color-primary-light);
+    background: linear-gradient(90deg, var(--color-primary-light) 0%, rgba(59, 130, 246, 0.04) 100%);
     color: var(--color-primary);
     font-weight: 600;
+    border-left: 3px solid var(--color-primary);
+    padding-left: calc(1rem - 3px);
 }
 
 .menu-links li a.active i:first-child {
@@ -2650,6 +2671,55 @@ body.dark-mode .net-amount-pill {
     border-color: rgba(16, 185, 129, 0.35);
 }
 
+/* Badges de Margem Líquida */
+.margin-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.15rem 0.45rem;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.72rem;
+    font-weight: 700;
+    margin-top: 0.15rem;
+    letter-spacing: 0.01em;
+}
+
+.margin-badge.margin-badge-high {
+    background-color: #ecfdf5;
+    color: #047857;
+    border: 1px solid #a7f3d0;
+}
+
+body.dark-mode .margin-badge.margin-badge-high {
+    background-color: rgba(16, 185, 129, 0.18);
+    color: #34d399;
+    border-color: rgba(16, 185, 129, 0.35);
+}
+
+.margin-badge.margin-badge-medium {
+    background-color: #eff6ff;
+    color: #1e40af;
+    border: 1px solid #bfdbfe;
+}
+
+body.dark-mode .margin-badge.margin-badge-medium {
+    background-color: rgba(59, 130, 246, 0.18);
+    color: #93c5fd;
+    border-color: rgba(59, 130, 246, 0.35);
+}
+
+.margin-badge.margin-badge-low {
+    background-color: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+}
+
+body.dark-mode .margin-badge.margin-badge-low {
+    background-color: rgba(239, 68, 68, 0.18);
+    color: #f87171;
+    border-color: rgba(239, 68, 68, 0.35);
+}
+
 /* Card de Detalhamento Financeiro no Modal de Edição */
 .meli-financial-breakdown-card {
     background: linear-gradient(135deg, rgba(16, 185, 129, 0.04) 0%, rgba(5, 150, 105, 0.08) 100%);
@@ -3079,34 +3149,93 @@ body.dark-mode .meli-financial-breakdown-card {
     margin-bottom: 0.25rem;
 }
 
-.ai-message-bubble table {
+.ai-message-bubble table,
+.ai-rendered-markdown .ai-table {
     width: 100%;
-    border-collapse: collapse;
-    margin: 0.75rem 0;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 0.85rem 0;
     font-size: 0.82rem;
-}
-
-.ai-message-bubble th, .ai-message-bubble td {
-    padding: 0.45rem 0.65rem;
+    border-radius: var(--border-radius-sm);
+    overflow: hidden;
     border: 1px solid var(--color-border);
-    text-align: left;
 }
 
-.ai-message-bubble th {
-    background-color: var(--color-card-bg);
+.ai-message-bubble th,
+.ai-rendered-markdown .ai-table th {
+    padding: 0.6rem 0.85rem;
+    border-bottom: 2px solid var(--color-border);
+    border-right: 1px solid var(--color-border);
+    text-align: left;
+    background-color: var(--color-bg);
+    color: var(--color-text);
     font-weight: 700;
+    white-space: nowrap;
+}
+
+.ai-message-bubble th:last-child,
+.ai-rendered-markdown .ai-table th:last-child {
+    border-right: none;
+}
+
+.ai-message-bubble td,
+.ai-rendered-markdown .ai-table td {
+    padding: 0.55rem 0.85rem;
+    border-bottom: 1px solid var(--color-border);
+    border-right: 1px solid var(--color-border);
+    color: var(--color-text);
+}
+
+.ai-message-bubble td:last-child,
+.ai-rendered-markdown .ai-table td:last-child {
+    border-right: none;
+}
+
+.ai-message-bubble tr:last-child td,
+.ai-rendered-markdown .ai-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.ai-rendered-markdown .ai-table tbody tr:nth-child(even) {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+body.dark-mode .ai-rendered-markdown .ai-table tbody tr:nth-child(even) {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.ai-rendered-markdown .ai-table tbody tr:hover {
+    background-color: var(--color-primary-light);
 }
 
 .ai-message-bubble code {
     font-family: var(--font-family-mono);
-    background-color: rgba(0, 0, 0, 0.08);
-    padding: 0.15rem 0.35rem;
+    background-color: rgba(0, 0, 0, 0.06);
+    padding: 0.15rem 0.4rem;
     border-radius: 4px;
     font-size: 0.82rem;
+    border: 1px solid rgba(0, 0, 0, 0.08);
 }
 
 .dark-mode .ai-message-bubble code {
-    background-color: rgba(255, 255, 255, 0.12);
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.ai-code-block {
+    font-family: var(--font-family-mono);
+    background: rgba(0, 0, 0, 0.05);
+    border: 1px solid var(--color-border);
+    border-radius: var(--border-radius-sm);
+    padding: 0.85rem 1rem;
+    overflow-x: auto;
+    margin: 0.75rem 0;
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+
+.dark-mode .ai-code-block {
+    background: rgba(0, 0, 0, 0.35);
 }
 
 /* Card de Execução de Ferramentas (Tool Calls) */
