@@ -367,6 +367,17 @@ Regras de atuação:
     await connection.query(`UPDATE ai_agents SET model = 'gemini-3.6-flash' WHERE model LIKE '%1.5%' OR model LIKE '%2.0%' OR model IS NULL OR model = ''`);
     await connection.query(`UPDATE ai_settings SET default_model = 'gemini-3.6-flash' WHERE default_model LIKE '%1.5%' OR default_model LIKE '%2.0%' OR default_model IS NULL OR default_model = ''`);
 
+    // Garante que todos os agentes tenham acesso às novas ferramentas de vendas e APIs do Mercado Livre
+    const allToolsJson = JSON.stringify([
+      'buscar_anuncios_ml', 'obter_detalhes_anuncio_ml', 'simular_taxas_e_margem',
+      'atualizar_preco_anuncio_ml', 'atualizar_estoque_anuncio_ml', 'otimizar_titulo_descricao_ml',
+      'consultar_estoque_fornecedor', 'analisar_oportunidades_buybox', 'resumo_geral_loja',
+      'consultar_mapa_capacidades_ml', 'consultar_vendas_e_pedidos_ml', 'consultar_reputacao_e_metricas_ml',
+      'consultar_promocoes_e_campanhas_ml', 'consultar_publicidade_ads_ml', 'consultar_perguntas_e_atendimento_ml',
+      'consultar_saude_e_visitas_anuncio_ml', 'consultar_outro_agente'
+    ]);
+    await connection.query('UPDATE ai_agents SET allowed_tools = ? WHERE allowed_tools IS NULL OR allowed_tools = "" OR allowed_tools NOT LIKE "%consultar_vendas_e_pedidos_ml%"', [allToolsJson]);
+
     console.log('Banco de dados MySQL pronto.');
   } finally {
     connection.release();

@@ -112,7 +112,7 @@ export const toolDeclarations = [
   },
   {
     name: 'resumo_geral_loja',
-    description: 'Gera um resumo consolidado das métricas de toda a loja (total de anúncios ativos, anúncios de catálogo, itens com baixa rentabilidade e status geral).',
+    description: 'Gera um resumo consolidado das métricas de toda a loja (total de anúncios ativos, anúncios de catálogo, itens com baixa rentabilidade e status geral). ATENÇÃO: Use APENAS quando o usuário pedir expressamente um resumo ou visão geral da loja. NÃO USE para perguntas sobre vendas, produtos mais vendidos ou faturamento.',
     parameters: {
       type: 'OBJECT',
       properties: {}

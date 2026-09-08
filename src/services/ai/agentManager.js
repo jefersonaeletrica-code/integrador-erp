@@ -116,12 +116,16 @@ export async function processAgentMessage({ agentId, conversationId, message, db
     '- Diagnóstico de Anúncio: consultar_saude_e_visitas_anuncio_ml (nota de qualidade 0-100% e histórico de visitas)\n' +
     '- Mapa de Capacidades: consultar_mapa_capacidades_ml (para inspecionar quais dados cada endpoint entrega antes de buscar)';
 
-  const performanceGuidance = '\n\nDIRETRIZ DE SELEÇÃO DE FERRAMENTAS E RACIOCÍNIO:\n' +
-    '1. REGRA CRÍTICA DE ROTEAMENTO: Para qualquer pergunta sobre "vendas", "mais vendido", "campeão de vendas", "volume vendido", "faturamento", "receita" ou "pedidos" em qualquer período (ex: últimos 30 dias, 60 dias, 12 meses / 1 ano), VOCÊ DEVE OBRIGATORIAMENTE CHAMAR `consultar_vendas_e_pedidos_ml` (passando o parâmetro `dias` correspondente, ex: `dias: 365` para 12 meses/1 ano, `dias: 30` para 30 dias). NUNCA chame `buscar_anuncios_ml` para perguntas de vendas/pedidos, pois `buscar_anuncios_ml` busca apenas o catálogo cadastrado de estoque e não possui histórico de vendas.\n' +
-    '2. Responda DIRETAMENTE e OBJETIVAMENTE à pergunta exata do usuário logo na primeira linha, destacando o anúncio/produto principal, número de vendas, faturamento e sua margem líquida exata.\n' +
-    '3. Apresente os dados de forma consultiva e executiva (destaque o item campeão, comissão ML, frete e margem líquida percentual).\n' +
-    '4. A ferramenta `consultar_vendas_e_pedidos_ml` JÁ RETORNA faturamento, quantidade vendida, preço, taxas e MARGEM LÍQUIDA % dos produtos mais vendidos.\n' +
-    '5. Responda em 1 ÚNICO ciclo assim que obtiver os dados, sem fazer chamadas secundárias repetitivas.';
+  const performanceGuidance = '\n\n--- FLUXO COGNITIVO OBRIGATÓRIO EM 2 ETAPAS ---\n' +
+    'ETAPA 1: ANÁLISE SEMÂNTICA DA PERGUNTA & ESCOLHA DA FERRAMENTA IDEAL\n' +
+    '- Se o usuário perguntar sobre "vendas", "mais vendido", "campeão de vendas", "volume vendido", "faturamento", "receita" ou "pedidos" em qualquer período (ex: 30 dias, 60 dias, 12 meses / 1 ano): você DEVE OBRIGATORIAMENTE acionar a ferramenta `consultar_vendas_e_pedidos_ml` com `dias` (ex: `dias: 365` para 12 meses/1 ano, `dias: 30` para 30 dias). NUNCA chame `buscar_anuncios_ml` ou `resumo_geral_loja` para essas perguntas!\n' +
+    '- Se o usuário perguntar sobre disputa de Buy Box ou concorrência de catálogo: chame `analisar_oportunidades_buybox`.\n' +
+    '- Se o usuário pedir expressamente um resumo ou panorama geral de toda a loja: chame `resumo_geral_loja`.\n\n' +
+    'ETAPA 2: PROCESSAMENTO DOS DADOS & RESPOSTA DIRECIONADA E INTELIGENTE\n' +
+    '1. Assim que a ferramenta retornar os dados, processe os números e responda DIRETAMENTE e OBJETIVAMENTE à pergunta exata do usuário logo na primeira linha, destacando o anúncio/produto principal, número de vendas, faturamento e sua margem líquida exata.\n' +
+    '2. Apresente os dados de forma consultiva e executiva (destaque o item campeão, comissão ML, frete e margem líquida percentual).\n' +
+    '3. A ferramenta `consultar_vendas_e_pedidos_ml` JÁ RETORNA faturamento, quantidade vendida, preço, taxas e MARGEM LÍQUIDA % dos produtos mais vendidos.\n' +
+    '4. Responda em 1 ÚNICO ciclo assim que obtiver os dados, sem fazer chamadas secundárias repetitivas.';
 
   const systemPrompt = (agent.system_prompt || '') + otherAgentsContext + apiDomainsContext + performanceGuidance;
 
