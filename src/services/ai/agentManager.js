@@ -626,9 +626,10 @@ function generateStructuredFallbackSummary(executedActions, userMessage = '') {
         }
       }
 
-      text += `#### 🛒 Panorama Geral de Vendas no Mercado Livre\n`;
-      text += `- **Total de Pedidos:** ${result.pedidos_listados || result.total_pedidos_encontrados || 0}\n`;
-      text += `- **Faturamento da Amostra:** R$ ${(result.faturamento_total_amostra || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
+      const periodoStr = result.periodo_dias_analisado ? ` (Últimos ${result.periodo_dias_analisado} dias)` : '';
+      text += `#### 🛒 Panorama Geral de Vendas no Mercado Livre${periodoStr}\n`;
+      text += `- **Total de Pedidos Consolidados:** ${result.pedidos_consolidados || result.pedidos_listados || result.total_pedidos_encontrados || 0}\n`;
+      text += `- **Faturamento Total do Período:** R$ ${(result.faturamento_total || result.faturamento_total_amostra || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n`;
       text += `- **Ticket Médio:** R$ ${(result.ticket_medio || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}\n\n`;
 
       if (topProducts.length > 0) {
@@ -688,8 +689,8 @@ async function executeHeuristicToolFallback(userMessage, db, agent) {
   try {
     if (lower.includes('venda') || lower.includes('pedido') || lower.includes('vendido') || lower.includes('faturamento') || lower.includes('ticket') || lower.includes('margem')) {
       logger.info('[AgentManager:Contingência] Executando consulta direta de vendas, faturamento e margens...');
-      const res = await toolExecutors.consultar_vendas_e_pedidos_ml({}, { db, agentId: agent?.id });
-      executedActions.push({ tool_name: 'consultar_vendas_e_pedidos_ml', args: {}, result: res });
+      const res = await toolExecutors.consultar_vendas_e_pedidos_ml({ dias: 30, max_pedidos: 200 }, { db, agentId: agent?.id });
+      executedActions.push({ tool_name: 'consultar_vendas_e_pedidos_ml', args: { dias: 30, max_pedidos: 200 }, result: res });
     } else if (lower.includes('anuncio') || lower.includes('anúncio') || lower.includes('estoque') || lower.includes('preço') || lower.includes('preco')) {
       logger.info('[AgentManager:Contingência] Executando consulta direta de anúncios e estoque...');
       const res = await toolExecutors.buscar_anuncios_ml({ limit: 30 }, { db, agentId: agent?.id });

@@ -133,12 +133,13 @@ export const toolDeclarations = [
   },
   {
     name: 'consultar_vendas_e_pedidos_ml',
-    description: 'Consulta o faturamento bruto total da conta, ticket médio, histórico de pedidos recentes e ranking dos produtos mais vendidos no Mercado Livre.',
+    description: 'Consulta o faturamento bruto total da conta, ticket médio, histórico de pedidos (com paginação automática multitelas) e ranking consolidado dos produtos mais vendidos com margens de lucro no Mercado Livre.',
     parameters: {
       type: 'OBJECT',
       properties: {
-        status: { type: 'STRING', description: 'Status dos pedidos: "paid" (pagos), "cancelled" (cancelados), "all" (todos). Padrão: "paid"' },
-        limit: { type: 'INTEGER', description: 'Quantidade de pedidos a analisar (padrão: 30, máximo: 50)' }
+        dias: { type: 'INTEGER', description: 'Quantidade de dias retroativos para analisar vendas (ex: 30 para últimos 30 dias, 60, 90). Padrão: 30' },
+        max_pedidos: { type: 'INTEGER', description: 'Limite máximo de pedidos a coletar via paginação (padrão: 200, máximo: 1000)' },
+        status: { type: 'STRING', description: 'Status dos pedidos: "paid" (pagos), "cancelled" (cancelados), "all" (todos). Padrão: "paid"' }
       }
     }
   },

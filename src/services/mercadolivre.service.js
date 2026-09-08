@@ -1817,29 +1817,62 @@ export async function getSellerOrders(connection, db, options = {}) {
         throw new Error('User ID do vendedor não encontrado na conexão.');
     }
 
-    const limit = Math.min(parseInt(options.limit || 30, 10), 50);
     const status = options.status || 'paid';
+    
+    // Determina o período de busca (padrão: últimos 30 dias)
+    let dateFrom = options.dateFrom;
+    if (!dateFrom && options.dias) {
+        const d = new Date(Date.now() - parseInt(options.dias, 10) * 24 * 60 * 60 * 1000);
+        dateFrom = d.toISOString();
+    } else if (!dateFrom) {
+        const d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        dateFrom = d.toISOString();
+    }
+
+    const maxOrders = Math.min(parseInt(options.max_pedidos || options.maxOrders || options.limit || 200, 10), 1000);
+    const pageSize = 50;
 
     return await executeMeliRequest(connection, db, async (token) => {
-        let url = `/orders/search?seller=${userId}&sort=date_desc&limit=${limit}`;
-        if (status && status !== 'all') {
-            url += `&order.status=${status}`;
-        }
-        if (options.dateFrom) {
-            url += `&order.date_created.from=${options.dateFrom}`;
-        }
+        let allOrders = [];
+        let offset = 0;
+        let totalAvailable = 0;
 
-        const response = await meliAxios.get(url, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        while (allOrders.length < maxOrders) {
+            let url = `/orders/search?seller=${userId}&sort=date_desc&limit=${pageSize}&offset=${offset}`;
+            if (status && status !== 'all') {
+                url += `&order.status=${status}`;
+            }
+            if (dateFrom) {
+                url += `&order.date_created.from=${dateFrom}`;
+            }
+            if (options.dateTo) {
+                url += `&order.date_created.to=${options.dateTo}`;
+            }
 
-        const orders = response.data?.results || [];
-        const paging = response.data?.paging || {};
+            const response = await meliAxios.get(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            const ordersPage = response.data?.results || [];
+            const paging = response.data?.paging || {};
+            totalAvailable = paging.total !== undefined ? paging.total : totalAvailable;
+
+            if (ordersPage.length === 0) break;
+            allOrders.push(...ordersPage);
+
+            offset += ordersPage.length;
+            if (offset >= (paging.total || 0) || ordersPage.length < pageSize) {
+                break;
+            }
+
+            // Pausa de 60ms entre páginas para respeitar taxa de requisições
+            await new Promise(r => setTimeout(r, 60));
+        }
 
         let totalRevenue = 0;
         const itemSalesMap = {};
 
-        const formattedOrders = orders.map(o => {
+        const formattedOrders = allOrders.map(o => {
             const total = parseFloat(o.total_amount || 0);
             totalRevenue += total;
 
@@ -1876,8 +1909,8 @@ export async function getSellerOrders(connection, db, options = {}) {
         });
 
         const topProducts = Object.values(itemSalesMap)
-            .sort((a, b) => b.faturamento - a.faturamento)
-            .slice(0, 10);
+            .sort((a, b) => b.quantidade_vendida - a.quantidade_vendida || b.faturamento - a.faturamento)
+            .slice(0, 15);
 
         // Enriquece os produtos mais vendidos com os dados financeiros (taxas, valor líquido e margem) do banco local
         if (topProducts.length > 0 && db) {
@@ -1916,12 +1949,13 @@ export async function getSellerOrders(connection, db, options = {}) {
         const averageTicket = formattedOrders.length > 0 ? (totalRevenue / formattedOrders.length) : 0;
 
         return {
-            total_pedidos_encontrados: paging.total || formattedOrders.length,
-            pedidos_listados: formattedOrders.length,
-            faturamento_total_amostra: parseFloat(totalRevenue.toFixed(2)),
+            periodo_dias_analisado: options.dias || 30,
+            total_pedidos_encontrados: totalAvailable || formattedOrders.length,
+            pedidos_consolidados: formattedOrders.length,
+            faturamento_total: parseFloat(totalRevenue.toFixed(2)),
             ticket_medio: parseFloat(averageTicket.toFixed(2)),
             produtos_mais_vendidos: topProducts,
-            ultimos_pedidos: formattedOrders
+            ultimos_pedidos: formattedOrders.slice(0, 30)
         };
     });
 }
