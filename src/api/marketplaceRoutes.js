@@ -186,7 +186,7 @@ export default (db) => {
         }
 
         try {
-            const authUrl = meliService.getAuthUrl(connection);
+            const authUrl = await meliService.getAuthUrl(connection, db);
             res.json({ sucesso: true, url: authUrl });
         } catch (err) {
             res.status(400).json({ sucesso: false, erro: err.message });

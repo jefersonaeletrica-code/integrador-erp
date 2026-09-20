@@ -1,4 +1,5 @@
 import axios from 'axios';
+import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { getLogger } from '../core/logger.js';
@@ -6,6 +7,9 @@ import { getLogger } from '../core/logger.js';
 const logger = getLogger();
 const MELI_API_BASE = 'https://api.mercadolibre.com';
 const MELI_AUTH_BASE = 'https://auth.mercadolivre.com.br';
+
+// Armazena temporariamente os verifiers PKCE gerados para cada conexão
+const pkceVerifierMap = new Map();
 
 /**
  * Cria uma instância do axios com timeout configurado para requisições do Mercado Livre
@@ -94,22 +98,45 @@ export async function resolveSellerUserId(connection, db) {
 }
 
 /**
- * Gera a URL de autorização OAuth 2.0 para o Mercado Livre
+ * Gera a URL de autorização OAuth 2.0 para o Mercado Livre com suporte a PKCE (RFC 7636)
  * @param {object} connection - Conexão do Mercado Livre
- * @returns {string} URL para redirecionar o usuário
+ * @param {object} db - Instância do banco de dados (opcional)
+ * @returns {Promise<string>|string} URL para redirecionar o usuário
  */
-export function getAuthUrl(connection) {
+export async function getAuthUrl(connection, db) {
     const creds = normalizeMeliCredentials(connection.credentials);
     if (!creds.client_id || !creds.redirect_uri) {
         throw new Error('Client ID (App ID) e Redirect URI são obrigatórios para autenticação do Mercado Livre.');
     }
+
+    // Gera code_verifier e code_challenge para PKCE (Obrigatório nas versões recentes da API do Mercado Livre)
+    const codeVerifier = crypto.randomBytes(32).toString('base64url');
+    const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
+
+    // Armazena no cache em memória e no credentials da conexão
+    pkceVerifierMap.set(String(connection.id), codeVerifier);
+    connection.credentials = { ...creds, code_verifier: codeVerifier };
+
+    try {
+        if (db && typeof db.updateMarketplaceConnection === 'function') {
+            await db.updateMarketplaceConnection(connection);
+        } else {
+            const dbModule = await import('../database/db.mysql.js');
+            if (typeof dbModule.updateMarketplaceConnection === 'function') {
+                await dbModule.updateMarketplaceConnection(connection);
+            }
+        }
+    } catch (dbErr) {
+        logger.warn(`[MercadoLivreService] Aviso ao salvar code_verifier no MySQL: ${dbErr.message}`);
+    }
+
     const state = `connId=${connection.id}`;
     const scopes = 'read write offline_access';
-    return `${MELI_AUTH_BASE}/authorization?response_type=code&client_id=${creds.client_id}&redirect_uri=${encodeURIComponent(creds.redirect_uri)}&state=${state}&scope=${encodeURIComponent(scopes)}`;
+    return `${MELI_AUTH_BASE}/authorization?response_type=code&client_id=${creds.client_id}&redirect_uri=${encodeURIComponent(creds.redirect_uri)}&state=${state}&scope=${encodeURIComponent(scopes)}&code_challenge=${codeChallenge}&code_challenge_method=S256`;
 }
 
 /**
- * Troca o código de autorização recebido no callback por access_token e refresh_token
+ * Troca o código de autorização recebido no callback por access_token e refresh_token (com suporte a PKCE)
  * @param {object} connection - Conexão do Mercado Livre
  * @param {string} code - Código de autorização retornado pelo ML
  * @returns {Promise<object>} Dados de autenticação atualizados
@@ -120,17 +147,28 @@ export async function exchangeCodeForToken(connection, code) {
         throw new Error('Credenciais incompletas (client_id/app_id, client_secret/secret_key, redirect_uri).');
     }
 
+    const codeVerifier = pkceVerifierMap.get(String(connection.id)) || creds.code_verifier;
+
     try {
-        logger.info(`[MercadoLivreService] Trocando código por token para conexão ID ${connection.id}...`);
-        const response = await meliAxios.post('/oauth/token', new URLSearchParams({
+        logger.info(`[MercadoLivreService] Trocando código por token para conexão ID ${connection.id}... (PKCE code_verifier: ${codeVerifier ? 'Sim (len ' + codeVerifier.length + ')' : 'Não'})`);
+
+        const bodyParams = {
             grant_type: 'authorization_code',
             client_id: creds.client_id,
             client_secret: creds.client_secret,
             code: String(code).trim(),
             redirect_uri: creds.redirect_uri
-        }), {
+        };
+        if (codeVerifier) {
+            bodyParams.code_verifier = codeVerifier;
+        }
+
+        const response = await meliAxios.post('/oauth/token', new URLSearchParams(bodyParams), {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
         });
+
+        // Limpa o verifier da memória
+        pkceVerifierMap.delete(String(connection.id));
 
         const { access_token, refresh_token, user_id, expires_in } = response.data;
         const finalRefreshToken = refresh_token || response.data.refreshToken || creds.refresh_token;
