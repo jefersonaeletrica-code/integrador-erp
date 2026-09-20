@@ -438,7 +438,7 @@ export async function getBiEstoqueSummary(db, { empresa_id = null, tipo_custo = 
     const pool = resolvePool(db);
     const costCol = getValidCostColumn(tipo_custo);
 
-    let whereClause = `WHERE p.inativo = FALSE AND ${getStockLocationCondition()}`;
+    let whereClause = `WHERE p.inativo = FALSE AND p.bloqueia_venda = FALSE AND ${getStockLocationCondition()}`;
     const params = [];
 
     if (empresa_id && empresa_id !== 'all' && empresa_id !== '') {
@@ -475,7 +475,7 @@ export async function getBiEstoqueSummary(db, { empresa_id = null, tipo_custo = 
             COALESCE(SUM(s.saldo_atual), 0) as qtd_estoque
         FROM bi_empresas e
         LEFT JOIN bi_estoque_saldos s ON s.empresa_id = e.id AND ${getStockLocationCondition()}
-        LEFT JOIN bi_produtos p ON p.idsubproduto = s.idsubproduto AND p.inativo = FALSE
+        LEFT JOIN bi_produtos p ON p.idsubproduto = s.idsubproduto AND p.inativo = FALSE AND p.bloqueia_venda = FALSE
         WHERE e.ativo = TRUE
         GROUP BY e.id, e.nome_fantasia
         ORDER BY e.codigo_erp ASC
@@ -556,7 +556,7 @@ export async function getBiEstoqueSummary(db, { empresa_id = null, tipo_custo = 
 export async function getBiEstoqueCurvaABC(db, { empresa_id = null, tipo_custo = 'custo_medio_fiscal', agrupador = 'subgrupo', curva_a = 20, curva_b = 30 }) {
     const pool = resolvePool(db);
 
-    let whereClause = `WHERE p.inativo = FALSE AND ${getStockLocationCondition()}`;
+    let whereClause = `WHERE p.inativo = FALSE AND p.bloqueia_venda = FALSE AND ${getStockLocationCondition()}`;
     const params = [];
 
     if (empresa_id && empresa_id !== 'all' && empresa_id !== '') {
@@ -683,7 +683,7 @@ export async function getBiEstoqueCurvaABC(db, { empresa_id = null, tipo_custo =
 export async function getBiEstoqueProducts(db, { empresa_id = null, busca = '', curva_abc = '', situacao = '', page = 1, limit = 50 }) {
     const pool = resolvePool(db);
 
-    let whereClause = `WHERE p.inativo = FALSE AND ${getStockLocationCondition()}`;
+    let whereClause = `WHERE p.inativo = FALSE AND p.bloqueia_venda = FALSE AND ${getStockLocationCondition()}`;
     const params = [];
 
     if (empresa_id && empresa_id !== 'all' && empresa_id !== '') {

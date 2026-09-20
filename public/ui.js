@@ -483,7 +483,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <div class="integrim-diag-title">
                                 <i class="fas fa-box-open" style="color: #0284c7;"></i> Dados Cadastrais & Estrutura Mercadológica
                             </div>
-                            <span class="badge ${prod.inativo ? 'badge-danger' : 'badge-success'}">${prod.inativo ? 'Inativo' : 'Ativo'}</span>
+                            <span class="badge ${prod.inativo || prod.bloqueia_venda ? 'badge-danger' : 'badge-success'}">${prod.bloqueia_venda ? '🚫 Bloqueado p/ Venda (Inativo)' : (prod.inativo ? '🔴 Inativo' : '🟢 Ativo')}</span>
                         </div>
 
                         <div class="integrim-diag-grid-badges">

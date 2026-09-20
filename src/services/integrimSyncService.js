@@ -70,8 +70,8 @@ export async function syncIntegrimProducts(connection, db, batchLimit = 2000) {
             const idSubgrupo = parseInt(item.idsubgrupo, 10) || null;
             const ncm = item.ncm ? String(item.ncm) : null;
             const unMedida = item.embalagemsaida || 'UN';
-            const inativo = item.flaginativo === 'T';
             const bloqueiaVenda = item.flagbloqueiavenda === 'T';
+            const inativo = (item.flaginativo === 'T') || bloqueiaVenda;
 
             await pool.execute(`
                 INSERT INTO bi_produtos (
@@ -611,8 +611,8 @@ export async function testSyncSingleProduct(connection, db, { idsubproduto = nul
                 id_subgrupo: parseInt(item.idsubgrupo, 10) || null,
                 ncm: item.ncm ? String(item.ncm) : null,
                 unidade_medida: item.embalagemsaida || 'UN',
-                inativo: item.flaginativo === 'T',
-                bloqueia_venda: item.flagbloqueiavenda === 'T'
+                bloqueia_venda: item.flagbloqueiavenda === 'T',
+                inativo: item.flaginativo === 'T' || item.flagbloqueiavenda === 'T'
             };
         } else {
             results.endpoints.cad_produtos.erro = 'Nenhum produto retornado no CAD_PRODUTOS com os filtros especificados.';
