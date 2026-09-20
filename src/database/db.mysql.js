@@ -113,16 +113,23 @@ export const initializeDatabase = async () => {
     // Migrações preventivas para garantir que colunas de credenciais e sessões suportem tokens grandes sem truncamento
     try {
       await connection.query(`ALTER TABLE marketplace_connections MODIFY COLUMN credentials LONGTEXT NOT NULL;`);
+      console.log("Coluna 'credentials' na tabela 'marketplace_connections' atualizada para LONGTEXT com sucesso.");
     } catch (mcErr) {
-      // Ignora se tabela acabou de ser criada ou erro de compatibilidade
+      console.warn("Aviso na migração LONGTEXT marketplace_connections:", mcErr.message);
     }
     try {
       await connection.query(`ALTER TABLE erp_connections MODIFY COLUMN credentials LONGTEXT NOT NULL;`);
-    } catch (ecErr) {}
+      console.log("Coluna 'credentials' na tabela 'erp_connections' atualizada para LONGTEXT com sucesso.");
+    } catch (ecErr) {
+      console.warn("Aviso na migração LONGTEXT erp_connections:", ecErr.message);
+    }
     try {
       await connection.query(`ALTER TABLE supplier_connections MODIFY COLUMN credentials LONGTEXT NOT NULL;`);
       await connection.query(`ALTER TABLE supplier_connections MODIFY COLUMN session_data LONGTEXT DEFAULT NULL;`);
-    } catch (scErr) {}
+      console.log("Colunas 'credentials' e 'session_data' na tabela 'supplier_connections' atualizadas para LONGTEXT com sucesso.");
+    } catch (scErr) {
+      console.warn("Aviso na migração LONGTEXT supplier_connections:", scErr.message);
+    }
 
     await connection.query(`
       CREATE TABLE IF NOT EXISTS mercado_livre_anuncios (
@@ -567,25 +574,28 @@ export const updateMarketplaceConnection = async (connection) => {
   try {
     const { id, name, type = 'mercadolivre', credentials } = connection;
     const credObj = safeJsonParse(credentials, {}) || {};
+    const credStr = JSON.stringify(credObj);
+    let result;
     if (name) {
-      await conn.execute(
+      [result] = await conn.execute(
         'UPDATE marketplace_connections SET name = ?, type = ?, credentials = ? WHERE id = ?',
         [
           name,
           type,
-          JSON.stringify(credObj),
+          credStr,
           id
         ]
       );
     } else {
-      await conn.execute(
+      [result] = await conn.execute(
         'UPDATE marketplace_connections SET credentials = ? WHERE id = ?',
         [
-          JSON.stringify(credObj),
+          credStr,
           id
         ]
       );
     }
+    console.log(`[DB:updateMarketplaceConnection] Conexão ID ${id} atualizada (affectedRows: ${result?.affectedRows}). Creds size: ${credStr.length} chars, possui refresh_token: ${!!credObj.refresh_token}`);
   } catch (error) {
     console.error(`Erro ao atualizar a conexão de marketplace (ID: ${connection?.id}) no MySQL:`, error);
     throw error;

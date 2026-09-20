@@ -132,7 +132,10 @@ export async function exchangeCodeForToken(connection, code) {
         });
 
         const { access_token, refresh_token, user_id, expires_in } = response.data;
+        const finalRefreshToken = refresh_token || response.data.refreshToken || creds.refresh_token;
         const expires_at = Date.now() + ((expires_in || 21600) * 1000);
+
+        logger.info(`[MercadoLivreService] Resposta OAuth do ML recebida. Keys no payload: [${Object.keys(response.data).join(', ')}]. Possui refresh_token: ${!!finalRefreshToken} (len: ${finalRefreshToken ? String(finalRefreshToken).length : 0}), user_id: ${user_id || creds.user_id}`);
 
         // Busca informações do usuário/vendedor
         let nickname = creds.nickname || '';
@@ -153,7 +156,7 @@ export async function exchangeCodeForToken(connection, code) {
         const updatedCreds = {
             ...creds,
             access_token,
-            refresh_token,
+            refresh_token: finalRefreshToken,
             user_id: user_id || creds.user_id,
             expires_in: expires_in || 21600,
             expires_at,
@@ -179,6 +182,8 @@ export async function exchangeCodeForToken(connection, code) {
 export async function refreshToken(connection, db) {
     const creds = normalizeMeliCredentials(connection.credentials);
     const { client_id, client_secret, refresh_token } = creds;
+
+    logger.info(`[MercadoLivreService:refreshToken] Verificando conexão ID ${connection.id}. client_id: ${!!client_id}, client_secret: ${!!client_secret}, refresh_token: ${!!refresh_token}`);
 
     if (!refresh_token) {
         throw new Error(`Refresh token não configurado para a conexão ID ${connection.id}. Realize a autorização OAuth oficial na aba Contas ML.`);

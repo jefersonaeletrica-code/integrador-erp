@@ -29,7 +29,9 @@ export default (db) => {
         const pool = db.getPool();
         const [rows] = await pool.execute('SELECT * FROM marketplace_connections WHERE id = ?', [id]);
         if (!rows[0]) return null;
-        return { ...rows[0], credentials: meliService.normalizeMeliCredentials(rows[0].credentials) };
+        const normCreds = meliService.normalizeMeliCredentials(rows[0].credentials);
+        logger.info(`[MarketplaceRoutes:findMarketplaceConnectionById] ID ${id}: raw credentials len: ${rows[0].credentials ? String(rows[0].credentials).length : 0}, has refresh_token: ${!!normCreds.refresh_token}, nickname: ${normCreds.nickname || 'N/A'}`);
+        return { ...rows[0], credentials: normCreds };
     };
 
     // Helper para encontrar conexão ERP por ID
@@ -132,13 +134,21 @@ export default (db) => {
                 return res.status(404).json({ sucesso: false, erro: 'Conexão de Marketplace não encontrada.' });
             }
 
-            const existingCreds = safeJsonParse(connection.credentials) || {};
-            const incomingCreds = safeJsonParse(credentials) || {};
+            const existingCreds = meliService.normalizeMeliCredentials(connection.credentials) || {};
+            const incomingCreds = meliService.normalizeMeliCredentials(credentials) || {};
+
+            // Filtra campos vazios ou mascarados para não sobrescrever tokens OAuth existentes
+            const cleanedIncoming = {};
+            for (const [k, v] of Object.entries(incomingCreds)) {
+                if (v !== null && v !== undefined && v !== '' && !String(v).includes('***')) {
+                    cleanedIncoming[k] = v;
+                }
+            }
 
             // Preserva tokens OAuth existentes (access_token, refresh_token, user_id, expires_at, etc.) ao editar client_id/secret/redirect_uri
             const newCredentials = { 
                 ...existingCreds, 
-                ...incomingCreds 
+                ...cleanedIncoming 
             };
             const updatedConnection = { ...connection, name, type, credentials: newCredentials };
 
