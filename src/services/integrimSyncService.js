@@ -483,3 +483,274 @@ export async function seedRealisticEstoqueMockData(db) {
     return { sucesso: true, count: totalItems };
 }
 
+/**
+ * 5. Teste Diagnóstico de Importação de 1 Único Produto
+ *    Valida e executa em tempo real os 3 endpoints do Integrim:
+ *      1. CAD_PRODUTOS
+ *      2. PRODUTOS_SALDO_ESTOQUE_EMPRESA
+ *      3. PRECOS_CUSTOS_PRODUTOS_EMPRESA
+ */
+export async function testSyncSingleProduct(connection, db, { idsubproduto = null, codigo_barras = null } = {}) {
+    const pool = resolvePool(db);
+    await ensureCissPoderTokenIsValid(connection, db);
+
+    const results = {
+        sucesso: true,
+        idsubproduto_buscado: idsubproduto ? parseInt(idsubproduto, 10) : null,
+        codigo_barras_buscado: codigo_barras || null,
+        token_valido: true,
+        duracao_total_ms: 0,
+        endpoints: {
+            cad_produtos: { sucesso: false, status: null, tempo_ms: 0, total_retornado: 0, raw_data: null, erro: null, dados_formatados: null },
+            produtos_saldo_estoque_empresa: { sucesso: false, status: null, tempo_ms: 0, total_retornado: 0, raw_data: null, erro: null, dados_formatados: [] },
+            precos_custos_produtos_empresa: { sucesso: false, status: null, tempo_ms: 0, total_retornado: 0, raw_data: null, erro: null, dados_formatados: [] }
+        },
+        produto_consolidado: null
+    };
+
+    const startTimeTotal = Date.now();
+    const headers = {
+        'Authorization': `Bearer ${connection.credentials.access_token}`,
+        'Content-Type': 'application/json'
+    };
+
+    // 1. ENDPOINT 1: CAD_PRODUTOS
+    const authUrlCad = new URL(connection.credentials.auth_url);
+    authUrlCad.pathname = '/cisspoder-service/cad_produtos';
+
+    const cadClausulas = [];
+    if (results.idsubproduto_buscado) {
+        cadClausulas.push({ campo: "idsubproduto", valor: results.idsubproduto_buscado, operador: "IGUAL", operadorlogico: "AND" });
+    } else if (results.codigo_barras_buscado) {
+        cadClausulas.push({ campo: "nrcodbarprod", valor: results.codigo_barras_buscado, operador: "IGUAL", operadorlogico: "AND" });
+    }
+
+    const t1Start = Date.now();
+    try {
+        const resCad = await axiosInstance.post(authUrlCad.toString(), {
+            page: 1,
+            clausulas: cadClausulas,
+            ordenacoes: [{ campo: "idsubproduto", direcao: "ASC" }]
+        }, { headers });
+
+        results.endpoints.cad_produtos.status = resCad.status;
+        results.endpoints.cad_produtos.tempo_ms = Date.now() - t1Start;
+        const cadItems = Array.isArray(resCad.data?.data) ? resCad.data.data : [];
+        results.endpoints.cad_produtos.total_retornado = cadItems.length;
+        results.endpoints.cad_produtos.raw_data = cadItems.slice(0, 3);
+
+        if (cadItems.length > 0) {
+            results.endpoints.cad_produtos.sucesso = true;
+            const item = cadItems[0];
+            const resolvedSubId = parseInt(item.idsubproduto, 10);
+            results.idsubproduto_buscado = resolvedSubId;
+
+            results.endpoints.cad_produtos.dados_formatados = {
+                idproduto: parseInt(item.idproduto, 10) || resolvedSubId,
+                idsubproduto: resolvedSubId,
+                codigo_barras: item.nrcodbarprod ? String(item.nrcodbarprod) : null,
+                codigo_barras_cx: item.idcodbarcx ? String(item.idcodbarcx) : null,
+                descricao: item.descrcomproduto || item.descrresproduto || `Produto ${resolvedSubId}`,
+                descricao_resumida: item.descrresproduto || null,
+                marca: item.descricao || null,
+                id_marca: parseInt(item.idmarcafabricante, 10) || null,
+                divisao: item.descrdivisao || null,
+                id_divisao: parseInt(item.iddivisao, 10) || null,
+                secao: item.descrsecao || null,
+                id_secao: parseInt(item.idsecao, 10) || null,
+                grupo: item.descrgrupo || null,
+                id_grupo: parseInt(item.idgrupo, 10) || null,
+                subgrupo: item.descrsubgrupo || null,
+                id_subgrupo: parseInt(item.idsubgrupo, 10) || null,
+                ncm: item.ncm ? String(item.ncm) : null,
+                unidade_medida: item.embalagemsaida || 'UN',
+                inativo: item.flaginativo === 'T',
+                bloqueia_venda: item.flagbloqueiavenda === 'T'
+            };
+        } else {
+            results.endpoints.cad_produtos.erro = 'Nenhum produto retornado no CAD_PRODUTOS com os filtros especificados.';
+        }
+    } catch (errCad) {
+        results.endpoints.cad_produtos.sucesso = false;
+        results.endpoints.cad_produtos.tempo_ms = Date.now() - t1Start;
+        results.endpoints.cad_produtos.status = errCad.response?.status || 500;
+        results.endpoints.cad_produtos.erro = errCad.response?.data || errCad.message;
+    }
+
+    const targetSubId = results.idsubproduto_buscado;
+
+    if (targetSubId) {
+        // 2. ENDPOINT 2: PRODUTOS_SALDO_ESTOQUE_EMPRESA
+        const authUrlSaldo = new URL(connection.credentials.auth_url);
+        authUrlSaldo.pathname = '/cisspoder-service/produtos_saldo_estoque_empresa';
+
+        const t2Start = Date.now();
+        try {
+            const resSaldo = await axiosInstance.post(authUrlSaldo.toString(), {
+                page: 1,
+                clausulas: [{ campo: "idsubproduto", valor: targetSubId, operador: "IGUAL", operadorlogico: "AND" }],
+                ordenacoes: [{ campo: "idempresa", direcao: "ASC" }]
+            }, { headers });
+
+            results.endpoints.produtos_saldo_estoque_empresa.status = resSaldo.status;
+            results.endpoints.produtos_saldo_estoque_empresa.tempo_ms = Date.now() - t2Start;
+            const saldoItems = Array.isArray(resSaldo.data?.data) ? resSaldo.data.data : [];
+            results.endpoints.produtos_saldo_estoque_empresa.total_retornado = saldoItems.length;
+            results.endpoints.produtos_saldo_estoque_empresa.raw_data = saldoItems;
+            results.endpoints.produtos_saldo_estoque_empresa.sucesso = true;
+
+            results.endpoints.produtos_saldo_estoque_empresa.dados_formatados = saldoItems.map(s => ({
+                empresa_id: parseInt(s.idempresa, 10) || 1,
+                nome_empresa: parseInt(s.idempresa, 10) === 2 ? '2 - Filial 2' : '1 - Matriz',
+                id_local_estoque: parseInt(s.idlocalestoque, 10) || 1,
+                local_estoque: s.descrlocalestoque || 'Geral',
+                saldo_atual: parseFloat(s.qtdsaldoatual) || 0,
+                saldo_reserva: parseFloat(s.qtdsaldoreserva) || 0,
+                saldo_disponivel: parseFloat(s.qtdsaldodisponivel) || ((parseFloat(s.qtdsaldoatual) || 0) - (parseFloat(s.qtdsaldoreserva) || 0))
+            }));
+        } catch (errSaldo) {
+            results.endpoints.produtos_saldo_estoque_empresa.sucesso = false;
+            results.endpoints.produtos_saldo_estoque_empresa.tempo_ms = Date.now() - t2Start;
+            results.endpoints.produtos_saldo_estoque_empresa.status = errSaldo.response?.status || 500;
+            results.endpoints.produtos_saldo_estoque_empresa.erro = errSaldo.response?.data || errSaldo.message;
+        }
+
+        // 3. ENDPOINT 3: PRECOS_CUSTOS_PRODUTOS_EMPRESA
+        const authUrlCustos = new URL(connection.credentials.auth_url);
+        authUrlCustos.pathname = '/cisspoder-service/precos_custos_produtos_empresa';
+
+        const t3Start = Date.now();
+        try {
+            const resCustos = await axiosInstance.post(authUrlCustos.toString(), {
+                page: 1,
+                clausulas: [{ campo: "idsubproduto", valor: targetSubId, operador: "IGUAL", operadorlogico: "AND" }],
+                ordenacoes: [{ campo: "idempresa", direcao: "ASC" }]
+            }, { headers });
+
+            results.endpoints.precos_custos_produtos_empresa.status = resCustos.status;
+            results.endpoints.precos_custos_produtos_empresa.tempo_ms = Date.now() - t3Start;
+            const custoItems = Array.isArray(resCustos.data?.data) ? resCustos.data.data : [];
+            results.endpoints.precos_custos_produtos_empresa.total_retornado = custoItems.length;
+            results.endpoints.precos_custos_produtos_empresa.raw_data = custoItems;
+            results.endpoints.precos_custos_produtos_empresa.sucesso = true;
+
+            results.endpoints.precos_custos_produtos_empresa.dados_formatados = custoItems.map(c => {
+                const custoReposicao = parseFloat(c.valcustorepos) || 0;
+                const custoGerencial = parseFloat(c.custogerencial) || 0;
+                const custoNotaFiscal = parseFloat(c.custonotafiscal) || 0;
+                const custoMedio = custoNotaFiscal > 0 ? custoNotaFiscal : custoReposicao;
+                const custoMedioFiscal = custoMedio;
+                const precoVenda = parseFloat(c.valprecovarejo) || 0;
+                const precoPromocao = parseFloat(c.valpromvarejo) || 0;
+                const precoAtacado = parseFloat(c.valprecoatacado) || 0;
+
+                return {
+                    empresa_id: parseInt(c.idempresa, 10) || 1,
+                    nome_empresa: parseInt(c.idempresa, 10) === 2 ? '2 - Filial 2' : '1 - Matriz',
+                    custo_medio: custoMedio,
+                    custo_medio_fiscal: custoMedioFiscal,
+                    custo_gerencial: custoGerencial,
+                    custo_reposicao: custoReposicao,
+                    custo_nota_fiscal: custoNotaFiscal,
+                    preco_venda_varejo: precoVenda,
+                    preco_promocao_varejo: precoPromocao,
+                    preco_venda_atacado: precoAtacado
+                };
+            });
+        } catch (errCustos) {
+            results.endpoints.precos_custos_produtos_empresa.sucesso = false;
+            results.endpoints.precos_custos_produtos_empresa.tempo_ms = Date.now() - t3Start;
+            results.endpoints.precos_custos_produtos_empresa.status = errCustos.response?.status || 500;
+            results.endpoints.precos_custos_produtos_empresa.erro = errCustos.response?.data || errCustos.message;
+        }
+    }
+
+    results.duracao_total_ms = Date.now() - startTimeTotal;
+
+    // Consolidação amigável
+    const prod = results.endpoints.cad_produtos.dados_formatados;
+    if (prod) {
+        const saldos = results.endpoints.produtos_saldo_estoque_empresa.dados_formatados || [];
+        const custos = results.endpoints.precos_custos_produtos_empresa.dados_formatados || [];
+
+        // Monta tabela comparativa das duas lojas
+        const empresas = [1, 2].map(empId => {
+            const s = saldos.find(x => x.empresa_id === empId) || { saldo_atual: 0, saldo_reserva: 0, saldo_disponivel: 0, local_estoque: 'Geral' };
+            const c = custos.find(x => x.empresa_id === empId) || { custo_medio: 0, custo_medio_fiscal: 0, custo_gerencial: 0, custo_reposicao: 0, custo_nota_fiscal: 0, preco_venda_varejo: 0 };
+            return {
+                empresa_id: empId,
+                nome_empresa: empId === 1 ? '1 - A Elétrica (Matriz)' : '2 - A Elétrica (Filial 2)',
+                ...s,
+                ...c
+            };
+        });
+
+        results.produto_consolidado = {
+            ...prod,
+            lojas: empresas
+        };
+
+        // Persistência segura no MySQL
+        try {
+            await pool.execute(`
+                INSERT INTO bi_produtos (
+                    idproduto, idsubproduto, codigo_barras, codigo_barras_cx,
+                    descricao, descricao_resumida, marca, id_marca,
+                    divisao, id_divisao, secao, id_secao,
+                    grupo, id_grupo, subgrupo, id_subgrupo,
+                    ncm, unidade_medida, inativo, bloqueia_venda
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE
+                    codigo_barras = VALUES(codigo_barras),
+                    descricao = VALUES(descricao),
+                    marca = VALUES(marca),
+                    divisao = VALUES(divisao),
+                    secao = VALUES(secao),
+                    grupo = VALUES(grupo),
+                    subgrupo = VALUES(subgrupo),
+                    ncm = VALUES(ncm),
+                    unidade_medida = VALUES(unidade_medida),
+                    inativo = VALUES(inativo),
+                    bloqueia_venda = VALUES(bloqueia_venda)
+            `, [
+                prod.idproduto, prod.idsubproduto, prod.codigo_barras, prod.codigo_barras_cx,
+                prod.descricao, prod.descricao_resumida, prod.marca, prod.id_marca,
+                prod.divisao, prod.id_divisao, prod.secao, prod.id_secao,
+                prod.grupo, prod.id_grupo, prod.subgrupo, prod.id_subgrupo,
+                prod.ncm, prod.unidade_medida, prod.inativo, prod.bloqueia_venda
+            ]);
+
+            for (const emp of empresas) {
+                await pool.execute(`
+                    INSERT INTO bi_estoque_saldos (
+                        empresa_id, idproduto, idsubproduto, id_local_estoque, local_estoque,
+                        saldo_atual, saldo_reserva, saldo_disponivel,
+                        custo_medio, custo_medio_fiscal, custo_gerencial, custo_reposicao, custo_nota_fiscal,
+                        preco_venda_varejo, preco_promocao_varejo, preco_venda_atacado
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE
+                        saldo_atual = VALUES(saldo_atual),
+                        saldo_reserva = VALUES(saldo_reserva),
+                        saldo_disponivel = VALUES(saldo_disponivel),
+                        custo_medio = VALUES(custo_medio),
+                        custo_medio_fiscal = VALUES(custo_medio_fiscal),
+                        custo_gerencial = VALUES(custo_gerencial),
+                        custo_reposicao = VALUES(custo_reposicao),
+                        custo_nota_fiscal = VALUES(custo_nota_fiscal),
+                        preco_venda_varejo = VALUES(preco_venda_varejo)
+                `, [
+                    emp.empresa_id, prod.idproduto, prod.idsubproduto, emp.id_local_estoque || 1, emp.local_estoque || 'Geral',
+                    emp.saldo_atual, emp.saldo_reserva, emp.saldo_disponivel,
+                    emp.custo_medio, emp.custo_medio_fiscal, emp.custo_gerencial, emp.custo_reposicao, emp.custo_nota_fiscal,
+                    emp.preco_venda_varejo, emp.preco_promocao_varejo || 0, emp.preco_venda_atacado || 0
+                ]);
+            }
+        } catch (dbErr) {
+            logger.warn(`[IntegrimSync] Não foi possível persistir produto de teste no MySQL:`, dbErr.message);
+        }
+    }
+
+    return results;
+}
+
+

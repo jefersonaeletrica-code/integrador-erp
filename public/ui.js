@@ -32,6 +32,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const supplierTestSubmitBtn = document.getElementById('supplier-test-submit-btn');
     const supplierTestModalCloseBtns = document.querySelectorAll('.supplier-test-modal-close');
 
+    // Modal Pop-up de Teste Diagnóstico de 1 Produto no Integrim (CISS Poder)
+    const integrimTestModal = document.getElementById('integrim-test-modal');
+    const integrimTestForm = document.getElementById('integrim-test-form');
+    const integrimTestSku = document.getElementById('integrim-test-sku');
+    const integrimTestEan = document.getElementById('integrim-test-ean');
+    const integrimTestResults = document.getElementById('integrim-test-results');
+    const integrimTestRunBtn = document.getElementById('integrim-test-run-btn');
+    const integrimTestModalCloseBtns = document.querySelectorAll('.integrim-test-modal-close');
+
     // Modais do Mercado Livre
     const meliCreateModal = document.getElementById('meli-create-modal');
     const meliCreateForm = document.getElementById('meli-create-form');
@@ -329,6 +338,288 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const closeSupplierTestModal = () => {
         if (supplierTestModal) supplierTestModal.style.display = 'none';
+    };
+
+    /**
+     * Modal Pop-up para Teste Diagnóstico de 1 Produto no Integrim (CISS Poder)
+     */
+    const openIntegrimSingleProductTestModal = (prefilledSku = '') => {
+        if (!integrimTestModal) return;
+        if (integrimTestSku) {
+            integrimTestSku.value = prefilledSku || '';
+        }
+        if (integrimTestEan) {
+            integrimTestEan.value = '';
+        }
+
+        if (prefilledSku) {
+            runIntegrimProductDiagnostic();
+        } else if (integrimTestResults) {
+            integrimTestResults.innerHTML = `
+                <div class="empty-state" style="padding: 2.5rem 1rem;">
+                    <div class="empty-state-icon" style="background: rgba(245, 158, 11, 0.12); color: #f59e0b;">
+                        <i class="fas fa-microscope"></i>
+                    </div>
+                    <h3>Pronto para testar os endpoints</h3>
+                    <p>Informe o SKU ou deixe em branco e clique em <strong>"Testar 3 Endpoints"</strong> para validar a autenticação e as respostas de CAD_PRODUTOS, SALDOS e CUSTOS.</p>
+                </div>
+            `;
+        }
+
+        integrimTestModal.style.display = 'flex';
+        if (!prefilledSku && integrimTestSku) {
+            setTimeout(() => integrimTestSku.focus(), 150);
+        }
+    };
+
+    const closeIntegrimTestModal = () => {
+        if (integrimTestModal) integrimTestModal.style.display = 'none';
+    };
+
+    const runIntegrimProductDiagnostic = async () => {
+        const sku = integrimTestSku ? integrimTestSku.value.trim() : '';
+        const ean = integrimTestEan ? integrimTestEan.value.trim() : '';
+
+        if (integrimTestRunBtn) {
+            integrimTestRunBtn.disabled = true;
+            integrimTestRunBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Executando Teste...';
+        }
+
+        if (integrimTestResults) {
+            integrimTestResults.innerHTML = `
+                <div style="padding: 2.5rem 1rem; background: var(--color-surface); border-radius: var(--border-radius-md); border: 1px solid var(--color-border); text-align: center;">
+                    <div class="loader" style="margin: 0 auto 1.25rem;"></div>
+                    <h4 style="font-size: 1.05rem; font-weight: 700; color: var(--color-text); margin-bottom: 0.35rem;">Consultando Integrim CISS Poder em tempo real...</h4>
+                    <p style="font-size: 0.84rem; color: var(--color-text-offset); max-width: 500px; margin: 0 auto;">
+                        Disparando chamadas para <code>CAD_PRODUTOS</code>, <code>PRODUTOS_SALDO_ESTOQUE_EMPRESA</code> e <code>PRECOS_CUSTOS_PRODUTOS_EMPRESA</code>...
+                    </p>
+                </div>
+            `;
+        }
+
+        try {
+            const res = await api('/api/bi/stock/test-single-product', 'POST', {
+                idsubproduto: sku || null,
+                codigo_barras: ean || null
+            });
+
+            const cad = res.endpoints?.cad_produtos || {};
+            const saldo = res.endpoints?.produtos_saldo_estoque_empresa || {};
+            const custos = res.endpoints?.precos_custos_produtos_empresa || {};
+            const prod = res.produto_consolidado || cad.dados_formatados;
+            const allSuccess = cad.sucesso && saldo.sucesso && custos.sucesso;
+
+            let html = `
+                <!-- Banner de Status Geral -->
+                <div style="background: ${allSuccess ? 'rgba(16, 185, 129, 0.12)' : 'rgba(239, 68, 68, 0.12)'}; border: 1px solid ${allSuccess ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}; border-radius: var(--border-radius-md); padding: 1rem 1.25rem; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.75rem;">
+                    <div style="display: flex; align-items: center; gap: 0.75rem;">
+                        <div style="width: 40px; height: 40px; border-radius: 50%; background: ${allSuccess ? '#10b981' : '#ef4444'}; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 1.2rem;">
+                            <i class="fas ${allSuccess ? 'fa-check' : 'fa-triangle-exclamation'}"></i>
+                        </div>
+                        <div>
+                            <h4 style="margin: 0; font-size: 0.98rem; font-weight: 700; color: var(--color-text);">
+                                ${allSuccess ? '3 Endpoints Respondendo Perfeitamente no Integrim!' : 'Atenção: Houve falha ou pendência em endpoint(s)'}
+                            </h4>
+                            <p style="margin: 0; font-size: 0.8rem; color: var(--color-text-offset);">
+                                Tempo total de resposta: <strong>${res.duracao_total_ms || 0}ms</strong> | SKU Testado: <strong>${res.idsubproduto_buscado || 'N/D'}</strong>
+                            </p>
+                        </div>
+                    </div>
+                    <div>
+                        <span class="badge ${allSuccess ? 'badge-success' : 'badge-danger'}" style="font-size: 0.82rem; padding: 0.4rem 0.8rem;">
+                            ${allSuccess ? 'STATUS 100% OK' : 'REQUER AJUSTE'}
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Cards dos 3 Endpoints -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 0.85rem; margin-bottom: 1.25rem;">
+                    <!-- Endpoint 1 -->
+                    <div class="integrim-diag-chip" style="border-left: 4px solid ${cad.sucesso ? '#10b981' : '#ef4444'};">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span class="integrim-diag-chip-label">1. CAD_PRODUTOS</span>
+                            <span class="integrim-ep-badge ${cad.sucesso ? 'success' : 'error'}">
+                                <i class="fas ${cad.sucesso ? 'fa-circle-check' : 'fa-circle-xmark'}"></i> ${cad.status || 500}
+                            </span>
+                        </div>
+                        <div class="integrim-diag-chip-val" style="font-size: 0.82rem; margin-top: 0.25rem;">
+                            ${cad.sucesso ? `✅ ${cad.total_retornado} item(ns) em ${cad.tempo_ms}ms` : `❌ ${cad.erro || 'Erro na consulta'}`}
+                        </div>
+                    </div>
+
+                    <!-- Endpoint 2 -->
+                    <div class="integrim-diag-chip" style="border-left: 4px solid ${saldo.sucesso ? '#10b981' : '#ef4444'};">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span class="integrim-diag-chip-label">2. SALDOS_EMPRESA</span>
+                            <span class="integrim-ep-badge ${saldo.sucesso ? 'success' : 'error'}">
+                                <i class="fas ${saldo.sucesso ? 'fa-circle-check' : 'fa-circle-xmark'}"></i> ${saldo.status || 500}
+                            </span>
+                        </div>
+                        <div class="integrim-diag-chip-val" style="font-size: 0.82rem; margin-top: 0.25rem;">
+                            ${saldo.sucesso ? `✅ ${saldo.total_retornado} filial(is) em ${saldo.tempo_ms}ms` : `❌ ${saldo.erro || 'Erro na consulta'}`}
+                        </div>
+                    </div>
+
+                    <!-- Endpoint 3 -->
+                    <div class="integrim-diag-chip" style="border-left: 4px solid ${custos.sucesso ? '#10b981' : '#ef4444'};">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span class="integrim-diag-chip-label">3. PRECOS_CUSTOS</span>
+                            <span class="integrim-ep-badge ${custos.sucesso ? 'success' : 'error'}">
+                                <i class="fas ${custos.sucesso ? 'fa-circle-check' : 'fa-circle-xmark'}"></i> ${custos.status || 500}
+                            </span>
+                        </div>
+                        <div class="integrim-diag-chip-val" style="font-size: 0.82rem; margin-top: 0.25rem;">
+                            ${custos.sucesso ? `✅ ${custos.total_retornado} filial(is) em ${custos.tempo_ms}ms` : `❌ ${custos.erro || 'Erro na consulta'}`}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            if (prod) {
+                html += `
+                    <!-- Detalhes do Produto & Estrutura Mercadológica -->
+                    <div class="integrim-diag-section">
+                        <div class="integrim-diag-header">
+                            <div class="integrim-diag-title">
+                                <i class="fas fa-box-open" style="color: #0284c7;"></i> Dados Cadastrais & Estrutura Mercadológica
+                            </div>
+                            <span class="badge ${prod.inativo ? 'badge-danger' : 'badge-success'}">${prod.inativo ? 'Inativo' : 'Ativo'}</span>
+                        </div>
+
+                        <div class="integrim-diag-grid-badges">
+                            <div class="integrim-diag-chip">
+                                <span class="integrim-diag-chip-label">SKU / ID Subproduto</span>
+                                <span class="integrim-diag-chip-val"><code>${prod.idsubproduto}</code> (ID: ${prod.idproduto || prod.idsubproduto})</span>
+                            </div>
+                            <div class="integrim-diag-chip" style="grid-column: span 2;">
+                                <span class="integrim-diag-chip-label">Descrição Completa</span>
+                                <span class="integrim-diag-chip-val">${prod.descricao}</span>
+                            </div>
+                            <div class="integrim-diag-chip">
+                                <span class="integrim-diag-chip-label">Marca / Fabricante</span>
+                                <span class="integrim-diag-chip-val">${prod.marca || '-'} (ID: ${prod.id_marca || '-'})</span>
+                            </div>
+                            <div class="integrim-diag-chip">
+                                <span class="integrim-diag-chip-label">Código de Barras (EAN)</span>
+                                <span class="integrim-diag-chip-val">${prod.codigo_barras || '-'}</span>
+                            </div>
+                            <div class="integrim-diag-chip">
+                                <span class="integrim-diag-chip-label">NCM</span>
+                                <span class="integrim-diag-chip-val">${prod.ncm || '-'}</span>
+                            </div>
+                            <div class="integrim-diag-chip">
+                                <span class="integrim-diag-chip-label">Unidade Medida</span>
+                                <span class="integrim-diag-chip-val">${prod.unidade_medida || 'UN'}</span>
+                            </div>
+                        </div>
+
+                        <!-- Breadcrumb da Árvore Mercadológica -->
+                        <div class="integrim-tree-breadcrumb">
+                            <span><i class="fas fa-sitemap" style="color: #0284c7;"></i> <strong>Árvore:</strong></span>
+                            <span>Divisão: <strong>${prod.divisao || '-'}</strong></span>
+                            <span class="integrim-tree-sep"><i class="fas fa-chevron-right"></i></span>
+                            <span>Seção: <strong>${prod.secao || '-'}</strong></span>
+                            <span class="integrim-tree-sep"><i class="fas fa-chevron-right"></i></span>
+                            <span>Grupo: <strong>${prod.grupo || '-'}</strong></span>
+                            <span class="integrim-tree-sep"><i class="fas fa-chevron-right"></i></span>
+                            <span>Subgrupo: <strong>${prod.subgrupo || '-'}</strong></span>
+                        </div>
+                    </div>
+
+                    <!-- Tabela Comparativa das 2 Lojas (Saldos e 5 Custos) -->
+                    <div class="integrim-diag-section">
+                        <div class="integrim-diag-header">
+                            <div class="integrim-diag-title">
+                                <i class="fas fa-building-columns" style="color: #0284c7;"></i> Posição de Estoque & Custos por Filial (Loja 1 e Loja 2)
+                            </div>
+                        </div>
+
+                        <div class="table-responsive">
+                            <table class="data-table" style="font-size: 0.82rem;">
+                                <thead>
+                                    <tr>
+                                        <th>Filial / Empresa</th>
+                                        <th style="text-align: right;">Saldo Físico</th>
+                                        <th style="text-align: right;">Reserva</th>
+                                        <th style="text-align: right;">Disponível</th>
+                                        <th style="text-align: right;">Custo Médio</th>
+                                        <th style="text-align: right;">Custo Fiscal</th>
+                                        <th style="text-align: right;">Custo Gerencial</th>
+                                        <th style="text-align: right;">Custo Reposição</th>
+                                        <th style="text-align: right;">Última NF</th>
+                                        <th style="text-align: right; color: #0284c7;">Preço Venda</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${(prod.lojas || []).map(l => `
+                                        <tr>
+                                            <td style="font-weight: 700;">${l.nome_empresa}</td>
+                                            <td style="text-align: right; font-weight: 700; color: ${l.saldo_atual <= 0 ? 'var(--color-danger)' : 'inherit'};">${formatInt(l.saldo_atual)} ${prod.unidade_medida || 'UN'}</td>
+                                            <td style="text-align: right; color: var(--color-text-offset);">${formatInt(l.saldo_reserva)}</td>
+                                            <td style="text-align: right; font-weight: 700;">${formatInt(l.saldo_disponivel)}</td>
+                                            <td style="text-align: right;">${formatBRL(l.custo_medio)}</td>
+                                            <td style="text-align: right;">${formatBRL(l.custo_medio_fiscal)}</td>
+                                            <td style="text-align: right;">${formatBRL(l.custo_gerencial)}</td>
+                                            <td style="text-align: right;">${formatBRL(l.custo_reposicao)}</td>
+                                            <td style="text-align: right;">${formatBRL(l.custo_nota_fiscal)}</td>
+                                            <td style="text-align: right; font-weight: 800; color: #0284c7;">${formatBRL(l.preco_venda_varejo)}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Inspecionar JSON Bruto
+            html += `
+                <div class="integrim-diag-section">
+                    <details>
+                        <summary style="cursor: pointer; font-weight: 700; font-size: 0.88rem; color: var(--color-text); user-select: none;">
+                            <i class="fas fa-code" style="color: #f59e0b;"></i> Inspecionar Respostas JSON Originais da API CISS Poder (Raw Data)
+                        </summary>
+                        <div style="margin-top: 0.85rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                            <div>
+                                <strong style="font-size: 0.78rem; color: var(--color-text-offset);">1. CAD_PRODUTOS:</strong>
+                                <pre class="json-code-box"><code>${JSON.stringify(cad.raw_data || cad.erro || {}, null, 2)}</code></pre>
+                            </div>
+                            <div>
+                                <strong style="font-size: 0.78rem; color: var(--color-text-offset);">2. PRODUTOS_SALDO_ESTOQUE_EMPRESA:</strong>
+                                <pre class="json-code-box"><code>${JSON.stringify(saldo.raw_data || saldo.erro || {}, null, 2)}</code></pre>
+                            </div>
+                            <div>
+                                <strong style="font-size: 0.78rem; color: var(--color-text-offset);">3. PRECOS_CUSTOS_PRODUTOS_EMPRESA:</strong>
+                                <pre class="json-code-box"><code>${JSON.stringify(custos.raw_data || custos.erro || {}, null, 2)}</code></pre>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+            `;
+
+            integrimTestResults.innerHTML = html;
+            showToast('Diagnóstico do Integrim executado com sucesso!', allSuccess ? 'success' : 'warning');
+
+        } catch (err) {
+            integrimTestResults.innerHTML = `
+                <div class="empty-state" style="padding: 2rem 1rem; border: 1px solid rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.05);">
+                    <div class="empty-state-icon" style="color: var(--color-danger); background: rgba(239, 68, 68, 0.15);">
+                        <i class="fas fa-triangle-exclamation"></i>
+                    </div>
+                    <h3 style="color: var(--color-danger);">Falha na comunicação com o Integrim CISS</h3>
+                    <p style="max-width: 600px; margin: 0 auto 1rem;">${err.message}</p>
+                    <div style="font-size: 0.82rem; color: var(--color-text-offset); background: var(--color-surface); padding: 0.75rem; border-radius: var(--border-radius-sm); border: 1px solid var(--color-border); display: inline-block; text-align: left;">
+                        💡 <strong>Dica de resolução:</strong> Verifique se a URL da API, Usuário e Senha do CISS Poder estão preenchidos corretamente no menu <strong>Integrações > ERPs (CISS Poder)</strong>.
+                    </div>
+                </div>
+            `;
+            showToast(`Erro no teste: ${err.message}`, 'error');
+        } finally {
+            if (integrimTestRunBtn) {
+                integrimTestRunBtn.disabled = false;
+                integrimTestRunBtn.innerHTML = '<i class="fas fa-play"></i> Testar 3 Endpoints';
+            }
+        }
     };
 
     /**
@@ -1328,6 +1619,19 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    if (integrimTestModalCloseBtns) {
+        integrimTestModalCloseBtns.forEach(btn => {
+            btn.addEventListener('click', closeIntegrimTestModal);
+        });
+    }
+
+    if (integrimTestForm) {
+        integrimTestForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            runIntegrimProductDiagnostic();
+        });
+    }
+
     if (meliCreateModalCloseBtns) {
         meliCreateModalCloseBtns.forEach(btn => btn.addEventListener('click', closeMeliCreateModal));
     }
@@ -1346,6 +1650,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target === supplierTestModal || (e.target.classList && e.target.classList.contains('modal-backdrop') && e.target.closest('#supplier-test-modal'))) {
             closeSupplierTestModal();
         }
+        if (e.target === integrimTestModal || (e.target.classList && e.target.classList.contains('modal-backdrop') && e.target.closest('#integrim-test-modal'))) {
+            closeIntegrimTestModal();
+        }
         if (e.target === meliCreateModal || (e.target.classList && e.target.classList.contains('modal-backdrop') && e.target.closest('#meli-create-modal'))) {
             closeMeliCreateModal();
         }
@@ -1361,6 +1668,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.key === 'Escape') {
             if (modal && modal.style.display === 'flex') closeModal();
             if (supplierTestModal && supplierTestModal.style.display === 'flex') closeSupplierTestModal();
+            if (integrimTestModal && integrimTestModal.style.display === 'flex') closeIntegrimTestModal();
             if (meliCreateModal && meliCreateModal.style.display === 'flex') closeMeliCreateModal();
             if (meliEditModal && meliEditModal.style.display === 'flex') closeMeliEditModal();
             if (aiAgentModal && aiAgentModal.style.display === 'flex') closeAIAgentModal();
@@ -3730,7 +4038,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderProductsPage = async (preselectedConnectionId = null) => {
         mainTitle.textContent = 'Catálogo de Produtos';
         if (mainSubtitle) mainSubtitle.textContent = 'Consulte produtos, estoque e preços em tempo real diretamente do ERP selecionado';
-        headerActions.innerHTML = '';
+        headerActions.innerHTML = `
+            <button class="btn btn-warning" data-action="open-integrim-test-modal" title="Testar importação de 1 produto nos 3 endpoints do Integrim (CISS Poder)" style="background: #f59e0b; color: #fff; border: none; font-weight: 600;">
+                <i class="fas fa-flask"></i> Testar 1 Produto (Integrim)
+            </button>
+        `;
 
         showLoading('Carregando conexões disponíveis...');
 
@@ -4077,6 +4389,14 @@ document.addEventListener('DOMContentLoaded', () => {
             e.preventDefault();
             e.stopPropagation();
             openSupplierTestModal(id, name || 'Dismatal');
+            return;
+        }
+
+        // 5.1. Testar Diagnóstico de 1 Produto no Integrim CISS Poder
+        if (action === 'open-integrim-test-modal') {
+            e.preventDefault();
+            e.stopPropagation();
+            openIntegrimSingleProductTestModal(sku || '');
             return;
         }
 
@@ -6276,6 +6596,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
 
                 <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <!-- Botão de Teste de 1 Produto (Temporário / Diagnóstico) -->
+                    <button class="btn" id="bi-btn-test-single-product" data-action="open-integrim-test-modal" title="Testar importação de 1 produto nos 3 endpoints do Integrim (CISS Poder)" style="padding: 0.45rem 0.85rem; height: 35px; font-size: 0.82rem; background: rgba(245, 158, 11, 0.15); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.4); font-weight: 600;">
+                        <i class="fas fa-flask"></i> Testar 1 Produto
+                    </button>
+
                     <!-- Botão Sincronizar Integrim -->
                     <button class="btn btn-primary" id="bi-btn-sync-integrim" title="Sincronizar dados em tempo real com Integrim CISS Poder" style="padding: 0.45rem 0.85rem; height: 35px; font-size: 0.82rem;">
                         <i class="fas fa-rotate"></i> Sincronizar Integrim
@@ -6303,6 +6628,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         document.getElementById('bi-estoque-btn-refresh')?.addEventListener('click', () => {
             reloadFn();
+        });
+
+        document.getElementById('bi-btn-test-single-product')?.addEventListener('click', () => {
+            openIntegrimSingleProductTestModal();
         });
 
         document.getElementById('bi-btn-sync-integrim')?.addEventListener('click', async () => {
@@ -6955,7 +7284,11 @@ document.addEventListener('DOMContentLoaded', () => {
         destroyBiCharts();
         mainTitle.textContent = 'Estoque - Análise Detalhada de Produtos';
         mainSubtitle.textContent = 'Consulta individual de SKUs, saldos por filial, cobertura e alertas de reposição';
-        headerActions.innerHTML = '';
+        headerActions.innerHTML = `
+            <button class="btn btn-warning" data-action="open-integrim-test-modal" title="Testar importação de 1 produto nos 3 endpoints do Integrim (CISS Poder)" style="background: #f59e0b; color: #fff; border: none; font-weight: 600;">
+                <i class="fas fa-flask"></i> Testar 1 Produto (Integrim)
+            </button>
+        `;
         showLoading('Carregando catálogo de produtos e saldos...');
 
         try {
@@ -7021,13 +7354,14 @@ document.addEventListener('DOMContentLoaded', () => {
                                         <th style="text-align: right;">Preço Venda</th>
                                         <th style="text-align: center;">Cobertura</th>
                                         <th style="text-align: center;">Status</th>
+                                        <th style="text-align: center; width: 60px;">Teste</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     ${products.length === 0 ? `
                                         <tr>
-                                            <td colspan="11" style="text-align: center; color: var(--color-text-offset); padding: 2.5rem;">
-                                                Nenhum produto encontrado com os filtros selecionados.
+                                            <td colspan="12" style="text-align: center; color: var(--color-text-offset); padding: 2.5rem;">
+                                                 Nenhum produto encontrado com os filtros selecionados.
                                             </td>
                                         </tr>
                                     ` : products.map(p => {
@@ -7049,6 +7383,11 @@ document.addEventListener('DOMContentLoaded', () => {
                                                 <td style="text-align: right; font-weight: 700;">${formatBRL(p.preco_venda)}</td>
                                                 <td style="text-align: center;">${p.dias_cobertura}d</td>
                                                 <td style="text-align: center;">${statusBadge}</td>
+                                                <td style="text-align: center;">
+                                                    <button type="button" class="card-action-btn" data-action="open-integrim-test-modal" data-sku="${p.idsubproduto}" title="Testar SKU ${p.idsubproduto} diretamente na API CISS">
+                                                        <i class="fas fa-flask" style="color: #f59e0b;"></i>
+                                                    </button>
+                                                </td>
                                             </tr>
                                         `;
                                     }).join('')}

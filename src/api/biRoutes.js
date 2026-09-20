@@ -127,7 +127,13 @@ export default (db) => {
     // 9. Sincronização ao Vivo com Integrim CISS Poder (CAD_PRODUTOS, SALDO_ESTOQUE, PRECOS_CUSTOS)
     router.post('/bi/stock/sync-integrim', async (req, res) => {
         try {
-            const { integrimSyncService } = await import('../services/integrimSyncService.js');
+            const {
+                syncIntegrimProducts,
+                syncIntegrimStockBalances,
+                syncIntegrimCostsAndPrices,
+                recalculateAbcAndCoverage
+            } = await import('../services/integrimSyncService.js');
+
             // Busca conexão ativa do CISS Poder
             const [erpConns] = await db.getPool().execute("SELECT * FROM erp_connections WHERE type = 'cisspoder' ORDER BY id DESC LIMIT 1");
             if (erpConns.length === 0) {
@@ -140,10 +146,10 @@ export default (db) => {
             }
 
             // Executa os 3 serviços sequencialmente
-            const resProd = await integrimSyncService.syncIntegrimProducts(connection, db);
-            const resSaldo = await integrimSyncService.syncIntegrimStockBalances(connection, db);
-            const resCustos = await integrimSyncService.syncIntegrimCostsAndPrices(connection, db);
-            await integrimSyncService.recalculateAbcAndCoverage(db);
+            const resProd = await syncIntegrimProducts(connection, db);
+            const resSaldo = await syncIntegrimStockBalances(connection, db);
+            const resCustos = await syncIntegrimCostsAndPrices(connection, db);
+            await recalculateAbcAndCoverage(db);
 
             res.json({
                 sucesso: true,
@@ -156,7 +162,40 @@ export default (db) => {
         }
     });
 
-    // 10. Seed de Demonstração Realista de Estoque
+    // 10. Teste Diagnóstico de 1 Produto no Integrim (Validação dos 3 Endpoints)
+    router.post('/bi/stock/test-single-product', async (req, res) => {
+        try {
+            const { testSyncSingleProduct } = await import('../services/integrimSyncService.js');
+            const { idsubproduto, codigo_barras } = req.body || {};
+
+            // Busca conexão ativa do CISS Poder
+            const [erpConns] = await db.getPool().execute("SELECT * FROM erp_connections WHERE type = 'cisspoder' ORDER BY id DESC LIMIT 1");
+            if (erpConns.length === 0) {
+                return res.status(400).json({
+                    sucesso: false,
+                    erro: 'Nenhuma conexão com CISS Poder cadastrada em Integrações > ERPs.',
+                    ajuda: 'Por favor, vá em Integrações > ERPs e cadastre a URL da API (ex: https://api.ciss.com.br), Usuário e Senha de acesso.'
+                });
+            }
+
+            const connection = erpConns[0];
+            if (typeof connection.credentials === 'string') {
+                connection.credentials = JSON.parse(connection.credentials);
+            }
+
+            const result = await testSyncSingleProduct(connection, db, { idsubproduto, codigo_barras });
+            res.json({ sucesso: true, ...result });
+        } catch (error) {
+            logger.error('[BiRoutes] Erro no teste de 1 produto com Integrim CISS:', error);
+            res.status(500).json({
+                sucesso: false,
+                erro: error.message,
+                detalhes: error.response?.data || null
+            });
+        }
+    });
+
+    // 11. Seed de Demonstração Realista de Estoque
     router.post('/bi/stock/seed-mock', async (req, res) => {
         try {
             const { seedRealisticEstoqueMockData } = await import('../services/integrimSyncService.js');
