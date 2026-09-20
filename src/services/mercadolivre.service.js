@@ -104,7 +104,8 @@ export function getAuthUrl(connection) {
         throw new Error('Client ID (App ID) e Redirect URI são obrigatórios para autenticação do Mercado Livre.');
     }
     const state = `connId=${connection.id}`;
-    return `${MELI_AUTH_BASE}/authorization?response_type=code&client_id=${creds.client_id}&redirect_uri=${encodeURIComponent(creds.redirect_uri)}&state=${state}`;
+    const scopes = 'read write offline_access';
+    return `${MELI_AUTH_BASE}/authorization?response_type=code&client_id=${creds.client_id}&redirect_uri=${encodeURIComponent(creds.redirect_uri)}&state=${state}&scope=${encodeURIComponent(scopes)}`;
 }
 
 /**
