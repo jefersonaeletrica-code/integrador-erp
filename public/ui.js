@@ -5850,32 +5850,31 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * TELA 1: POWER BI - VENDAS HOME (DASHBOARD PRINCIPAL)
      */
-    async function renderBiVendasHome() {
+    async function renderBiVendasHome(autoSeedAttempted = false) {
         destroyBiCharts();
-        mainTitle.textContent = 'A Elétrica - Power BI & Gestão';
-        mainSubtitle.textContent = 'Painel Executivo de Faturamento, Margem Líquida e Performance de Vendas';
+        mainTitle.textContent = 'A Elétrica - Visão Geral Executiva';
+        mainSubtitle.textContent = 'Acompanhamento de Vendas, Faturamento, Margem e Desempenho por Empresa';
         headerActions.innerHTML = `
-            <button class="btn btn-secondary" id="bi-seed-demo-btn" title="Recarregar Dados Demonstrativos CISS">
-                <i class="fas fa-database"></i> Recarregar Dados Mock
+            <button class="btn btn-secondary" id="bi-seed-btn" title="Recarregar Dados Demonstrativos">
+                <i class="fas fa-database"></i> Recarregar Dados CISS
             </button>
             <button class="btn btn-primary" onclick="window.print()">
-                <i class="fas fa-file-arrow-down"></i> Exportar Relatório
+                <i class="fas fa-file-arrow-down"></i> Exportar
             </button>
         `;
 
-        const seedDemoBtn = document.getElementById('bi-seed-demo-btn');
-        seedDemoBtn?.addEventListener('click', async () => {
-            showToast('Recarregando dados de demonstração do CISS BI...', 'info');
+        document.getElementById('bi-seed-btn')?.addEventListener('click', async () => {
+            showToast('Recarregando dados de demonstração CISS...', 'info');
             try {
                 await api('/api/bi/seed-mock', 'POST');
                 showToast('Dados de demonstração atualizados com sucesso!', 'success');
-                renderBiVendasHome();
+                renderBiVendasHome(true);
             } catch (err) {
-                showToast(`Erro ao gerar mock: ${err.message}`, 'error');
+                showToast(`Erro ao carregar dados de demonstração: ${err.message}`, 'error');
             }
         });
 
-        showLoading('Processando indicadores do Power BI...');
+        showLoading('Processando indicadores de faturamento...');
 
         try {
             // Buscar Empresas e Resumo
@@ -5886,11 +5885,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const companies = compRes.companies || [];
 
-            // Se banco estiver zerado, dispara mock automaticamente
-            if (!summaryRes || summaryRes.total_registros_base === 0) {
+            // Se banco estiver zerado, dispara mock automaticamente no máximo uma vez
+            if ((!summaryRes || summaryRes.total_registros_base === 0) && !autoSeedAttempted) {
                 try {
                     await api('/api/bi/seed-mock', 'POST');
-                    return renderBiVendasHome();
+                    return renderBiVendasHome(true);
                 } catch (e) {
                     console.error('Falha no auto-seed do BI:', e);
                 }
@@ -6674,7 +6673,7 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * TELA 6: POWER BI - ESTOQUE HOME
      */
-    async function renderBiEstoqueHome() {
+    async function renderBiEstoqueHome(autoSeedAttempted = false) {
         destroyBiCharts();
         mainTitle.textContent = 'A Elétrica - Estoque Home';
         mainSubtitle.textContent = 'Posição Física, Valorização de Estoque, Cobertura e Alertas de Ruptura';
@@ -6692,7 +6691,7 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 await api('/api/bi/stock/seed-mock', 'POST');
                 showToast('Dados de estoque atualizados!', 'success');
-                renderBiEstoqueHome();
+                renderBiEstoqueHome(true);
             } catch (e) {
                 showToast(`Erro: ${e.message}`, 'error');
             }
@@ -6708,11 +6707,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const companies = compRes.companies || [];
 
-            // Se estoque estiver vazio, popula automaticamente
-            if (!summaryRes || !summaryRes.kpis || summaryRes.kpis.mix_produtos === 0) {
+            // Se estoque estiver vazio, popula automaticamente no máximo uma vez
+            if ((!summaryRes || !summaryRes.kpis || summaryRes.kpis.mix_produtos === 0) && !autoSeedAttempted) {
                 try {
                     await api('/api/bi/stock/seed-mock', 'POST');
-                    return renderBiEstoqueHome();
+                    return renderBiEstoqueHome(true);
                 } catch (e) {
                     console.error('Falha no auto-seed do estoque:', e);
                 }

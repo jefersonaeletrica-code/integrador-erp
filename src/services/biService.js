@@ -422,7 +422,7 @@ function getValidCostColumn(tipoCusto = 'custo_medio_fiscal') {
  */
 export async function getBiEstoqueSummary(db, { empresa_id = null, tipo_custo = 'custo_medio_fiscal' }) {
     const pool = resolvePool(db);
-    const costCol = getValidCostColumn(tipoCusto);
+    const costCol = getValidCostColumn(tipo_custo);
 
     let whereClause = 'WHERE p.inativo = FALSE';
     const params = [];
