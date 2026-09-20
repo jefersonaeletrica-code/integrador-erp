@@ -482,3 +482,4 @@ export async function seedRealisticEstoqueMockData(db) {
     logger.info(`[IntegrimSync] Base de dados de Estoque demonstrativa gerada com ${totalItems} produtos.`);
     return { sucesso: true, count: totalItems };
 }
+
