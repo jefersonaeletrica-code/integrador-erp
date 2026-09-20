@@ -336,9 +336,7 @@ export const toolExecutors = {
     const pool = db.getPool();
     const [conns] = await pool.execute('SELECT * FROM marketplace_connections WHERE type = "mercadolivre" LIMIT 1');
     const conn = conns[0] || { site_id: 'MLB', credentials: {} };
-    if (typeof conn.credentials === 'string') {
-      try { conn.credentials = JSON.parse(conn.credentials); } catch(e) {}
-    }
+    conn.credentials = meliService.normalizeMeliCredentials(conn.credentials);
 
     const calcResult = await meliService.calculateItemFeesAndNet(conn, {
       id: args.item_id,
@@ -393,8 +391,7 @@ export const toolExecutors = {
     if (conns.length === 0) {
       throw new Error(`Conexão do Mercado Livre (ID ${localItem.connection_id}) não encontrada.`);
     }
-    const conn = conns[0];
-    if (typeof conn.credentials === 'string') conn.credentials = JSON.parse(conn.credentials);
+    const conn = { ...conns[0], credentials: meliService.normalizeMeliCredentials(conns[0].credentials) };
 
     const novoPreco = parseFloat(args.novo_preco);
     const precoAnterior = parseFloat(localItem.price);
@@ -448,8 +445,7 @@ export const toolExecutors = {
     if (conns.length === 0) {
       throw new Error(`Conexão do Mercado Livre não encontrada.`);
     }
-    const conn = conns[0];
-    if (typeof conn.credentials === 'string') conn.credentials = JSON.parse(conn.credentials);
+    const conn = { ...conns[0], credentials: meliService.normalizeMeliCredentials(conns[0].credentials) };
 
     const novoEstoque = parseInt(args.novo_estoque, 10);
     const estoqueAnterior = localItem.available_quantity;
@@ -481,8 +477,7 @@ export const toolExecutors = {
     if (conns.length === 0) {
       throw new Error(`Conexão do Mercado Livre não encontrada.`);
     }
-    const conn = conns[0];
-    if (typeof conn.credentials === 'string') conn.credentials = JSON.parse(conn.credentials);
+    const conn = { ...conns[0], credentials: meliService.normalizeMeliCredentials(conns[0].credentials) };
 
     const updates = {};
     if (args.novo_titulo) {
@@ -621,7 +616,7 @@ export const toolExecutors = {
     if (rows.length === 0) {
       return { erro: 'Nenhuma conexão ativa com o Mercado Livre encontrada.' };
     }
-    const connection = { ...rows[0], credentials: typeof rows[0].credentials === 'string' ? JSON.parse(rows[0].credentials) : rows[0].credentials };
+    const connection = { ...rows[0], credentials: meliService.normalizeMeliCredentials(rows[0].credentials) };
     return await meliService.getSellerOrders(connection, db, args);
   },
 
@@ -634,7 +629,7 @@ export const toolExecutors = {
     if (rows.length === 0) {
       return { erro: 'Nenhuma conexão ativa com o Mercado Livre encontrada.' };
     }
-    const connection = { ...rows[0], credentials: typeof rows[0].credentials === 'string' ? JSON.parse(rows[0].credentials) : rows[0].credentials };
+    const connection = { ...rows[0], credentials: meliService.normalizeMeliCredentials(rows[0].credentials) };
     return await meliService.getSellerReputation(connection, db);
   },
 
@@ -647,7 +642,7 @@ export const toolExecutors = {
     if (rows.length === 0) {
       return { erro: 'Nenhuma conexão ativa com o Mercado Livre encontrada.' };
     }
-    const connection = { ...rows[0], credentials: typeof rows[0].credentials === 'string' ? JSON.parse(rows[0].credentials) : rows[0].credentials };
+    const connection = { ...rows[0], credentials: meliService.normalizeMeliCredentials(rows[0].credentials) };
     return await meliService.getSellerPromotions(connection, db);
   },
 
@@ -660,7 +655,7 @@ export const toolExecutors = {
     if (rows.length === 0) {
       return { erro: 'Nenhuma conexão ativa com o Mercado Livre encontrada.' };
     }
-    const connection = { ...rows[0], credentials: typeof rows[0].credentials === 'string' ? JSON.parse(rows[0].credentials) : rows[0].credentials };
+    const connection = { ...rows[0], credentials: meliService.normalizeMeliCredentials(rows[0].credentials) };
     return await meliService.getProductAdsMetrics(connection, db);
   },
 
@@ -673,7 +668,7 @@ export const toolExecutors = {
     if (rows.length === 0) {
       return { erro: 'Nenhuma conexão ativa com o Mercado Livre encontrada.' };
     }
-    const connection = { ...rows[0], credentials: typeof rows[0].credentials === 'string' ? JSON.parse(rows[0].credentials) : rows[0].credentials };
+    const connection = { ...rows[0], credentials: meliService.normalizeMeliCredentials(rows[0].credentials) };
     return await meliService.getSellerQuestions(connection, db, args.status || 'UNANSWERED');
   },
 
@@ -689,7 +684,7 @@ export const toolExecutors = {
     if (rows.length === 0) {
       return { erro: 'Nenhuma conexão ativa com o Mercado Livre encontrada.' };
     }
-    const connection = { ...rows[0], credentials: typeof rows[0].credentials === 'string' ? JSON.parse(rows[0].credentials) : rows[0].credentials };
+    const connection = { ...rows[0], credentials: meliService.normalizeMeliCredentials(rows[0].credentials) };
     return await meliService.getItemHealthAndVisits(connection, db, args.item_id);
   },
 

@@ -105,10 +105,24 @@ export const initializeDatabase = async () => {
         id INT AUTO_INCREMENT PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         type VARCHAR(50) NOT NULL DEFAULT 'mercadolivre',
-        credentials JSON NOT NULL,
+        credentials LONGTEXT NOT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
+
+    // Migrações preventivas para garantir que colunas de credenciais e sessões suportem tokens grandes sem truncamento
+    try {
+      await connection.query(`ALTER TABLE marketplace_connections MODIFY COLUMN credentials LONGTEXT NOT NULL;`);
+    } catch (mcErr) {
+      // Ignora se tabela acabou de ser criada ou erro de compatibilidade
+    }
+    try {
+      await connection.query(`ALTER TABLE erp_connections MODIFY COLUMN credentials LONGTEXT NOT NULL;`);
+    } catch (ecErr) {}
+    try {
+      await connection.query(`ALTER TABLE supplier_connections MODIFY COLUMN credentials LONGTEXT NOT NULL;`);
+      await connection.query(`ALTER TABLE supplier_connections MODIFY COLUMN session_data LONGTEXT DEFAULT NULL;`);
+    } catch (scErr) {}
 
     await connection.query(`
       CREATE TABLE IF NOT EXISTS mercado_livre_anuncios (
@@ -393,8 +407,9 @@ export const ensureInitialized = () => {
 };
 
 // Helper para parsear JSON de forma segura, evitando que a aplicação quebre ou fique com strings aninhadas.
-export const safeJsonParse = (data) => {
-    if (data === null || data === undefined) return null;
+export const safeJsonParse = (data, defaultValue = null) => {
+    if (data === null || data === undefined) return defaultValue;
+    if (typeof data === 'object') return data;
     let result = data;
     while (typeof result === 'string') {
         try {
@@ -404,13 +419,13 @@ export const safeJsonParse = (data) => {
             } else if (typeof parsed === 'string') {
                 result = parsed;
             } else {
-                break;
+                return parsed;
             }
         } catch {
-            break;
+            return typeof result === 'object' && result !== null ? result : defaultValue;
         }
     }
-    return result;
+    return result || defaultValue;
 };
 
 export const readDb = async () => {
@@ -423,13 +438,13 @@ export const readDb = async () => {
     const [produtos] = await connection.query('SELECT * FROM produtos_importados');
 
     return {
-      connections: connections.map(c => ({...c, credentials: safeJsonParse(c.credentials) })),
+      connections: connections.map(c => ({...c, credentials: safeJsonParse(c.credentials, {}) })),
       supplierConnections: supplierConnections.map(c => ({
         ...c, 
-        credentials: safeJsonParse(c.credentials),
+        credentials: safeJsonParse(c.credentials, {}),
         // Garante que os dados da sessão também sejam parseados do JSON.
         // O campo no DB é 'session_data', mas o app usa 'cookies' internamente.
-        cookies: safeJsonParse(c.session_data)
+        cookies: safeJsonParse(c.session_data, null)
       })),
       produtos: produtos.map(p => ({ ...p, preco: parseFloat(p.preco) })) // Garante que o preço seja número
     };
@@ -446,18 +461,29 @@ export const updateSupplierConnection = async (connection) => {
   const conn = await getPool().getConnection();
   try {
     const { id, name, credentials, cookies: sessionData } = connection; // Renomeado para clareza
-    const credObj = safeJsonParse(credentials) || {};
-    await conn.execute(
-      'UPDATE supplier_connections SET name = ?, credentials = ?, session_data = ? WHERE id = ?',
-      [
-        name,
-        JSON.stringify(credObj),
-        sessionData ? (typeof sessionData === 'string' ? sessionData : JSON.stringify(sessionData)) : null,
-        id
-      ]
-    );
+    const credObj = safeJsonParse(credentials, {}) || {};
+    if (name) {
+      await conn.execute(
+        'UPDATE supplier_connections SET name = ?, credentials = ?, session_data = ? WHERE id = ?',
+        [
+          name,
+          JSON.stringify(credObj),
+          sessionData ? (typeof sessionData === 'string' ? sessionData : JSON.stringify(sessionData)) : null,
+          id
+        ]
+      );
+    } else {
+      await conn.execute(
+        'UPDATE supplier_connections SET credentials = ?, session_data = ? WHERE id = ?',
+        [
+          JSON.stringify(credObj),
+          sessionData ? (typeof sessionData === 'string' ? sessionData : JSON.stringify(sessionData)) : null,
+          id
+        ]
+      );
+    }
   } catch (error) {
-    console.error(`Erro ao atualizar a conexão de fornecedor (ID: ${connection.id}) no MySQL:`, error);
+    console.error(`Erro ao atualizar a conexão de fornecedor (ID: ${connection?.id}) no MySQL:`, error);
     throw error;
   } finally {
     conn.release();
@@ -469,18 +495,28 @@ export const updateErpConnection = async (connection) => {
   const conn = await getPool().getConnection();
   try {
     const { id, name, type, credentials } = connection;
-    const credObj = safeJsonParse(credentials) || {};
-    await conn.execute(
-      'UPDATE erp_connections SET name = ?, type = ?, credentials = ? WHERE id = ?',
-      [
-        name,
-        type,
-        JSON.stringify(credObj),
-        id
-      ]
-    );
+    const credObj = safeJsonParse(credentials, {}) || {};
+    if (name && type) {
+      await conn.execute(
+        'UPDATE erp_connections SET name = ?, type = ?, credentials = ? WHERE id = ?',
+        [
+          name,
+          type,
+          JSON.stringify(credObj),
+          id
+        ]
+      );
+    } else {
+      await conn.execute(
+        'UPDATE erp_connections SET credentials = ? WHERE id = ?',
+        [
+          JSON.stringify(credObj),
+          id
+        ]
+      );
+    }
   } catch (error) {
-    console.error(`Erro ao atualizar a conexão ERP (ID: ${connection.id}) no MySQL:`, error);
+    console.error(`Erro ao atualizar a conexão ERP (ID: ${connection?.id}) no MySQL:`, error);
     throw error;
   } finally {
     conn.release();
@@ -494,7 +530,7 @@ export const updateDb = async (data) => {
     // 1. Atualizar conexões de ERP
     if (data.connections && Array.isArray(data.connections)) {
       for (const conn of data.connections) {
-        const credObj = safeJsonParse(conn.credentials) || {};
+        const credObj = safeJsonParse(conn.credentials, {}) || {};
         await connection.execute(
           'UPDATE erp_connections SET name = ?, type = ?, credentials = ? WHERE id = ?',
           [conn.name, conn.type, JSON.stringify(credObj), conn.id]
@@ -505,7 +541,7 @@ export const updateDb = async (data) => {
     // 2. Atualizar conexões de Fornecedor
     if (data.supplierConnections && Array.isArray(data.supplierConnections)) {
       for (const conn of data.supplierConnections) {
-        const credObj = safeJsonParse(conn.credentials) || {};
+        const credObj = safeJsonParse(conn.credentials, {}) || {};
         await connection.execute(
           'UPDATE supplier_connections SET name = ?, credentials = ?, session_data = ? WHERE id = ?',
           [
@@ -530,18 +566,28 @@ export const updateMarketplaceConnection = async (connection) => {
   const conn = await getPool().getConnection();
   try {
     const { id, name, type = 'mercadolivre', credentials } = connection;
-    const credObj = safeJsonParse(credentials) || {};
-    await conn.execute(
-      'UPDATE marketplace_connections SET name = ?, type = ?, credentials = ? WHERE id = ?',
-      [
-        name,
-        type,
-        JSON.stringify(credObj),
-        id
-      ]
-    );
+    const credObj = safeJsonParse(credentials, {}) || {};
+    if (name) {
+      await conn.execute(
+        'UPDATE marketplace_connections SET name = ?, type = ?, credentials = ? WHERE id = ?',
+        [
+          name,
+          type,
+          JSON.stringify(credObj),
+          id
+        ]
+      );
+    } else {
+      await conn.execute(
+        'UPDATE marketplace_connections SET credentials = ? WHERE id = ?',
+        [
+          JSON.stringify(credObj),
+          id
+        ]
+      );
+    }
   } catch (error) {
-    console.error(`Erro ao atualizar a conexão de marketplace (ID: ${connection.id}) no MySQL:`, error);
+    console.error(`Erro ao atualizar a conexão de marketplace (ID: ${connection?.id}) no MySQL:`, error);
     throw error;
   } finally {
     conn.release();

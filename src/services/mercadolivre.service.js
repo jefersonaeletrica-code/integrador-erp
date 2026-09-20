@@ -50,6 +50,50 @@ export function normalizeMeliCredentials(credentials) {
 }
 
 /**
+ * Obtém o user_id do vendedor na conexão, consultando a API /users/me caso ainda não esteja salvo
+ * @param {object} connection - Conexão do Mercado Livre
+ * @param {object} db - Instância do banco de dados
+ * @returns {Promise<string|number|null>} User ID do vendedor
+ */
+export async function resolveSellerUserId(connection, db) {
+    const creds = normalizeMeliCredentials(connection.credentials);
+    connection.credentials = creds;
+
+    if (creds.user_id) return creds.user_id;
+
+    try {
+        const token = await ensureValidToken(connection, db);
+        const userRes = await meliAxios.get('/users/me', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (userRes.data?.id) {
+            const uid = userRes.data.id;
+            connection.credentials.user_id = uid;
+            if (userRes.data.nickname) connection.credentials.nickname = userRes.data.nickname;
+            if (userRes.data.site_id) connection.credentials.site_id = userRes.data.site_id;
+            if (userRes.data.email) connection.credentials.email = userRes.data.email;
+
+            // Salva de forma resiliente no banco
+            try {
+                if (db && typeof db.updateMarketplaceConnection === 'function') {
+                    await db.updateMarketplaceConnection(connection);
+                } else {
+                    const dbModule = await import('../database/db.mysql.js');
+                    await dbModule.updateMarketplaceConnection(connection);
+                }
+                logger.info(`[MercadoLivreService] User ID (${uid}) e apelido (@${userRes.data.nickname || uid}) obtidos via /users/me e salvos no banco para conexão ID ${connection.id}.`);
+            } catch (saveErr) {
+                logger.warn(`[MercadoLivreService] Aviso ao persistir user_id: ${saveErr.message}`);
+            }
+            return uid;
+        }
+    } catch (uErr) {
+        logger.warn(`[MercadoLivreService] Não foi possível obter user_id do vendedor via /users/me: ${uErr.message}`);
+    }
+    return null;
+}
+
+/**
  * Gera a URL de autorização OAuth 2.0 para o Mercado Livre
  * @param {object} connection - Conexão do Mercado Livre
  * @returns {string} URL para redirecionar o usuário
@@ -243,10 +287,8 @@ export function isMeliTokenError(error) {
     const msg = String(error.response?.data?.message || error.response?.data?.error_description || error.response?.data?.error || error.message || '').toLowerCase();
 
     if (status === 401) return true;
-    if (status === 400 || status === 403) {
-        if (msg.includes('token') || msg.includes('unauthorized') || msg.includes('access_token') || msg.includes('invalid access token') || msg.includes('expired') || msg.includes('invalid_grant')) {
-            return true;
-        }
+    if (msg.includes('token') || msg.includes('unauthorized') || msg.includes('access_token') || msg.includes('invalid access token') || msg.includes('expired') || msg.includes('invalid_grant') || msg.includes('invalid_token')) {
+        return true;
     }
     return false;
 }
@@ -1892,9 +1934,9 @@ export async function syncAllItemsFeesAndNet(db, connectionId = null) {
  * @returns {Promise<object>}
  */
 export async function getSellerOrders(connection, db, options = {}) {
-    const userId = connection.credentials?.user_id;
+    const userId = await resolveSellerUserId(connection, db);
     if (!userId) {
-        throw new Error('User ID do vendedor não encontrado na conexão.');
+        throw new Error('User ID do vendedor não encontrado na conexão. Realize a autorização na aba Mercado Livre > Contas ML.');
     }
 
     const status = options.status || null;
@@ -2095,9 +2137,9 @@ export async function getSellerOrders(connection, db, options = {}) {
  * @returns {Promise<object>}
  */
 export async function getSellerReputation(connection, db) {
-    const userId = connection.credentials?.user_id;
+    const userId = await resolveSellerUserId(connection, db);
     if (!userId) {
-        throw new Error('User ID do vendedor não encontrado na conexão.');
+        throw new Error('User ID do vendedor não encontrado na conexão. Realize a autorização na aba Mercado Livre > Contas ML.');
     }
 
     return await executeMeliRequest(connection, db, async (token) => {
@@ -2235,9 +2277,9 @@ export async function getProductAdsMetrics(connection, db) {
  * @returns {Promise<object>}
  */
 export async function getSellerQuestions(connection, db, status = 'UNANSWERED') {
-    const userId = connection.credentials?.user_id;
+    const userId = await resolveSellerUserId(connection, db);
     if (!userId) {
-        throw new Error('User ID do vendedor não encontrado na conexão.');
+        throw new Error('User ID do vendedor não encontrado na conexão. Realize a autorização na aba Mercado Livre > Contas ML.');
     }
 
     return await executeMeliRequest(connection, db, async (token) => {

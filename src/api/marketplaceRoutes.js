@@ -29,7 +29,7 @@ export default (db) => {
         const pool = db.getPool();
         const [rows] = await pool.execute('SELECT * FROM marketplace_connections WHERE id = ?', [id]);
         if (!rows[0]) return null;
-        return { ...rows[0], credentials: safeJsonParse(rows[0].credentials) };
+        return { ...rows[0], credentials: meliService.normalizeMeliCredentials(rows[0].credentials) };
     };
 
     // Helper para encontrar conexão ERP por ID
@@ -235,11 +235,13 @@ export default (db) => {
             if (!connection) {
                 return res.status(404).json({ sucesso: false, erro: 'Conexão de Marketplace não encontrada.' });
             }
-            await meliService.refreshToken(connection, db);
+            const newAccessToken = await meliService.refreshToken(connection, db);
             res.json({ 
                 sucesso: true, 
                 mensagem: 'Token de acesso do Mercado Livre renovado e salvo com sucesso!',
-                expires_at: connection.credentials?.expires_at
+                nickname: connection.credentials?.nickname,
+                expires_at: connection.credentials?.expires_at,
+                token_preview: newAccessToken ? `${newAccessToken.substring(0, 10)}...` : null
             });
         } catch (err) {
             logger.error(`[MarketplaceRoutes] Falha ao renovar token para conexão ${id}: ${err.message}`);
