@@ -497,7 +497,79 @@ Regras de atuação:
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
-    console.log('Tabelas do Módulo Power BI prontas.');
+    // 5. Produtos e Estrutura Mercadológica (CAD_PRODUTOS do Integrim)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS bi_produtos (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        idproduto INT NOT NULL,
+        idsubproduto INT NOT NULL UNIQUE,
+        codigo_barras VARCHAR(50) DEFAULT NULL,
+        codigo_barras_cx VARCHAR(50) DEFAULT NULL,
+        descricao VARCHAR(255) NOT NULL,
+        descricao_resumida VARCHAR(100) DEFAULT NULL,
+        marca VARCHAR(100) DEFAULT NULL,
+        id_marca INT DEFAULT NULL,
+        fornecedor_principal VARCHAR(150) DEFAULT NULL,
+        id_fornecedor INT DEFAULT NULL,
+        divisao VARCHAR(100) DEFAULT NULL,
+        id_divisao INT DEFAULT NULL,
+        secao VARCHAR(100) DEFAULT NULL,
+        id_secao INT DEFAULT NULL,
+        grupo VARCHAR(100) DEFAULT NULL,
+        id_grupo INT DEFAULT NULL,
+        subgrupo VARCHAR(100) DEFAULT NULL,
+        id_subgrupo INT DEFAULT NULL,
+        ncm VARCHAR(20) DEFAULT NULL,
+        unidade_medida VARCHAR(20) DEFAULT 'UN',
+        peso_bruto DECIMAL(10,3) DEFAULT NULL,
+        peso_liquido DECIMAL(10,3) DEFAULT NULL,
+        bloqueia_venda BOOLEAN NOT NULL DEFAULT FALSE,
+        inativo BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_produto_sub (idproduto, idsubproduto),
+        INDEX idx_marca (marca),
+        INDEX idx_fornecedor (fornecedor_principal),
+        INDEX idx_grupo (grupo),
+        INDEX idx_subgrupo (subgrupo),
+        INDEX idx_cod_barras (codigo_barras)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 6. Saldos de Estoque e Custos por Empresa/Filial (PRODUTOS_SALDO_ESTOQUE_EMPRESA & PRECOS_CUSTOS_PRODUTOS_EMPRESA)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS bi_estoque_saldos (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        empresa_id INT NOT NULL,
+        idproduto INT NOT NULL,
+        idsubproduto INT NOT NULL,
+        id_local_estoque INT DEFAULT 1,
+        local_estoque VARCHAR(100) DEFAULT 'Geral',
+        saldo_atual DECIMAL(15,3) NOT NULL DEFAULT 0.000,
+        saldo_reserva DECIMAL(15,3) NOT NULL DEFAULT 0.000,
+        saldo_disponivel DECIMAL(15,3) NOT NULL DEFAULT 0.000,
+        custo_medio DECIMAL(15,4) NOT NULL DEFAULT 0.0000,
+        custo_medio_fiscal DECIMAL(15,4) NOT NULL DEFAULT 0.0000,
+        custo_gerencial DECIMAL(15,4) NOT NULL DEFAULT 0.0000,
+        custo_reposicao DECIMAL(15,4) NOT NULL DEFAULT 0.0000,
+        custo_nota_fiscal DECIMAL(15,4) NOT NULL DEFAULT 0.0000,
+        preco_venda_varejo DECIMAL(15,4) NOT NULL DEFAULT 0.0000,
+        preco_promocao_varejo DECIMAL(15,4) NOT NULL DEFAULT 0.0000,
+        preco_venda_atacado DECIMAL(15,4) NOT NULL DEFAULT 0.0000,
+        estoque_minimo DECIMAL(15,3) NOT NULL DEFAULT 0.000,
+        estoque_maximo DECIMAL(15,3) NOT NULL DEFAULT 0.000,
+        media_venda_diaria DECIMAL(15,3) NOT NULL DEFAULT 0.000,
+        dias_cobertura INT NOT NULL DEFAULT 0,
+        curva_abc VARCHAR(2) NOT NULL DEFAULT 'C',
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_empresa_subprod_local (empresa_id, idsubproduto, id_local_estoque),
+        INDEX idx_empresa_saldo (empresa_id, saldo_disponivel),
+        INDEX idx_curva_abc (curva_abc),
+        INDEX idx_subprod (idsubproduto)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    console.log('Tabelas do Módulo Power BI (Vendas, Estoque e Produtos) prontas.');
     console.log('Banco de dados MySQL pronto.');
   } finally {
     connection.release();

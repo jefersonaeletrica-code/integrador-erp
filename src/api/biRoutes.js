@@ -59,13 +59,111 @@ export default (db) => {
         }
     });
 
-    // 5. Seed / Gerar Dados Realistas de Demonstração
+    // 5. Seed / Gerar Dados Realistas de Demonstração (Vendas)
     router.post('/bi/seed-mock', async (req, res) => {
         try {
             const result = await biService.seedRealisticBiMockData(db);
             res.json({ sucesso: true, ...result });
         } catch (error) {
             logger.error('[BiRoutes] Erro ao gerar dados de mock para o BI:', error);
+            res.status(500).json({ sucesso: false, erro: error.message });
+        }
+    });
+
+    // =========================================================================
+    // ROTAS DO POWER BI - ESTOQUE & PRODUTOS
+    // =========================================================================
+
+    // 6. Resumo Geral de Estoque (5 KPIs + Gráficos Empresa, Estrutura e Fornecedores)
+    router.get('/bi/stock/summary', async (req, res) => {
+        try {
+            const { empresa_id, tipo_custo } = req.query;
+            const summary = await biService.getBiEstoqueSummary(db, {
+                empresa_id,
+                tipo_custo: tipo_custo || 'custo_medio_fiscal'
+            });
+            res.json({ sucesso: true, ...summary });
+        } catch (error) {
+            logger.error('[BiRoutes] Erro ao buscar resumo de estoque do BI:', error);
+            res.status(500).json({ sucesso: false, erro: error.message });
+        }
+    });
+
+    // 7. Curva ABC de Estoque (Pareto, Donuts e Tabela de 5 Custos)
+    router.get('/bi/stock/curva-abc', async (req, res) => {
+        try {
+            const { empresa_id, tipo_custo, agrupador } = req.query;
+            const data = await biService.getBiEstoqueCurvaABC(db, {
+                empresa_id,
+                tipo_custo: tipo_custo || 'custo_medio_fiscal',
+                agrupador: agrupador || 'subgrupo'
+            });
+            res.json({ sucesso: true, ...data });
+        } catch (error) {
+            logger.error('[BiRoutes] Erro ao buscar curva ABC de estoque:', error);
+            res.status(500).json({ sucesso: false, erro: error.message });
+        }
+    });
+
+    // 8. Tabela de Produtos e Posição de Estoque Detalhada
+    router.get('/bi/stock/products', async (req, res) => {
+        try {
+            const { empresa_id, busca, curva_abc, situacao, page, limit } = req.query;
+            const data = await biService.getBiEstoqueProducts(db, {
+                empresa_id,
+                busca,
+                curva_abc,
+                situacao,
+                page: page || 1,
+                limit: limit || 50
+            });
+            res.json({ sucesso: true, ...data });
+        } catch (error) {
+            logger.error('[BiRoutes] Erro ao buscar produtos de estoque:', error);
+            res.status(500).json({ sucesso: false, erro: error.message });
+        }
+    });
+
+    // 9. Sincronização ao Vivo com Integrim CISS Poder (CAD_PRODUTOS, SALDO_ESTOQUE, PRECOS_CUSTOS)
+    router.post('/bi/stock/sync-integrim', async (req, res) => {
+        try {
+            const { integrimSyncService } = await import('../services/integrimSyncService.js');
+            // Busca conexão ativa do CISS Poder
+            const [erpConns] = await db.getPool().execute("SELECT * FROM erp_connections WHERE type = 'cisspoder' ORDER BY id DESC LIMIT 1");
+            if (erpConns.length === 0) {
+                return res.status(400).json({ sucesso: false, erro: 'Nenhuma conexão com CISS Poder cadastrada em Integrações > ERPs.' });
+            }
+
+            const connection = erpConns[0];
+            if (typeof connection.credentials === 'string') {
+                connection.credentials = JSON.parse(connection.credentials);
+            }
+
+            // Executa os 3 serviços sequencialmente
+            const resProd = await integrimSyncService.syncIntegrimProducts(connection, db);
+            const resSaldo = await integrimSyncService.syncIntegrimStockBalances(connection, db);
+            const resCustos = await integrimSyncService.syncIntegrimCostsAndPrices(connection, db);
+            await integrimSyncService.recalculateAbcAndCoverage(db);
+
+            res.json({
+                sucesso: true,
+                mensagem: 'Sincronização com Integrim CISS Poder concluída com sucesso!',
+                detalhes: { produtos: resProd.total, saldos: resSaldo.total, custos: resCustos.total }
+            });
+        } catch (error) {
+            logger.error('[BiRoutes] Erro na sincronização com Integrim CISS Poder:', error);
+            res.status(500).json({ sucesso: false, erro: error.message });
+        }
+    });
+
+    // 10. Seed de Demonstração Realista de Estoque
+    router.post('/bi/stock/seed-mock', async (req, res) => {
+        try {
+            const { seedRealisticEstoqueMockData } = await import('../services/integrimSyncService.js');
+            const result = await seedRealisticEstoqueMockData(db);
+            res.json({ sucesso: true, ...result });
+        } catch (error) {
+            logger.error('[BiRoutes] Erro ao gerar dados de mock de estoque:', error);
             res.status(500).json({ sucesso: false, erro: error.message });
         }
     });

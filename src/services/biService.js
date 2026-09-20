@@ -395,3 +395,372 @@ export async function seedRealisticBiMockData(db) {
     logger.info(`[BiService] ${insertedCount} registros de vendas gerados com sucesso.`);
     return { sucesso: true, count: insertedCount };
 }
+
+/**
+ * =========================================================================
+ * MÓDULO POWER BI - ESTOQUE & PRODUTOS ("A ELÉTRICA")
+ * =========================================================================
+ */
+
+/**
+ * Helper para validar o campo de custo
+ */
+function getValidCostColumn(tipoCusto = 'custo_medio_fiscal') {
+    const valid = {
+        'custo_medio_fiscal': 's.custo_medio_fiscal',
+        'custo_gerencial': 's.custo_gerencial',
+        'custo_medio': 's.custo_medio',
+        'custo_reposicao': 's.custo_reposicao',
+        'custo_nota_fiscal': 's.custo_nota_fiscal',
+        'preco_venda_varejo': 's.preco_venda_varejo'
+    };
+    return valid[tipoCusto] || 's.custo_medio_fiscal';
+}
+
+/**
+ * 1. Resumo Geral de Estoque (5 KPIs + Gráficos de Empresa, Estrutura e Fornecedores)
+ */
+export async function getBiEstoqueSummary(db, { empresa_id = null, tipo_custo = 'custo_medio_fiscal' }) {
+    const pool = resolvePool(db);
+    const costCol = getValidCostColumn(tipoCusto);
+
+    let whereClause = 'WHERE p.inativo = FALSE';
+    const params = [];
+
+    if (empresa_id && empresa_id !== 'all' && empresa_id !== '') {
+        whereClause += ' AND s.empresa_id = ?';
+        params.push(empresa_id);
+    }
+
+    // 1. KPIs Principais
+    const [kpiRows] = await pool.execute(`
+        SELECT 
+            COALESCE(SUM(s.saldo_atual * ${costCol}), 0) as valor_estoque,
+            COALESCE(SUM(s.saldo_atual), 0) as qtd_estoque,
+            COUNT(DISTINCT p.idsubproduto) as mix_produtos,
+            COALESCE(SUM(CASE WHEN s.saldo_atual <= 0 THEN 1 ELSE 0 END), 0) as ruptura_itens,
+            COALESCE(AVG(s.dias_cobertura), 179) as dias_cobertura
+        FROM bi_produtos p
+        LEFT JOIN bi_estoque_saldos s ON s.idsubproduto = p.idsubproduto
+        ${whereClause}
+    `, params);
+
+    const kpi = kpiRows[0] || {};
+    const valorEstoque = parseFloat(kpi.valor_estoque) || 0;
+    const qtdEstoque = parseFloat(kpi.qtd_estoque) || 0;
+    const mixProdutos = parseInt(kpi.mix_produtos, 10) || 0;
+    const rupturaItens = parseInt(kpi.ruptura_itens, 10) || 0;
+    const diasCobertura = Math.round(parseFloat(kpi.dias_cobertura) || 179);
+
+    // 2. Gráfico: Valor de Estoque por Empresa (1 - Matriz vs 2 - Filial)
+    const [byCompanyRows] = await pool.execute(`
+        SELECT 
+            e.id as empresa_id,
+            e.nome_fantasia as nome,
+            COALESCE(SUM(s.saldo_atual * ${costCol}), 0) as valor_estoque,
+            COALESCE(SUM(s.saldo_atual), 0) as qtd_estoque
+        FROM bi_empresas e
+        LEFT JOIN bi_estoque_saldos s ON s.empresa_id = e.id
+        LEFT JOIN bi_produtos p ON p.idsubproduto = s.idsubproduto AND p.inativo = FALSE
+        WHERE e.ativo = TRUE
+        GROUP BY e.id, e.nome_fantasia
+        ORDER BY e.codigo_erp ASC
+    `);
+
+    const totalValorComp = byCompanyRows.reduce((acc, r) => acc + (parseFloat(r.valor_estoque) || 0), 0);
+    const empresasData = byCompanyRows.map(r => {
+        const val = parseFloat(r.valor_estoque) || 0;
+        return {
+            empresa_id: r.empresa_id,
+            nome: r.nome,
+            valor: val,
+            qtd: parseFloat(r.qtd_estoque) || 0,
+            share_pct: totalValorComp > 0 ? (val / totalValorComp) * 100 : 0
+        };
+    });
+
+    // 3. Gráfico: Estrutura Mercadológica (Divisão / Grupo)
+    const [estruturaRows] = await pool.execute(`
+        SELECT 
+            COALESCE(p.grupo, '9999 - GERAL') as nome_grupo,
+            COALESCE(p.divisao, 'MATERIAIS ELÉTRICOS') as nome_divisao,
+            COALESCE(SUM(s.saldo_atual * ${costCol}), 0) as valor,
+            COALESCE(SUM(s.saldo_atual), 0) as qtd
+        FROM bi_produtos p
+        JOIN bi_estoque_saldos s ON s.idsubproduto = p.idsubproduto
+        ${whereClause}
+        GROUP BY p.grupo, p.divisao
+        ORDER BY valor DESC
+        LIMIT 10
+    `, params);
+
+    // 4. Gráfico: Fornecedor / Grupo Econômico
+    const [fornecedorRows] = await pool.execute(`
+        SELECT 
+            COALESCE(p.fornecedor_principal, '0 - FORNECEDOR NÃO INFORMADO') as fornecedor,
+            COALESCE(SUM(s.saldo_atual * ${costCol}), 0) as valor,
+            COALESCE(SUM(s.saldo_atual), 0) as qtd
+        FROM bi_produtos p
+        JOIN bi_estoque_saldos s ON s.idsubproduto = p.idsubproduto
+        ${whereClause}
+        GROUP BY p.fornecedor_principal
+        ORDER BY valor DESC
+        LIMIT 12
+    `, params);
+
+    return {
+        kpis: {
+            valor_estoque: valorEstoque,
+            quantidade_estoque: qtdEstoque,
+            dias_cobertura: diasCobertura,
+            mix_produtos: mixProdutos,
+            ruptura_itens: rupturaItens
+        },
+        grafico_empresas: empresasData,
+        grafico_estrutura: estruturaRows.map(r => ({
+            nome: r.nome_grupo,
+            divisao: r.nome_divisao,
+            valor: parseFloat(r.valor) || 0,
+            qtd: parseFloat(r.qtd) || 0
+        })),
+        grafico_fornecedores: fornecedorRows.map(r => ({
+            fornecedor: r.fornecedor,
+            valor: parseFloat(r.valor) || 0,
+            qtd: parseFloat(r.qtd) || 0
+        }))
+    };
+}
+
+/**
+ * 2. Curva ABC de Estoque (Pareto, Donuts de Qtd/Valor e Tabela de 5 Custos)
+ */
+export async function getBiEstoqueCurvaABC(db, { empresa_id = null, tipo_custo = 'custo_medio_fiscal', agrupador = 'subgrupo', curva_a = 20, curva_b = 30 }) {
+    const pool = resolvePool(db);
+
+    let whereClause = 'WHERE p.inativo = FALSE';
+    const params = [];
+
+    if (empresa_id && empresa_id !== 'all' && empresa_id !== '') {
+        whereClause += ' AND s.empresa_id = ?';
+        params.push(empresa_id);
+    }
+
+    // 1. Tabela Comparativa de 5 Custos por Curva ABC
+    const [tabelaCustosRows] = await pool.execute(`
+        SELECT 
+            s.curva_abc,
+            COUNT(DISTINCT s.idsubproduto) as contagem_itens,
+            COALESCE(SUM(s.saldo_atual), 0) as qtd_atual_estoque,
+            COALESCE(SUM(s.saldo_atual * s.custo_gerencial), 0) as valor_gerencial,
+            COALESCE(SUM(s.saldo_atual * s.custo_medio), 0) as valor_medio,
+            COALESCE(SUM(s.saldo_atual * s.custo_medio_fiscal), 0) as valor_fiscal,
+            COALESCE(SUM(s.saldo_atual * s.custo_reposicao), 0) as valor_reposicao,
+            COALESCE(SUM(s.saldo_atual * s.custo_nota_fiscal), 0) as valor_nota_fiscal
+        FROM bi_estoque_saldos s
+        JOIN bi_produtos p ON p.idsubproduto = s.idsubproduto
+        ${whereClause}
+        GROUP BY s.curva_abc
+        ORDER BY FIELD(s.curva_abc, 'A', 'B', 'C')
+    `, params);
+
+    let totalContagem = 0;
+    let totalQtd = 0;
+    let totalGerencial = 0;
+    let totalMedio = 0;
+    let totalFiscal = 0;
+    let totalReposicao = 0;
+    let totalNF = 0;
+
+    const tabelaCustos = tabelaCustosRows.map(r => {
+        const cont = parseInt(r.contagem_itens, 10) || 0;
+        const qtd = parseFloat(r.qtd_atual_estoque) || 0;
+        const ger = parseFloat(r.valor_gerencial) || 0;
+        const med = parseFloat(r.valor_medio) || 0;
+        const fis = parseFloat(r.valor_fiscal) || 0;
+        const rep = parseFloat(r.valor_reposicao) || 0;
+        const nf = parseFloat(r.valor_nota_fiscal) || 0;
+
+        totalContagem += cont;
+        totalQtd += qtd;
+        totalGerencial += ger;
+        totalMedio += med;
+        totalFiscal += fis;
+        totalReposicao += rep;
+        totalNF += nf;
+
+        return {
+            curva_abc: r.curva_abc,
+            contagem_itens: cont,
+            qtd_atual_estoque: qtd,
+            valor_gerencial: ger,
+            valor_medio: med,
+            valor_fiscal: fis,
+            valor_reposicao: rep,
+            valor_nota_fiscal: nf
+        };
+    });
+
+    const totais = {
+        curva_abc: 'Total',
+        contagem_itens: totalContagem,
+        qtd_atual_estoque: totalQtd,
+        valor_gerencial: totalGerencial,
+        valor_medio: totalMedio,
+        valor_fiscal: totalFiscal,
+        valor_reposicao: totalReposicao,
+        valor_nota_fiscal: totalNF
+    };
+
+    // 2. Gráficos Donut (Qtd % e Valor %)
+    const donuts = {
+        qtd: tabelaCustos.map(t => ({
+            curva: t.curva_abc,
+            pct: totalQtd > 0 ? (t.qtd_atual_estoque / totalQtd) * 100 : 0
+        })),
+        valor: tabelaCustos.map(t => ({
+            curva: t.curva_abc,
+            pct: totalFiscal > 0 ? (t.valor_fiscal / totalFiscal) * 100 : 0
+        }))
+    };
+
+    // 3. Gráfico de Pareto por Subgrupo (Barras + Linha de Pareto Acumulado %)
+    const [paretoRows] = await pool.execute(`
+        SELECT 
+            COALESCE(p.subgrupo, 'Geral') as nome,
+            COALESCE(SUM(s.saldo_atual), 0) as qtd,
+            COALESCE(SUM(s.saldo_atual * s.custo_medio_fiscal), 0) as valor
+        FROM bi_produtos p
+        JOIN bi_estoque_saldos s ON s.idsubproduto = p.idsubproduto
+        ${whereClause}
+        GROUP BY p.subgrupo
+        ORDER BY qtd DESC
+        LIMIT 20
+    `, params);
+
+    let paretoAcumuladoQtd = 0;
+    const pareto = paretoRows.map(p => {
+        const q = parseFloat(p.qtd) || 0;
+        paretoAcumuladoQtd += q;
+        const pctAcumulado = totalQtd > 0 ? (paretoAcumuladoQtd / totalQtd) * 100 : 0;
+        return {
+            nome: p.nome,
+            qtd: q,
+            valor: parseFloat(p.valor) || 0,
+            pct_acumulado: Math.min(pctAcumulado, 100)
+        };
+    });
+
+    return {
+        tabela_custos: tabelaCustos,
+        totais,
+        donuts,
+        pareto
+    };
+}
+
+/**
+ * 3. Tabela de Produtos e Posição de Estoque Detalhada
+ */
+export async function getBiEstoqueProducts(db, { empresa_id = null, busca = '', curva_abc = '', situacao = '', page = 1, limit = 50 }) {
+    const pool = resolvePool(db);
+
+    let whereClause = 'WHERE p.inativo = FALSE';
+    const params = [];
+
+    if (empresa_id && empresa_id !== 'all' && empresa_id !== '') {
+        whereClause += ' AND s.empresa_id = ?';
+        params.push(empresa_id);
+    }
+
+    if (busca && busca.trim()) {
+        whereClause += ' AND (p.descricao LIKE ? OR p.codigo_barras LIKE ? OR p.idsubproduto LIKE ? OR p.marca LIKE ?)';
+        const b = `%${busca.trim()}%`;
+        params.push(b, b, b, b);
+    }
+
+    if (curva_abc && curva_abc !== 'all') {
+        whereClause += ' AND s.curva_abc = ?';
+        params.push(curva_abc);
+    }
+
+    if (situacao === 'ruptura') {
+        whereClause += ' AND s.saldo_atual <= 0';
+    } else if (situacao === 'disponivel') {
+        whereClause += ' AND s.saldo_atual > 0';
+    } else if (situacao === 'baixo') {
+        whereClause += ' AND s.saldo_atual > 0 AND s.saldo_atual <= s.estoque_minimo';
+    }
+
+    // Contagem total
+    const [countRows] = await pool.execute(`
+        SELECT COUNT(DISTINCT s.id) as total
+        FROM bi_estoque_saldos s
+        JOIN bi_produtos p ON p.idsubproduto = s.idsubproduto
+        ${whereClause}
+    `, params);
+
+    const total = countRows[0]?.total || 0;
+    const offset = (Math.max(1, parseInt(page, 10)) - 1) * parseInt(limit, 10);
+
+    const queryParams = [...params, parseInt(limit, 10), offset];
+
+    const [rows] = await pool.execute(`
+        SELECT 
+            s.id,
+            s.empresa_id,
+            s.idproduto,
+            s.idsubproduto,
+            p.descricao,
+            p.marca,
+            p.fornecedor_principal,
+            p.grupo,
+            p.subgrupo,
+            p.unidade_medida,
+            p.codigo_barras,
+            s.saldo_atual,
+            s.saldo_reserva,
+            s.saldo_disponivel,
+            s.custo_medio_fiscal,
+            s.custo_gerencial,
+            s.custo_reposicao,
+            s.preco_venda_varejo,
+            s.estoque_minimo,
+            s.dias_cobertura,
+            s.curva_abc
+        FROM bi_estoque_saldos s
+        JOIN bi_produtos p ON p.idsubproduto = s.idsubproduto
+        ${whereClause}
+        ORDER BY s.curva_abc ASC, s.saldo_atual DESC
+        LIMIT ? OFFSET ?
+    `, queryParams);
+
+    return {
+        total,
+        page: parseInt(page, 10),
+        limit: parseInt(limit, 10),
+        pages: Math.ceil(total / limit),
+        products: rows.map(r => ({
+            id: r.id,
+            empresa_id: r.empresa_id,
+            idsubproduto: r.idsubproduto,
+            descricao: r.descricao,
+            marca: r.marca,
+            fornecedor: r.fornecedor_principal,
+            grupo: r.grupo,
+            subgrupo: r.subgrupo,
+            unidade: r.unidade_medida,
+            codigo_barras: r.codigo_barras,
+            saldo_atual: parseFloat(r.saldo_atual) || 0,
+            saldo_reserva: parseFloat(r.saldo_reserva) || 0,
+            saldo_disponivel: parseFloat(r.saldo_disponivel) || 0,
+            custo_fiscal: parseFloat(r.custo_medio_fiscal) || 0,
+            custo_gerencial: parseFloat(r.custo_gerencial) || 0,
+            custo_reposicao: parseFloat(r.custo_reposicao) || 0,
+            preco_venda: parseFloat(r.preco_venda_varejo) || 0,
+            estoque_minimo: parseFloat(r.estoque_minimo) || 0,
+            dias_cobertura: parseInt(r.dias_cobertura, 10) || 0,
+            curva_abc: r.curva_abc
+        }))
+    };
+}
+

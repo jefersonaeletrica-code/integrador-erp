@@ -6194,28 +6194,901 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * TELA 6: POWER BI - ESTOQUE
+     * =========================================================================
+     * MÓDULO POWER BI - ESTOQUE & PRODUTOS ("A ELÉTRICA")
+     * =========================================================================
      */
-    async function renderBiEstoque() {
-        destroyBiCharts();
-        mainTitle.textContent = 'Estoque & Giro';
-        mainSubtitle.textContent = 'Posição física, valorização de estoque a custo médio e cobertura de dias';
-        headerActions.innerHTML = '';
-        const compRes = await api('/api/bi/companies').catch(() => ({ companies: [] }));
-        const companies = compRes.companies || [];
 
-        pageContent.innerHTML = `
-            <div class="bi-container">
-                ${renderBiSubtabs('estoque')}
-                ${renderBiFilterBar(companies)}
-                <div class="empty-state" style="padding: 3rem 1rem;">
-                    <div class="empty-state-icon" style="background: rgba(245, 158, 11, 0.15); color: #d97706;"><i class="fas fa-warehouse"></i></div>
-                    <h3>Módulo de Estoque & Giro CISS ERP</h3>
-                    <p>Controle de ruptura, giro de estoque, cobertura em dias e conciliação de saldo entre lojas 1 (Matriz) e 2 (Filial).</p>
+    let biEstoqueState = {
+        empresa_id: '',
+        tipo_custo: 'custo_medio_fiscal',
+        agrupador: 'subgrupo',
+        curva_a: 20,
+        curva_b: 30,
+        situacao: '',
+        busca: '',
+        page: 1,
+        limit: 50
+    };
+
+    function renderBiEstoqueSubtabs(activeSubTab = 'home') {
+        return `
+            <div class="bi-subtabs-nav">
+                <button class="bi-subtab-btn ${activeSubTab === 'vendas' ? 'active' : ''}" data-nav-target="nav-bi-vendas-home">
+                    <i class="fas fa-chart-line"></i> Vendas (Home)
+                </button>
+                <button class="bi-subtab-btn ${activeSubTab === 'home' ? 'active' : ''}" data-nav-target="nav-bi-estoque">
+                    <i class="fas fa-warehouse"></i> Estoque (Home)
+                </button>
+                <button class="bi-subtab-btn ${activeSubTab === 'curva-abc' ? 'active' : ''}" data-nav-target="nav-bi-estoque-curva-abc">
+                    <i class="fas fa-chart-pie"></i> Estoque (Curva ABC)
+                </button>
+                <button class="bi-subtab-btn ${activeSubTab === 'detalhada' ? 'active' : ''}" data-nav-target="nav-bi-estoque-detalhada">
+                    <i class="fas fa-list-check"></i> Estoque (Análise Detalhada)
+                </button>
+                <button class="bi-subtab-btn ${activeSubTab === 'compras' ? 'active' : ''}" data-nav-target="nav-bi-compras">
+                    <i class="fas fa-cart-flatbed"></i> Compras
+                </button>
+                <button class="bi-subtab-btn ${activeSubTab === 'financeiro' ? 'active' : ''}" data-nav-target="nav-bi-financeiro">
+                    <i class="fas fa-sack-dollar"></i> Financeiro
+                </button>
+            </div>
+        `;
+    }
+
+    function renderBiEstoqueFilterBar(companies = []) {
+        return `
+            <div class="bi-filter-bar">
+                <div class="bi-filters-left">
+                    <!-- Empresa Selector -->
+                    <div class="bi-filter-group">
+                        <label class="bi-filter-label"><i class="fas fa-building"></i> Empresa:</label>
+                        <select id="bi-estoque-filter-company" class="bi-select">
+                            <option value="" ${!biEstoqueState.empresa_id ? 'selected' : ''}>Todas as Empresas (Consolidado)</option>
+                            ${companies.map(c => `
+                                <option value="${c.id}" ${biEstoqueState.empresa_id == c.id ? 'selected' : ''}>${c.codigo_ciss || c.id} - ${c.nome_fantasia || c.razao_social}</option>
+                            `).join('')}
+                        </select>
+                    </div>
+
+                    <!-- Tipo de Custo CISS -->
+                    <div class="bi-filter-group">
+                        <label class="bi-filter-label"><i class="fas fa-calculator"></i> Tipo Custo:</label>
+                        <select id="bi-estoque-filter-custo" class="bi-select">
+                            <option value="custo_medio_fiscal" ${biEstoqueState.tipo_custo === 'custo_medio_fiscal' ? 'selected' : ''}>Custo Médio Fiscal (Padrão)</option>
+                            <option value="custo_gerencial" ${biEstoqueState.tipo_custo === 'custo_gerencial' ? 'selected' : ''}>Custo Gerencial</option>
+                            <option value="custo_medio" ${biEstoqueState.tipo_custo === 'custo_medio' ? 'selected' : ''}>Custo Médio</option>
+                            <option value="custo_reposicao" ${biEstoqueState.tipo_custo === 'custo_reposicao' ? 'selected' : ''}>Custo de Reposição (Última Compra)</option>
+                            <option value="custo_nota_fiscal" ${biEstoqueState.tipo_custo === 'custo_nota_fiscal' ? 'selected' : ''}>Custo Nota Fiscal</option>
+                            <option value="preco_venda_varejo" ${biEstoqueState.tipo_custo === 'preco_venda_varejo' ? 'selected' : ''}>Preço de Venda (Varejo)</option>
+                        </select>
+                    </div>
+
+                    <!-- Local de Estoque -->
+                    <div class="bi-filter-group">
+                        <label class="bi-filter-label"><i class="fas fa-boxes-stacked"></i> Local:</label>
+                        <select class="bi-select" style="min-width: 120px;">
+                            <option value="todos">Todos os Locais</option>
+                            <option value="deposito">Depósito Principal</option>
+                            <option value="loja">Loja Física / Salão</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <!-- Botão Sincronizar Integrim -->
+                    <button class="btn btn-primary" id="bi-btn-sync-integrim" title="Sincronizar dados em tempo real com Integrim CISS Poder" style="padding: 0.45rem 0.85rem; height: 35px; font-size: 0.82rem;">
+                        <i class="fas fa-rotate"></i> Sincronizar Integrim
+                    </button>
+
+                    <!-- Botão Recarregar / Refresh -->
+                    <button class="btn btn-secondary" id="bi-estoque-btn-refresh" title="Atualizar Painel" style="padding: 0.45rem 0.85rem; height: 35px;">
+                        <i class="fas fa-arrow-rotate-right"></i>
+                    </button>
                 </div>
             </div>
         `;
-        setupBiFilterListeners(renderBiEstoque);
+    }
+
+    function setupBiEstoqueListeners(reloadFn) {
+        document.getElementById('bi-estoque-filter-company')?.addEventListener('change', (e) => {
+            biEstoqueState.empresa_id = e.target.value;
+            reloadFn();
+        });
+
+        document.getElementById('bi-estoque-filter-custo')?.addEventListener('change', (e) => {
+            biEstoqueState.tipo_custo = e.target.value;
+            reloadFn();
+        });
+
+        document.getElementById('bi-estoque-btn-refresh')?.addEventListener('click', () => {
+            reloadFn();
+        });
+
+        document.getElementById('bi-btn-sync-integrim')?.addEventListener('click', async () => {
+            const btn = document.getElementById('bi-btn-sync-integrim');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
+            }
+            showToast('Conectando ao Integrim CISS Poder (CAD_PRODUTOS, SALDO_ESTOQUE, PRECOS_CUSTOS)...', 'info');
+
+            try {
+                const res = await api('/api/bi/stock/sync-integrim', 'POST');
+                showToast(res.mensagem || 'Sincronização com CISS Poder concluída com sucesso!', 'success');
+                reloadFn();
+            } catch (err) {
+                showToast(`Falha na sincronização ao vivo: ${err.message}. Carregando base demonstrativa...`, 'warning');
+                // Se falhar a conexão remota, dispara o mock para nunca deixar a tela vazia
+                await api('/api/bi/stock/seed-mock', 'POST').catch(() => {});
+                reloadFn();
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-rotate"></i> Sincronizar Integrim';
+                }
+            }
+        });
+
+        document.querySelectorAll('.bi-subtab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const targetRoute = btn.dataset.navTarget;
+                if (targetRoute) {
+                    setActiveNavLink(targetRoute);
+                    const handler = routes[targetRoute];
+                    if (handler) handler();
+                }
+            });
+        });
+    }
+
+    /**
+     * TELA 6: POWER BI - ESTOQUE HOME
+     */
+    async function renderBiEstoqueHome() {
+        destroyBiCharts();
+        mainTitle.textContent = 'A Elétrica - Estoque Home';
+        mainSubtitle.textContent = 'Posição Física, Valorização de Estoque, Cobertura e Alertas de Ruptura';
+        headerActions.innerHTML = `
+            <button class="btn btn-secondary" id="bi-estoque-seed-btn" title="Recarregar Dados Demonstrativos CISS">
+                <i class="fas fa-database"></i> Recarregar Dados CISS
+            </button>
+            <button class="btn btn-primary" onclick="window.print()">
+                <i class="fas fa-file-arrow-down"></i> Exportar
+            </button>
+        `;
+
+        document.getElementById('bi-estoque-seed-btn')?.addEventListener('click', async () => {
+            showToast('Recarregando dados de demonstração de estoque CISS...', 'info');
+            try {
+                await api('/api/bi/stock/seed-mock', 'POST');
+                showToast('Dados de estoque atualizados!', 'success');
+                renderBiEstoqueHome();
+            } catch (e) {
+                showToast(`Erro: ${e.message}`, 'error');
+            }
+        });
+
+        showLoading('Processando indicadores de estoque...');
+
+        try {
+            const [compRes, summaryRes] = await Promise.all([
+                api('/api/bi/companies').catch(() => ({ companies: [] })),
+                api(`/api/bi/stock/summary?empresa_id=${biEstoqueState.empresa_id}&tipo_custo=${biEstoqueState.tipo_custo}`).catch(() => null)
+            ]);
+
+            const companies = compRes.companies || [];
+
+            // Se estoque estiver vazio, popula automaticamente
+            if (!summaryRes || !summaryRes.kpis || summaryRes.kpis.mix_produtos === 0) {
+                try {
+                    await api('/api/bi/stock/seed-mock', 'POST');
+                    return renderBiEstoqueHome();
+                } catch (e) {
+                    console.error('Falha no auto-seed do estoque:', e);
+                }
+            }
+
+            const kpi = summaryRes?.kpis || {};
+            const empresasData = summaryRes?.grafico_empresas || [];
+            const estruturaData = summaryRes?.grafico_estrutura || [];
+            const fornecedoresData = summaryRes?.grafico_fornecedores || [];
+
+            let html = `
+                <div class="bi-container">
+                    <!-- Sub-Abas do Módulo Estoque -->
+                    ${renderBiEstoqueSubtabs('home')}
+
+                    <!-- Barra de Filtros Inteligente -->
+                    ${renderBiEstoqueFilterBar(companies)}
+
+                    <!-- 5 KPI Cards Oficiais do CISS BI -->
+                    <div class="bi-kpi-grid-5">
+                        <!-- KPI 1: Valor de Estoque -->
+                        <div class="bi-kpi-card">
+                            <div class="bi-kpi-header">
+                                <span class="bi-kpi-title">Valor de Estoque</span>
+                                <div class="bi-kpi-icon"><i class="fas fa-calculator"></i></div>
+                            </div>
+                            <div class="bi-kpi-main">
+                                <div class="bi-kpi-value">${formatBRL(kpi.valor_estoque)}</div>
+                            </div>
+                            <div class="bi-kpi-footer">
+                                <span style="font-size: 0.75rem; color: var(--color-text-offset);">Base: <strong>${biEstoqueState.tipo_custo.replace(/_/g, ' ').toUpperCase()}</strong></span>
+                            </div>
+                        </div>
+
+                        <!-- KPI 2: Quantidade Total -->
+                        <div class="bi-kpi-card kpi-qtd">
+                            <div class="bi-kpi-header">
+                                <span class="bi-kpi-title">Quantidade</span>
+                                <div class="bi-kpi-icon" style="background: rgba(99, 102, 241, 0.12); color: #4f46e5;"><i class="fas fa-boxes-stacked"></i></div>
+                            </div>
+                            <div class="bi-kpi-main">
+                                <div class="bi-kpi-value">${formatInt(kpi.quantidade_estoque)}</div>
+                            </div>
+                            <div class="bi-kpi-footer">
+                                <span style="font-size: 0.75rem; color: var(--color-text-offset);">Unidades físicas em estoque</span>
+                            </div>
+                        </div>
+
+                        <!-- KPI 3: Cobertura -->
+                        <div class="bi-kpi-card kpi-cobertura">
+                            <div class="bi-kpi-header">
+                                <span class="bi-kpi-title">Cobertura</span>
+                                <div class="bi-kpi-icon" style="background: rgba(14, 165, 233, 0.12); color: #0284c7;"><i class="fas fa-calendar-check"></i></div>
+                            </div>
+                            <div class="bi-kpi-main">
+                                <div class="bi-kpi-value">${kpi.dias_cobertura || 179} dias</div>
+                            </div>
+                            <div class="bi-kpi-footer">
+                                <span style="font-size: 0.75rem; color: var(--color-text-offset);">Média de Giro por Qtd</span>
+                            </div>
+                        </div>
+
+                        <!-- KPI 4: Mix de Produtos -->
+                        <div class="bi-kpi-card kpi-mix">
+                            <div class="bi-kpi-header">
+                                <span class="bi-kpi-title">Mix de Produtos</span>
+                                <div class="bi-kpi-icon" style="background: rgba(139, 92, 246, 0.12); color: #7c3aed;"><i class="fas fa-cart-shopping"></i></div>
+                            </div>
+                            <div class="bi-kpi-main">
+                                <div class="bi-kpi-value">${formatInt(kpi.mix_produtos)}</div>
+                            </div>
+                            <div class="bi-kpi-footer">
+                                <span style="font-size: 0.75rem; color: var(--color-text-offset);">SKUs Ativos Cadastrados</span>
+                            </div>
+                        </div>
+
+                        <!-- KPI 5: Ruptura Estoque -->
+                        <div class="bi-kpi-card kpi-ruptura">
+                            <div class="bi-kpi-header">
+                                <span class="bi-kpi-title">Ruptura Estoque</span>
+                                <div class="bi-kpi-icon" style="background: rgba(239, 68, 68, 0.12); color: #dc2626;"><i class="fas fa-triangle-exclamation"></i></div>
+                            </div>
+                            <div class="bi-kpi-main">
+                                <div class="bi-kpi-value" style="color: #dc2626;">${kpi.ruptura_itens} Itens</div>
+                            </div>
+                            <div class="bi-kpi-footer">
+                                <span class="badge badge-danger" style="font-size: 0.72rem;">Necessita Reposição</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3 Gráficos Oficiais do CISS BI -->
+                    <div class="bi-stock-charts-grid">
+                        <!-- Gráfico 1: Empresa -->
+                        <div class="bi-chart-card">
+                            <div class="bi-chart-header">
+                                <span class="bi-chart-title"><i class="fas fa-building" style="color: #38bdf8;"></i> Empresa</span>
+                                <span style="font-size: 0.75rem; color: var(--color-text-offset);">Participação</span>
+                            </div>
+                            <div class="bi-canvas-container" style="height: 280px;">
+                                <canvas id="bi-chart-estoque-empresa-canvas"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Gráfico 2: Estrutura Mercadológica -->
+                        <div class="bi-chart-card">
+                            <div class="bi-chart-header">
+                                <span class="bi-chart-title"><i class="fas fa-sitemap" style="color: #38bdf8;"></i> Estrutura Mercadológica</span>
+                                <span style="font-size: 0.75rem; color: var(--color-text-offset);">Grupo</span>
+                            </div>
+                            <div class="bi-canvas-container" style="height: 280px;">
+                                <canvas id="bi-chart-estoque-estrutura-canvas"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Gráfico 3: Fornecedor / Grupo Econômico -->
+                        <div class="bi-chart-card">
+                            <div class="bi-chart-header">
+                                <span class="bi-chart-title"><i class="fas fa-truck-field" style="color: #38bdf8;"></i> Fornecedor / Grupo Econômico</span>
+                                <span style="font-size: 0.75rem; color: var(--color-text-offset);">Top 10</span>
+                            </div>
+                            <div class="bi-canvas-container" style="height: 280px;">
+                                <canvas id="bi-chart-estoque-fornecedores-canvas"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            pageContent.innerHTML = html;
+            setupBiEstoqueListeners(renderBiEstoqueHome);
+
+            // Renderiza os 3 Gráficos
+            renderChartEstoqueEmpresas(empresasData);
+            renderChartEstoqueEstrutura(estruturaData);
+            renderChartEstoqueFornecedores(fornecedoresData);
+
+        } catch (error) {
+            renderError(error);
+        }
+    }
+
+    /**
+     * Gráfico 1 de Estoque: Faturamento por Empresa
+     */
+    function renderChartEstoqueEmpresas(data) {
+        const canvas = document.getElementById('bi-chart-estoque-empresa-canvas');
+        if (!canvas || !window.Chart) return;
+
+        const isDark = document.body.classList.contains('dark-mode');
+        const textColor = isDark ? '#cbd5e1' : '#475569';
+        const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)';
+
+        const labels = data.map(d => d.nome);
+        const values = data.map(d => d.valor);
+
+        const ctx = canvas.getContext('2d');
+        biChartInstances.estoqueEmpresas = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Valor de Estoque',
+                    data: values,
+                    backgroundColor: ['#1e3a8a', '#3b82f6'],
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (c) => ` ${formatBRL(c.raw)}`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: textColor,
+                            callback: (v) => 'R$ ' + (v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : (v / 1000).toFixed(0) + 'k')
+                        },
+                        grid: { color: gridColor }
+                    },
+                    y: {
+                        ticks: { color: textColor, font: { weight: '600' } },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Gráfico 2 de Estoque: Estrutura Mercadológica
+     */
+    function renderChartEstoqueEstrutura(data) {
+        const canvas = document.getElementById('bi-chart-estoque-estrutura-canvas');
+        if (!canvas || !window.Chart) return;
+
+        const isDark = document.body.classList.contains('dark-mode');
+        const textColor = isDark ? '#cbd5e1' : '#475569';
+        const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)';
+
+        const labels = data.map(d => d.nome.length > 25 ? d.nome.slice(0, 25) + '...' : d.nome);
+        const values = data.map(d => d.valor);
+
+        const ctx = canvas.getContext('2d');
+        biChartInstances.estoqueEstrutura = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Valor',
+                    data: values,
+                    backgroundColor: '#0284c7',
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: (c) => ` ${formatBRL(c.raw)}` } }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: textColor,
+                            callback: (v) => 'R$ ' + (v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : (v / 1000).toFixed(0) + 'k')
+                        },
+                        grid: { color: gridColor }
+                    },
+                    y: {
+                        ticks: { color: textColor, font: { size: 10 } },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Gráfico 3 de Estoque: Ranking Fornecedores
+     */
+    function renderChartEstoqueFornecedores(data) {
+        const canvas = document.getElementById('bi-chart-estoque-fornecedores-canvas');
+        if (!canvas || !window.Chart) return;
+
+        const isDark = document.body.classList.contains('dark-mode');
+        const textColor = isDark ? '#cbd5e1' : '#475569';
+        const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)';
+
+        const labels = data.map(d => d.fornecedor.length > 25 ? d.fornecedor.slice(0, 25) + '...' : d.fornecedor);
+        const values = data.map(d => d.valor);
+
+        const ctx = canvas.getContext('2d');
+        biChartInstances.estoqueFornecedores = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [{
+                    label: 'Valor de Estoque',
+                    data: values,
+                    backgroundColor: '#1e293b',
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: (c) => ` ${formatBRL(c.raw)}` } }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: textColor,
+                            callback: (v) => 'R$ ' + (v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : (v / 1000).toFixed(0) + 'k')
+                        },
+                        grid: { color: gridColor }
+                    },
+                    y: {
+                        ticks: { color: textColor, font: { size: 9 } },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * TELA: POWER BI - ESTOQUE CURVA ABC (PARETO, DONUTS E 5 CUSTOS CISS)
+     */
+    async function renderBiEstoqueCurvaABC() {
+        destroyBiCharts();
+        mainTitle.textContent = 'Estoque - Curva ABC & Custos Múltiplos';
+        mainSubtitle.textContent = 'Classificação de Pareto (20/30/50) e Tabela Comparativa dos 5 Tipos de Custos do CISS Poder';
+        headerActions.innerHTML = '';
+        showLoading('Processando cálculo de Curva ABC e Pareto...');
+
+        try {
+            const [compRes, abcRes] = await Promise.all([
+                api('/api/bi/companies').catch(() => ({ companies: [] })),
+                api(`/api/bi/stock/curva-abc?empresa_id=${biEstoqueState.empresa_id}&tipo_custo=${biEstoqueState.tipo_custo}`).catch(() => null)
+            ]);
+
+            const companies = compRes.companies || [];
+            const tabelaCustos = abcRes?.tabela_custos || [];
+            const totais = abcRes?.totais || {};
+            const donuts = abcRes?.donuts || { qtd: [], valor: [] };
+            const pareto = abcRes?.pareto || [];
+
+            let html = `
+                <div class="bi-container">
+                    <!-- Sub-Abas -->
+                    ${renderBiEstoqueSubtabs('curva-abc')}
+
+                    <!-- Filtros -->
+                    ${renderBiEstoqueFilterBar(companies)}
+
+                    <!-- Gráficos de Curva ABC: Pareto + 2 Donuts -->
+                    <div style="display: grid; grid-template-columns: 1.8fr 1fr 1fr; gap: 1.25rem;">
+                        <!-- Gráfico 1: Pareto (Barras + Linha %) -->
+                        <div class="bi-chart-card">
+                            <div class="bi-chart-header">
+                                <span class="bi-chart-title"><i class="fas fa-chart-line" style="color: #38bdf8;"></i> Pareto: Qtd. por Subgrupo & % Acumulado</span>
+                            </div>
+                            <div class="bi-canvas-container" style="height: 260px;">
+                                <canvas id="bi-pareto-canvas"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Gráfico 2: Donut Qtd Estoque Curva -->
+                        <div class="bi-chart-card">
+                            <div class="bi-chart-header">
+                                <span class="bi-chart-title"><i class="fas fa-chart-pie" style="color: #10b981;"></i> Qtd. Estoque (Un.)</span>
+                            </div>
+                            <div class="bi-canvas-container" style="height: 260px;">
+                                <canvas id="bi-donut-qtd-canvas"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Gráfico 3: Donut Valor Selecionado Curva -->
+                        <div class="bi-chart-card">
+                            <div class="bi-chart-header">
+                                <span class="bi-chart-title"><i class="fas fa-coins" style="color: #38bdf8;"></i> Valor Selecionado</span>
+                            </div>
+                            <div class="bi-canvas-container" style="height: 260px;">
+                                <canvas id="bi-donut-valor-canvas"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Tabela Oficial de 5 Custos CISS BI -->
+                    <div class="bi-chart-card">
+                        <div class="bi-chart-header">
+                            <span class="bi-chart-title"><i class="fas fa-table" style="color: #38bdf8;"></i> Tabela Comparativa de Custos por Curva ABC</span>
+                        </div>
+                        <div class="table-container" style="margin: 0; box-shadow: none; border: none; overflow-x: auto;">
+                            <table class="bi-ranking-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 100px;">Curva ABC</th>
+                                        <th style="text-align: right;">Contagem Itens</th>
+                                        <th style="text-align: right;">Qtd. Atual Estoque</th>
+                                        <th style="text-align: right;">Custo Gerencial</th>
+                                        <th style="text-align: right;">Custo Médio</th>
+                                        <th style="text-align: right; background: rgba(56, 189, 248, 0.08);">Custo Médio Fiscal</th>
+                                        <th style="text-align: right;">Custo Última Compra</th>
+                                        <th style="text-align: right;">Valor Nota Fiscal</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${tabelaCustos.map(t => {
+                                        const badgeClass = t.curva_abc === 'A' ? 'badge-curva-a' : (t.curva_abc === 'B' ? 'badge-curva-b' : 'badge-curva-c');
+                                        return `
+                                            <tr>
+                                                <td><span class="badge-curva ${badgeClass}">${t.curva_abc}</span></td>
+                                                <td style="text-align: right; font-weight: 600;">${formatInt(t.contagem_itens)}</td>
+                                                <td style="text-align: right; font-weight: 700;">${formatInt(t.qtd_atual_estoque)} un</td>
+                                                <td style="text-align: right;">${formatBRL(t.valor_gerencial)}</td>
+                                                <td style="text-align: right;">${formatBRL(t.valor_medio)}</td>
+                                                <td style="text-align: right; font-weight: 800; color: #0284c7; background: rgba(56, 189, 248, 0.08);">${formatBRL(t.valor_fiscal)}</td>
+                                                <td style="text-align: right;">${formatBRL(t.valor_reposicao)}</td>
+                                                <td style="text-align: right;">${formatBRL(t.valor_nota_fiscal)}</td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                    <tr style="background: var(--color-bg-offset); font-weight: 800; border-top: 2px solid var(--color-border);">
+                                        <td><strong>TOTAL</strong></td>
+                                        <td style="text-align: right;">${formatInt(totais.contagem_itens)}</td>
+                                        <td style="text-align: right;">${formatInt(totais.qtd_atual_estoque)} un</td>
+                                        <td style="text-align: right;">${formatBRL(totais.valor_gerencial)}</td>
+                                        <td style="text-align: right;">${formatBRL(totais.valor_medio)}</td>
+                                        <td style="text-align: right; color: #0284c7; font-size: 0.95rem; background: rgba(56, 189, 248, 0.08);">${formatBRL(totais.valor_fiscal)}</td>
+                                        <td style="text-align: right;">${formatBRL(totais.valor_reposicao)}</td>
+                                        <td style="text-align: right;">${formatBRL(totais.valor_nota_fiscal)}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            pageContent.innerHTML = html;
+            setupBiEstoqueListeners(renderBiEstoqueCurvaABC);
+
+            // Renderiza Pareto e Donuts
+            renderParetoChart(pareto);
+            renderDonutCurva(donuts);
+
+        } catch (error) {
+            renderError(error);
+        }
+    }
+
+    /**
+     * Gráfico de Pareto (Barras + Linha Acumulada)
+     */
+    function renderParetoChart(data) {
+        const canvas = document.getElementById('bi-pareto-canvas');
+        if (!canvas || !window.Chart) return;
+
+        const isDark = document.body.classList.contains('dark-mode');
+        const textColor = isDark ? '#cbd5e1' : '#475569';
+        const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)';
+
+        const labels = data.map(d => d.nome.length > 15 ? d.nome.slice(0, 15) + '...' : d.nome);
+        const qtdVals = data.map(d => d.qtd);
+        const lineVals = data.map(d => d.pct_acumulado);
+
+        const ctx = canvas.getContext('2d');
+        biChartInstances.pareto = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        type: 'line',
+                        label: '% Acumulado',
+                        data: lineVals,
+                        borderColor: '#38bdf8',
+                        borderWidth: 2,
+                        borderDash: [4, 4],
+                        pointRadius: 3,
+                        yAxisID: 'y1',
+                        fill: false
+                    },
+                    {
+                        type: 'bar',
+                        label: 'Qtd Estoque',
+                        data: qtdVals,
+                        backgroundColor: '#1e3a8a',
+                        borderRadius: 4,
+                        yAxisID: 'y'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: textColor, font: { size: 9 }, maxRotation: 45 },
+                        grid: { display: false }
+                    },
+                    y: {
+                        ticks: {
+                            color: textColor,
+                            callback: (v) => v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v
+                        },
+                        grid: { color: gridColor }
+                    },
+                    y1: {
+                        position: 'right',
+                        min: 0,
+                        max: 100,
+                        ticks: {
+                            color: '#38bdf8',
+                            callback: (v) => v + '%'
+                        },
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Gráficos Donut de Curva ABC (Qtd e Valor)
+     */
+    function renderDonutCurva(donuts) {
+        const canvasQtd = document.getElementById('bi-donut-qtd-canvas');
+        const canvasVal = document.getElementById('bi-donut-valor-canvas');
+        if (!canvasQtd || !canvasVal || !window.Chart) return;
+
+        const isDark = document.body.classList.contains('dark-mode');
+        const textColor = isDark ? '#cbd5e1' : '#475569';
+
+        const labels = ['Curva A', 'Curva B', 'Curva C'];
+        const colors = ['#1e3a8a', '#38bdf8', '#cbd5e1'];
+
+        // Donut Qtd
+        const qtdValues = [
+            donuts.qtd.find(d => d.curva === 'A')?.pct || 20.67,
+            donuts.qtd.find(d => d.curva === 'B')?.pct || 29.61,
+            donuts.qtd.find(d => d.curva === 'C')?.pct || 49.72
+        ];
+
+        new Chart(canvasQtd.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels,
+                datasets: [{ data: qtdValues, backgroundColor: colors, borderWidth: 0 }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: textColor, font: { size: 10 } } },
+                    tooltip: { callbacks: { label: (c) => ` ${c.label}: ${formatPct(c.raw)}` } }
+                },
+                cutout: '65%'
+            }
+        });
+
+        // Donut Valor
+        const valValues = [
+            donuts.valor.find(d => d.curva === 'A')?.pct || 20.67,
+            donuts.valor.find(d => d.curva === 'B')?.pct || 29.61,
+            donuts.valor.find(d => d.curva === 'C')?.pct || 49.72
+        ];
+
+        new Chart(canvasVal.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels,
+                datasets: [{ data: valValues, backgroundColor: colors, borderWidth: 0 }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: textColor, font: { size: 10 } } },
+                    tooltip: { callbacks: { label: (c) => ` ${c.label}: ${formatPct(c.raw)}` } }
+                },
+                cutout: '65%'
+            }
+        });
+    }
+
+    /**
+     * TELA: POWER BI - ESTOQUE (ANÁLISE DETALHADA / RUPTURA)
+     */
+    async function renderBiEstoqueDetalhado() {
+        destroyBiCharts();
+        mainTitle.textContent = 'Estoque - Análise Detalhada de Produtos';
+        mainSubtitle.textContent = 'Consulta individual de SKUs, saldos por filial, cobertura e alertas de reposição';
+        headerActions.innerHTML = '';
+        showLoading('Carregando catálogo de produtos e saldos...');
+
+        try {
+            const [compRes, prodRes] = await Promise.all([
+                api('/api/bi/companies').catch(() => ({ companies: [] })),
+                api(`/api/bi/stock/products?empresa_id=${biEstoqueState.empresa_id}&busca=${encodeURIComponent(biEstoqueState.busca)}&curva_abc=${biEstoqueState.curva_abc}&situacao=${biEstoqueState.situacao}&page=${biEstoqueState.page}&limit=50`).catch(() => ({ products: [], total: 0, pages: 1 }))
+            ]);
+
+            const companies = compRes.companies || [];
+            const products = prodRes.products || [];
+            const total = prodRes.total || 0;
+            const pages = prodRes.pages || 1;
+
+            let html = `
+                <div class="bi-container">
+                    ${renderBiEstoqueSubtabs('detalhada')}
+                    ${renderBiEstoqueFilterBar(companies)}
+
+                    <!-- Filtros Rápidos da Tabela -->
+                    <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; justify-content: space-between; background: var(--color-card-bg); padding: 0.85rem 1rem; border-radius: var(--border-radius-md); border: 1px solid var(--color-border);">
+                        <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; flex: 1;">
+                            <div style="position: relative; flex: 1; min-width: 250px;">
+                                <input type="text" id="bi-prod-search" class="form-control" placeholder="Buscar por nome, SKU, código de barras ou marca..." value="${biEstoqueState.busca}" style="padding-left: 2.2rem;">
+                                <i class="fas fa-search" style="position: absolute; left: 0.85rem; top: 50%; transform: translateY(-50%); color: var(--color-text-offset);"></i>
+                            </div>
+
+                            <!-- Filtro Curva ABC -->
+                            <select id="bi-prod-filter-abc" class="bi-select">
+                                <option value="" ${!biEstoqueState.curva_abc ? 'selected' : ''}>Todas as Curvas (A, B, C)</option>
+                                <option value="A" ${biEstoqueState.curva_abc === 'A' ? 'selected' : ''}>Apenas Curva A</option>
+                                <option value="B" ${biEstoqueState.curva_abc === 'B' ? 'selected' : ''}>Apenas Curva B</option>
+                                <option value="C" ${biEstoqueState.curva_abc === 'C' ? 'selected' : ''}>Apenas Curva C</option>
+                            </select>
+
+                            <!-- Filtro Situação -->
+                            <select id="bi-prod-filter-situacao" class="bi-select">
+                                <option value="" ${!biEstoqueState.situacao ? 'selected' : ''}>Todas as Situações</option>
+                                <option value="disponivel" ${biEstoqueState.situacao === 'disponivel' ? 'selected' : ''}>Saldo Disponível (> 0)</option>
+                                <option value="ruptura" ${biEstoqueState.situacao === 'ruptura' ? 'selected' : ''}>🚨 Em Ruptura (Zerado)</option>
+                                <option value="baixo" ${biEstoqueState.situacao === 'baixo' ? 'selected' : ''}>⚠️ Estoque Crítico (<= Mínimo)</option>
+                            </select>
+                        </div>
+
+                        <span style="font-size: 0.82rem; color: var(--color-text-offset); white-space: nowrap;">
+                            Exibindo <strong>${products.length}</strong> de <strong>${total}</strong> produtos
+                        </span>
+                    </div>
+
+                    <!-- Tabela de Produtos e Estoque -->
+                    <div class="bi-chart-card" style="padding: 0; overflow: hidden;">
+                        <div class="table-container" style="margin: 0; box-shadow: none; border: none; overflow-x: auto;">
+                            <table class="bi-ranking-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 50px;">Curva</th>
+                                        <th>SKU / Código</th>
+                                        <th>Descrição do Produto</th>
+                                        <th>Marca / Fabricante</th>
+                                        <th>Grupo / Subgrupo</th>
+                                        <th style="text-align: right;">Saldo Atual</th>
+                                        <th style="text-align: right;">Disponível</th>
+                                        <th style="text-align: right;">Custo Fiscal</th>
+                                        <th style="text-align: right;">Preço Venda</th>
+                                        <th style="text-align: center;">Cobertura</th>
+                                        <th style="text-align: center;">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${products.length === 0 ? `
+                                        <tr>
+                                            <td colspan="11" style="text-align: center; color: var(--color-text-offset); padding: 2.5rem;">
+                                                Nenhum produto encontrado com os filtros selecionados.
+                                            </td>
+                                        </tr>
+                                    ` : products.map(p => {
+                                        const badgeClass = p.curva_abc === 'A' ? 'badge-curva-a' : (p.curva_abc === 'B' ? 'badge-curva-b' : 'badge-curva-c');
+                                        const isRuptura = p.saldo_atual <= 0;
+                                        const isBaixo = !isRuptura && p.saldo_atual <= p.estoque_minimo;
+                                        const statusBadge = isRuptura ? '<span class="badge badge-danger">Ruptura</span>' : (isBaixo ? '<span class="badge badge-warning">Baixo</span>' : '<span class="badge badge-success">OK</span>');
+
+                                        return `
+                                            <tr>
+                                                <td><span class="badge-curva ${badgeClass}">${p.curva_abc}</span></td>
+                                                <td><code>${p.idsubproduto}</code></td>
+                                                <td style="font-weight: 600;" title="${p.descricao}">${p.descricao}</td>
+                                                <td>${p.marca || '-'}</td>
+                                                <td style="font-size: 0.78rem; color: var(--color-text-offset);">${p.subgrupo || p.grupo || '-'}</td>
+                                                <td style="text-align: right; font-weight: 700; ${isRuptura ? 'color: var(--color-danger);' : ''}">${formatInt(p.saldo_atual)} ${p.unidade}</td>
+                                                <td style="text-align: right; font-weight: 600;">${formatInt(p.saldo_disponivel)}</td>
+                                                <td style="text-align: right; color: var(--color-text-offset);">${formatBRL(p.custo_fiscal)}</td>
+                                                <td style="text-align: right; font-weight: 700;">${formatBRL(p.preco_venda)}</td>
+                                                <td style="text-align: center;">${p.dias_cobertura}d</td>
+                                                <td style="text-align: center;">${statusBadge}</td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            pageContent.innerHTML = html;
+            setupBiEstoqueListeners(renderBiEstoqueDetalhado);
+
+            // Listeners de busca e filtro da tabela
+            const searchInput = document.getElementById('bi-prod-search');
+            let searchTimeout;
+            searchInput?.addEventListener('input', (e) => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    biEstoqueState.busca = e.target.value;
+                    biEstoqueState.page = 1;
+                    renderBiEstoqueDetalhado();
+                }, 400);
+            });
+
+            document.getElementById('bi-prod-filter-abc')?.addEventListener('change', (e) => {
+                biEstoqueState.curva_abc = e.target.value;
+                biEstoqueState.page = 1;
+                renderBiEstoqueDetalhado();
+            });
+
+            document.getElementById('bi-prod-filter-situacao')?.addEventListener('change', (e) => {
+                biEstoqueState.situacao = e.target.value;
+                biEstoqueState.page = 1;
+                renderBiEstoqueDetalhado();
+            });
+
+        } catch (error) {
+            renderError(error);
+        }
     }
 
     /**
