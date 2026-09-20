@@ -418,13 +418,27 @@ function getValidCostColumn(tipoCusto = 'custo_medio_fiscal') {
 }
 
 /**
- * 1. Resumo Geral de Estoque (5 KPIs + Gráficos de Empresa, Estrutura e Fornecedores)
+ * Helper para validar se o registro de estoque pertence à área de venda oficial da loja:
+ * - Loja 1 / Matriz -> 'Area de venda loja 1'
+ * - Loja 2 / Filial -> 'Area de venda loja 2'
+ */
+function getStockLocationCondition() {
+    return `(
+        (s.empresa_id = 1 AND (s.local_estoque LIKE '%loja 1%' OR s.local_estoque LIKE '%Matriz%' OR s.local_estoque = 'Area de venda loja 1' OR s.local_estoque IS NULL))
+        OR (s.empresa_id = 2 AND (s.local_estoque LIKE '%loja 2%' OR s.local_estoque LIKE '%Filial%' OR s.local_estoque = 'Area de venda loja 2' OR s.local_estoque IS NULL))
+        OR (s.empresa_id NOT IN (1, 2))
+        OR (s.local_estoque IS NULL)
+    )`;
+}
+
+/**
+ * 1. Resumo Geral de Estoque (5 KPIs + Gráficos de Empresa, Estrutura e Marcas)
  */
 export async function getBiEstoqueSummary(db, { empresa_id = null, tipo_custo = 'custo_medio_fiscal' }) {
     const pool = resolvePool(db);
     const costCol = getValidCostColumn(tipo_custo);
 
-    let whereClause = 'WHERE p.inativo = FALSE';
+    let whereClause = `WHERE p.inativo = FALSE AND ${getStockLocationCondition()}`;
     const params = [];
 
     if (empresa_id && empresa_id !== 'all' && empresa_id !== '') {
@@ -460,7 +474,7 @@ export async function getBiEstoqueSummary(db, { empresa_id = null, tipo_custo = 
             COALESCE(SUM(s.saldo_atual * ${costCol}), 0) as valor_estoque,
             COALESCE(SUM(s.saldo_atual), 0) as qtd_estoque
         FROM bi_empresas e
-        LEFT JOIN bi_estoque_saldos s ON s.empresa_id = e.id
+        LEFT JOIN bi_estoque_saldos s ON s.empresa_id = e.id AND ${getStockLocationCondition()}
         LEFT JOIN bi_produtos p ON p.idsubproduto = s.idsubproduto AND p.inativo = FALSE
         WHERE e.ativo = TRUE
         GROUP BY e.id, e.nome_fantasia
@@ -494,16 +508,16 @@ export async function getBiEstoqueSummary(db, { empresa_id = null, tipo_custo = 
         LIMIT 10
     `, params);
 
-    // 4. Gráfico: Fornecedor / Grupo Econômico
-    const [fornecedorRows] = await pool.execute(`
+    // 4. Gráfico: Ranking por Marca / Fabricante
+    const [marcaRows] = await pool.execute(`
         SELECT 
-            COALESCE(p.fornecedor_principal, '0 - FORNECEDOR NÃO INFORMADO') as fornecedor,
+            COALESCE(NULLIF(TRIM(p.marca), ''), '0 - SEM MARCA') as marca,
             COALESCE(SUM(s.saldo_atual * ${costCol}), 0) as valor,
             COALESCE(SUM(s.saldo_atual), 0) as qtd
         FROM bi_produtos p
         JOIN bi_estoque_saldos s ON s.idsubproduto = p.idsubproduto
         ${whereClause}
-        GROUP BY p.fornecedor_principal
+        GROUP BY COALESCE(NULLIF(TRIM(p.marca), ''), '0 - SEM MARCA')
         ORDER BY valor DESC
         LIMIT 12
     `, params);
@@ -523,8 +537,13 @@ export async function getBiEstoqueSummary(db, { empresa_id = null, tipo_custo = 
             valor: parseFloat(r.valor) || 0,
             qtd: parseFloat(r.qtd) || 0
         })),
-        grafico_fornecedores: fornecedorRows.map(r => ({
-            fornecedor: r.fornecedor,
+        grafico_marcas: marcaRows.map(r => ({
+            marca: r.marca,
+            valor: parseFloat(r.valor) || 0,
+            qtd: parseFloat(r.qtd) || 0
+        })),
+        grafico_fornecedores: marcaRows.map(r => ({
+            fornecedor: r.marca,
             valor: parseFloat(r.valor) || 0,
             qtd: parseFloat(r.qtd) || 0
         }))
@@ -537,7 +556,7 @@ export async function getBiEstoqueSummary(db, { empresa_id = null, tipo_custo = 
 export async function getBiEstoqueCurvaABC(db, { empresa_id = null, tipo_custo = 'custo_medio_fiscal', agrupador = 'subgrupo', curva_a = 20, curva_b = 30 }) {
     const pool = resolvePool(db);
 
-    let whereClause = 'WHERE p.inativo = FALSE';
+    let whereClause = `WHERE p.inativo = FALSE AND ${getStockLocationCondition()}`;
     const params = [];
 
     if (empresa_id && empresa_id !== 'all' && empresa_id !== '') {
@@ -664,7 +683,7 @@ export async function getBiEstoqueCurvaABC(db, { empresa_id = null, tipo_custo =
 export async function getBiEstoqueProducts(db, { empresa_id = null, busca = '', curva_abc = '', situacao = '', page = 1, limit = 50 }) {
     const pool = resolvePool(db);
 
-    let whereClause = 'WHERE p.inativo = FALSE';
+    let whereClause = `WHERE p.inativo = FALSE AND ${getStockLocationCondition()}`;
     const params = [];
 
     if (empresa_id && empresa_id !== 'all' && empresa_id !== '') {

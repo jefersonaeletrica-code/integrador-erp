@@ -538,7 +538,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <table class="data-table" style="font-size: 0.82rem;">
                                 <thead>
                                     <tr>
-                                        <th>Filial / Empresa</th>
+                                        <th>Filial / Empresa & Local de Estoque</th>
                                         <th style="text-align: right;">Saldo Físico</th>
                                         <th style="text-align: right;">Reserva</th>
                                         <th style="text-align: right;">Disponível</th>
@@ -553,7 +553,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <tbody>
                                     ${(prod.lojas || []).map(l => `
                                         <tr>
-                                            <td style="font-weight: 700;">${l.nome_empresa}</td>
+                                            <td>
+                                                <div style="font-weight: 700;">${l.nome_empresa}</div>
+                                                <div style="font-size: 0.72rem; color: #0284c7; font-weight: 600;"><i class="fas fa-location-dot"></i> ${l.local_estoque || (l.empresa_id === 1 ? 'Area de venda loja 1' : 'Area de venda loja 2')}</div>
+                                            </td>
                                             <td style="text-align: right; font-weight: 700; color: ${l.saldo_atual <= 0 ? 'var(--color-danger)' : 'inherit'};">${formatInt(l.saldo_atual)} ${prod.unidade_medida || 'UN'}</td>
                                             <td style="text-align: right; color: var(--color-text-offset);">${formatInt(l.saldo_reserva)}</td>
                                             <td style="text-align: right; font-weight: 700;">${formatInt(l.saldo_disponivel)}</td>
@@ -5673,18 +5676,12 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     function destroyBiCharts() {
-        if (biChartInstances.empresas) {
-            biChartInstances.empresas.destroy();
-            biChartInstances.empresas = null;
-        }
-        if (biChartInstances.diarizado) {
-            biChartInstances.diarizado.destroy();
-            biChartInstances.diarizado = null;
-        }
-        if (biChartInstances.sparkline) {
-            biChartInstances.sparkline.destroy();
-            biChartInstances.sparkline = null;
-        }
+        Object.keys(biChartInstances).forEach(key => {
+            if (biChartInstances[key] && typeof biChartInstances[key].destroy === 'function') {
+                biChartInstances[key].destroy();
+                biChartInstances[key] = null;
+            }
+        });
     }
 
     function formatBRL(val) {
@@ -6720,7 +6717,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const kpi = summaryRes?.kpis || {};
             const empresasData = summaryRes?.grafico_empresas || [];
             const estruturaData = summaryRes?.grafico_estrutura || [];
-            const fornecedoresData = summaryRes?.grafico_fornecedores || [];
+            const marcasData = summaryRes?.grafico_marcas || summaryRes?.grafico_fornecedores || [];
 
             let html = `
                 <div class="bi-container">
@@ -6827,14 +6824,14 @@ document.addEventListener('DOMContentLoaded', () => {
                             </div>
                         </div>
 
-                        <!-- Gráfico 3: Fornecedor / Grupo Econômico -->
+                        <!-- Gráfico 3: Ranking por Marca -->
                         <div class="bi-chart-card">
                             <div class="bi-chart-header">
-                                <span class="bi-chart-title"><i class="fas fa-truck-field" style="color: #38bdf8;"></i> Fornecedor / Grupo Econômico</span>
+                                <span class="bi-chart-title"><i class="fas fa-tags" style="color: #38bdf8;"></i> Ranking por Marca</span>
                                 <span style="font-size: 0.75rem; color: var(--color-text-offset);">Top 10</span>
                             </div>
                             <div class="bi-canvas-container" style="height: 280px;">
-                                <canvas id="bi-chart-estoque-fornecedores-canvas"></canvas>
+                                <canvas id="bi-chart-estoque-marcas-canvas"></canvas>
                             </div>
                         </div>
                     </div>
@@ -6847,7 +6844,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Renderiza os 3 Gráficos
             renderChartEstoqueEmpresas(empresasData);
             renderChartEstoqueEstrutura(estruturaData);
-            renderChartEstoqueFornecedores(fornecedoresData);
+            renderChartEstoqueMarcas(marcasData);
 
         } catch (error) {
             renderError(error);
@@ -6961,26 +6958,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Gráfico 3 de Estoque: Ranking Fornecedores
+     * Gráfico 3 de Estoque: Ranking por Marca
      */
-    function renderChartEstoqueFornecedores(data) {
-        const canvas = document.getElementById('bi-chart-estoque-fornecedores-canvas');
+    function renderChartEstoqueMarcas(data) {
+        const canvas = document.getElementById('bi-chart-estoque-marcas-canvas') || document.getElementById('bi-chart-estoque-fornecedores-canvas');
         if (!canvas || !window.Chart) return;
 
         const isDark = document.body.classList.contains('dark-mode');
         const textColor = isDark ? '#cbd5e1' : '#475569';
         const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)';
 
-        const labels = data.map(d => d.fornecedor.length > 25 ? d.fornecedor.slice(0, 25) + '...' : d.fornecedor);
+        const labels = data.map(d => {
+            const name = d.marca || d.fornecedor || 'Sem Marca';
+            return name.length > 25 ? name.slice(0, 25) + '...' : name;
+        });
         const values = data.map(d => d.valor);
 
         const ctx = canvas.getContext('2d');
-        biChartInstances.estoqueFornecedores = new Chart(ctx, {
+        if (biChartInstances.estoqueMarcas) {
+            biChartInstances.estoqueMarcas.destroy();
+        }
+        biChartInstances.estoqueMarcas = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels,
                 datasets: [{
-                    label: 'Valor de Estoque',
+                    label: 'Valor de Estoque por Marca',
                     data: values,
                     backgroundColor: '#1e293b',
                     borderRadius: 4
@@ -7009,6 +7012,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
         });
+    }
+
+    function renderChartEstoqueFornecedores(data) {
+        return renderChartEstoqueMarcas(data);
     }
 
     /**

@@ -114,6 +114,39 @@ export async function syncIntegrimProducts(connection, db, batchLimit = 2000) {
 }
 
 /**
+ * Valida se a descrição do local de estoque corresponde à Área de Venda oficial da Loja:
+ * - Loja 1 / Matriz -> "Area de venda loja 1"
+ * - Loja 2 / Filial 2 -> "Area de venda loja 2"
+ */
+export function isOfficialSalesLocation(empresaId, descrLocalEstoque) {
+    if (!descrLocalEstoque) return false;
+    const norm = String(descrLocalEstoque)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    
+    const emp = parseInt(empresaId, 10);
+    if (emp === 1) {
+        return norm.includes('area de venda loja 1') || 
+               norm.includes('area venda loja 1') || 
+               norm.includes('venda loja 1') ||
+               norm.includes('loja 1') ||
+               norm.includes('matriz');
+    }
+    if (emp === 2) {
+        return norm.includes('area de venda loja 2') || 
+               norm.includes('area venda loja 2') || 
+               norm.includes('venda loja 2') ||
+               norm.includes('loja 2') ||
+               norm.includes('filial');
+    }
+    return true;
+}
+
+/**
  * 2. Sincroniza Saldos de Estoque por Loja (PRODUTOS_SALDO_ESTOQUE_EMPRESA)
  */
 export async function syncIntegrimStockBalances(connection, db, batchLimit = 3000) {
@@ -445,8 +478,8 @@ export async function seedRealisticEstoqueMockData(db) {
                 saldo_atual, saldo_reserva, saldo_disponivel,
                 custo_medio, custo_medio_fiscal, custo_gerencial, custo_reposicao, custo_nota_fiscal,
                 preco_venda_varejo, preco_venda_atacado, estoque_minimo, media_venda_diaria, dias_cobertura
-            ) VALUES (?, ?, ?, 1, 'Depósito Matriz', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 20.00, 3.5, 179)
-            ON DUPLICATE KEY UPDATE saldo_atual = VALUES(saldo_atual)
+            ) VALUES (?, ?, ?, 1, 'Area de venda loja 1', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 20.00, 3.5, 179)
+            ON DUPLICATE KEY UPDATE saldo_atual = VALUES(saldo_atual), local_estoque = VALUES(local_estoque)
         `, [
             1, prodIdCounter, subprodIdCounter,
             saldoL1, reservaL1, saldoL1 - reservaL1,
@@ -464,8 +497,8 @@ export async function seedRealisticEstoqueMockData(db) {
                 saldo_atual, saldo_reserva, saldo_disponivel,
                 custo_medio, custo_medio_fiscal, custo_gerencial, custo_reposicao, custo_nota_fiscal,
                 preco_venda_varejo, preco_venda_atacado, estoque_minimo, media_venda_diaria, dias_cobertura
-            ) VALUES (?, ?, ?, 1, 'Loja Filial 2', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 10.00, 1.8, 179)
-            ON DUPLICATE KEY UPDATE saldo_atual = VALUES(saldo_atual)
+            ) VALUES (?, ?, ?, 2, 'Area de venda loja 2', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 10.00, 1.8, 179)
+            ON DUPLICATE KEY UPDATE saldo_atual = VALUES(saldo_atual), local_estoque = VALUES(local_estoque)
         `, [
             2, prodIdCounter, subprodIdCounter,
             saldoL2, reservaL2, saldoL2 - reservaL2,
@@ -673,9 +706,19 @@ export async function testSyncSingleProduct(connection, db, { idsubproduto = nul
         const saldos = results.endpoints.produtos_saldo_estoque_empresa.dados_formatados || [];
         const custos = results.endpoints.precos_custos_produtos_empresa.dados_formatados || [];
 
-        // Monta tabela comparativa das duas lojas
+        // Monta tabela comparativa das duas lojas priorizando "Area de venda loja 1" e "Area de venda loja 2"
         const empresas = [1, 2].map(empId => {
-            const s = saldos.find(x => x.empresa_id === empId) || { saldo_atual: 0, saldo_reserva: 0, saldo_disponivel: 0, local_estoque: 'Geral' };
+            const targetLocalName = empId === 1 ? 'Area de venda loja 1' : 'Area de venda loja 2';
+            const matchingSaldo = saldos.find(x => x.empresa_id === empId && isOfficialSalesLocation(empId, x.local_estoque))
+                || saldos.find(x => x.empresa_id === empId);
+
+            const s = matchingSaldo || { 
+                saldo_atual: 0, 
+                saldo_reserva: 0, 
+                saldo_disponivel: 0, 
+                local_estoque: targetLocalName,
+                id_local_estoque: empId === 1 ? 1 : 2
+            };
             const c = custos.find(x => x.empresa_id === empId) || { custo_medio: 0, custo_medio_fiscal: 0, custo_gerencial: 0, custo_reposicao: 0, custo_nota_fiscal: 0, preco_venda_varejo: 0 };
             return {
                 empresa_id: empId,
