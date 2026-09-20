@@ -419,13 +419,13 @@ function getValidCostColumn(tipoCusto = 'custo_medio_fiscal') {
 
 /**
  * Helper para validar se o registro de estoque pertence à área de venda oficial da loja:
- * - Loja 1 / Matriz -> 'Area de venda loja 1'
- * - Loja 2 / Filial -> 'Area de venda loja 2'
+ * - Loja 1 / Matriz -> 'AREA VENDA LOJA01' (id_local_estoque = 1)
+ * - Loja 2 / Filial -> 'AREA VENDA LOJA02' (id_local_estoque = 2)
  */
 function getStockLocationCondition() {
     return `(
-        (s.empresa_id = 1 AND (s.local_estoque LIKE '%loja 1%' OR s.local_estoque LIKE '%Matriz%' OR s.local_estoque = 'Area de venda loja 1' OR s.local_estoque IS NULL))
-        OR (s.empresa_id = 2 AND (s.local_estoque LIKE '%loja 2%' OR s.local_estoque LIKE '%Filial%' OR s.local_estoque = 'Area de venda loja 2' OR s.local_estoque IS NULL))
+        (s.empresa_id = 1 AND (s.id_local_estoque = 1 OR s.local_estoque LIKE '%LOJA01%' OR s.local_estoque LIKE '%loja 1%' OR s.local_estoque LIKE '%Matriz%' OR s.local_estoque IS NULL))
+        OR (s.empresa_id = 2 AND (s.id_local_estoque = 2 OR s.local_estoque LIKE '%LOJA02%' OR s.local_estoque LIKE '%loja 2%' OR s.local_estoque LIKE '%Filial%' OR s.local_estoque IS NULL))
         OR (s.empresa_id NOT IN (1, 2))
         OR (s.local_estoque IS NULL)
     )`;

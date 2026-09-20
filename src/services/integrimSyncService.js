@@ -114,36 +114,42 @@ export async function syncIntegrimProducts(connection, db, batchLimit = 2000) {
 }
 
 /**
- * Valida se a descrição do local de estoque corresponde à Área de Venda oficial da Loja:
- * - Loja 1 / Matriz -> "Area de venda loja 1"
- * - Loja 2 / Filial 2 -> "Area de venda loja 2"
+ * Valida com precisão o registro de estoque da loja oficial no CISS Poder:
+ * - Empresa 1 (Matriz / Loja 1) -> idlocalestoque = 1 e descrlocalestoque = "AREA VENDA LOJA01"
+ * - Empresa 2 (Filial 2 / Loja 2) -> idlocalestoque = 2 e descrlocalestoque = "AREA VENDA LOJA02"
  */
-export function isOfficialSalesLocation(empresaId, descrLocalEstoque) {
-    if (!descrLocalEstoque) return false;
-    const norm = String(descrLocalEstoque)
+export function isValidStoreStockRecord(idempresa, idlocalestoque, descrlocalestoque) {
+    const emp = parseInt(idempresa, 10);
+    const locId = parseInt(idlocalestoque, 10);
+    const desc = String(descrlocalestoque || '')
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-    
-    const emp = parseInt(empresaId, 10);
+        .toUpperCase()
+        .replace(/[^A-Z0-9]/g, '');
+
+    // Se for empresa 1: deve ser local 1 ("AREA VENDA LOJA01")
     if (emp === 1) {
-        return norm.includes('area de venda loja 1') || 
-               norm.includes('area venda loja 1') || 
-               norm.includes('venda loja 1') ||
-               norm.includes('loja 1') ||
-               norm.includes('matriz');
+        if (locId === 1 && (desc.includes('LOJA01') || desc.includes('LOJA1') || !desc)) return true;
+        if (desc.includes('LOJA01') || desc.includes('LOJA1') || desc.includes('MATRIZ')) {
+            return !desc.includes('TROCA') && !desc.includes('AVARIA') && !desc.includes('DEPOSITO');
+        }
+        return locId === 1;
     }
+
+    // Se for empresa 2: deve ser local 2 ("AREA VENDA LOJA02")
     if (emp === 2) {
-        return norm.includes('area de venda loja 2') || 
-               norm.includes('area venda loja 2') || 
-               norm.includes('venda loja 2') ||
-               norm.includes('loja 2') ||
-               norm.includes('filial');
+        if (locId === 2 && (desc.includes('LOJA02') || desc.includes('LOJA2') || !desc)) return true;
+        if (desc.includes('LOJA02') || desc.includes('LOJA2') || desc.includes('FILIAL')) {
+            return !desc.includes('TROCA') && !desc.includes('AVARIA') && !desc.includes('DEPOSITO');
+        }
+        return locId === 2;
     }
-    return true;
+
+    return false;
+}
+
+export function isOfficialSalesLocation(empresaId, descrLocalEstoque) {
+    return isValidStoreStockRecord(empresaId, null, descrLocalEstoque);
 }
 
 /**
@@ -161,12 +167,14 @@ export async function syncIntegrimStockBalances(connection, db, batchLimit = 300
     let hasNext = true;
     let totalImportados = 0;
 
-    logger.info(`[IntegrimSync] Sincronizando saldos físicos via PRODUTOS_SALDO_ESTOQUE_EMPRESA...`);
+    logger.info(`[IntegrimSync] Sincronizando saldos físicos via PRODUTOS_SALDO_ESTOQUE_EMPRESA com filtro de Área de Venda...`);
 
     while (hasNext && totalImportados < batchLimit) {
         const payload = {
             page,
-            clausulas: [],
+            clausulas: [
+                { campo: "descrlocalestoque", valor: "AREA VENDA%", operador: "LIKE", operadorlogico: "AND" }
+            ],
             ordenacoes: [{ campo: "idsubproduto", direcao: "ASC" }]
         };
 
@@ -186,8 +194,14 @@ export async function syncIntegrimStockBalances(connection, db, batchLimit = 300
             const idproduto = parseInt(item.idproduto, 10) || idsubproduto;
             if (!idsubproduto) continue;
 
-            const idLocalEstoque = parseInt(item.idlocalestoque, 10) || 1;
-            const localEstoque = item.descrlocalestoque || 'Geral';
+            const idLocalEstoque = parseInt(item.idlocalestoque, 10) || (empresaId === 1 ? 1 : 2);
+            const localEstoque = item.descrlocalestoque || (empresaId === 1 ? 'AREA VENDA LOJA01' : 'AREA VENDA LOJA02');
+
+            // Filtro de integridade: descarta estoques de troca, avaria ou locais cruzados
+            if (!isValidStoreStockRecord(empresaId, idLocalEstoque, localEstoque)) {
+                continue;
+            }
+
             const saldoAtual = parseFloat(item.qtdsaldoatual) || 0;
             const saldoReserva = parseFloat(item.qtdsaldoreserva) || 0;
             const saldoDisponivel = parseFloat(item.qtdsaldodisponivel) || (saldoAtual - saldoReserva);
@@ -214,7 +228,7 @@ export async function syncIntegrimStockBalances(connection, db, batchLimit = 300
         page++;
     }
 
-    logger.info(`[IntegrimSync] PRODUTOS_SALDO_ESTOQUE_EMPRESA concluído: ${totalImportados} registros.`);
+    logger.info(`[IntegrimSync] PRODUTOS_SALDO_ESTOQUE_EMPRESA concluído: ${totalImportados} registros oficiais importados.`);
     return { sucesso: true, total: totalImportados };
 }
 
@@ -632,15 +646,19 @@ export async function testSyncSingleProduct(connection, db, { idsubproduto = nul
             results.endpoints.produtos_saldo_estoque_empresa.raw_data = saldoItems;
             results.endpoints.produtos_saldo_estoque_empresa.sucesso = true;
 
-            results.endpoints.produtos_saldo_estoque_empresa.dados_formatados = saldoItems.map(s => ({
-                empresa_id: parseInt(s.idempresa, 10) || 1,
-                nome_empresa: parseInt(s.idempresa, 10) === 2 ? '2 - Filial 2' : '1 - Matriz',
-                id_local_estoque: parseInt(s.idlocalestoque, 10) || 1,
-                local_estoque: s.descrlocalestoque || 'Geral',
-                saldo_atual: parseFloat(s.qtdsaldoatual) || 0,
-                saldo_reserva: parseFloat(s.qtdsaldoreserva) || 0,
-                saldo_disponivel: parseFloat(s.qtdsaldodisponivel) || ((parseFloat(s.qtdsaldoatual) || 0) - (parseFloat(s.qtdsaldoreserva) || 0))
-            }));
+            results.endpoints.produtos_saldo_estoque_empresa.dados_formatados = saldoItems.map(s => {
+                const isOficial = isValidStoreStockRecord(s.idempresa, s.idlocalestoque, s.descrlocalestoque);
+                return {
+                    empresa_id: parseInt(s.idempresa, 10) || 1,
+                    nome_empresa: parseInt(s.idempresa, 10) === 2 ? '2 - Filial 2' : '1 - Matriz',
+                    id_local_estoque: parseInt(s.idlocalestoque, 10) || 1,
+                    local_estoque: s.descrlocalestoque || 'Geral',
+                    saldo_atual: parseFloat(s.qtdsaldoatual) || 0,
+                    saldo_reserva: parseFloat(s.qtdsaldoreserva) || 0,
+                    saldo_disponivel: parseFloat(s.qtdsaldodisponivel) || ((parseFloat(s.qtdsaldoatual) || 0) - (parseFloat(s.qtdsaldoreserva) || 0)),
+                    is_oficial: isOficial
+                };
+            });
         } catch (errSaldo) {
             results.endpoints.produtos_saldo_estoque_empresa.sucesso = false;
             results.endpoints.produtos_saldo_estoque_empresa.tempo_ms = Date.now() - t2Start;
@@ -706,10 +724,12 @@ export async function testSyncSingleProduct(connection, db, { idsubproduto = nul
         const saldos = results.endpoints.produtos_saldo_estoque_empresa.dados_formatados || [];
         const custos = results.endpoints.precos_custos_produtos_empresa.dados_formatados || [];
 
-        // Monta tabela comparativa das duas lojas priorizando "Area de venda loja 1" e "Area de venda loja 2"
+        // Monta tabela comparativa das duas lojas priorizando AREA VENDA LOJA01 (1) e AREA VENDA LOJA02 (2)
         const empresas = [1, 2].map(empId => {
-            const targetLocalName = empId === 1 ? 'Area de venda loja 1' : 'Area de venda loja 2';
-            const matchingSaldo = saldos.find(x => x.empresa_id === empId && isOfficialSalesLocation(empId, x.local_estoque))
+            const targetLocalName = empId === 1 ? 'AREA VENDA LOJA01' : 'AREA VENDA LOJA02';
+            const targetLocalId = empId === 1 ? 1 : 2;
+            const matchingSaldo = saldos.find(x => x.empresa_id === empId && isValidStoreStockRecord(empId, x.id_local_estoque, x.local_estoque))
+                || saldos.find(x => x.empresa_id === empId && (x.id_local_estoque === targetLocalId || x.is_oficial))
                 || saldos.find(x => x.empresa_id === empId);
 
             const s = matchingSaldo || { 
@@ -717,7 +737,7 @@ export async function testSyncSingleProduct(connection, db, { idsubproduto = nul
                 saldo_reserva: 0, 
                 saldo_disponivel: 0, 
                 local_estoque: targetLocalName,
-                id_local_estoque: empId === 1 ? 1 : 2
+                id_local_estoque: targetLocalId
             };
             const c = custos.find(x => x.empresa_id === empId) || { custo_medio: 0, custo_medio_fiscal: 0, custo_gerencial: 0, custo_reposicao: 0, custo_nota_fiscal: 0, preco_venda_varejo: 0 };
             return {
