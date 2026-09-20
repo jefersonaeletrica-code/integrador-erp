@@ -183,21 +183,27 @@ export default (db) => {
         }
     });
 
-    router.get('/marketplace/callback', async (req, res) => {
-        const { code, error, state } = req.query;
+    const handleMeliCallback = async (req, res) => {
+        const queryOrBody = req.method === 'POST' ? req.body : req.query;
+        const code = queryOrBody?.code || req.query?.code;
+        const error = queryOrBody?.error || req.query?.error;
+        const state = queryOrBody?.state || req.query?.state;
+
         if (error) return res.status(400).send(`Erro retornado pelo Mercado Livre: ${error}`);
         if (!code) return res.status(400).send('Código de autorização não informado pelo Mercado Livre.');
 
         let connectionId = null;
         if (state) {
-            const stateParams = new URLSearchParams(state);
-            connectionId = stateParams.get('connId');
+            try {
+                const stateParams = new URLSearchParams(state);
+                connectionId = stateParams.get('connId');
+            } catch (sErr) {}
         }
 
         if (!connectionId) {
             // Tenta pegar a primeira conexão do Mercado Livre se não vier no state
             const pool = db.getPool();
-            const [rows] = await pool.execute('SELECT id FROM marketplace_connections WHERE type = "mercadolivre" LIMIT 1');
+            const [rows] = await pool.execute('SELECT id FROM marketplace_connections WHERE type = "mercadolivre" ORDER BY id ASC LIMIT 1');
             if (rows[0]) connectionId = rows[0].id;
         }
 
@@ -211,10 +217,33 @@ export default (db) => {
             connection.credentials = updatedCredentials;
             await db.updateMarketplaceConnection(connection);
 
+            logger.info(`[MercadoLivreCallback] Conexão ID ${connection.id} (@${updatedCredentials.nickname || 'ML'}) autorizada com sucesso! Tokens salvos no MySQL.`);
             res.redirect('/?ml_autorizado=true');
         } catch (e) {
             logger.error('Falha no callback do Mercado Livre:', e);
             res.status(500).send(`Erro na autorização com Mercado Livre: ${e.message}`);
+        }
+    };
+
+    router.get('/marketplace/callback', handleMeliCallback);
+    router.post('/marketplace/callback', handleMeliCallback);
+
+    router.post('/marketplace-connections/:id/refresh-token', async (req, res) => {
+        const { id } = req.params;
+        try {
+            const connection = await findMarketplaceConnectionById(id);
+            if (!connection) {
+                return res.status(404).json({ sucesso: false, erro: 'Conexão de Marketplace não encontrada.' });
+            }
+            await meliService.refreshToken(connection, db);
+            res.json({ 
+                sucesso: true, 
+                mensagem: 'Token de acesso do Mercado Livre renovado e salvo com sucesso!',
+                expires_at: connection.credentials?.expires_at
+            });
+        } catch (err) {
+            logger.error(`[MarketplaceRoutes] Falha ao renovar token para conexão ${id}: ${err.message}`);
+            res.status(400).json({ sucesso: false, erro: err.message });
         }
     });
 

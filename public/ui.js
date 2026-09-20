@@ -3693,6 +3693,11 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <button class="btn btn-small ${isConnected ? 'btn-secondary' : 'btn-meli'}" data-action="auth-meli" data-id="${conn.id}" title="Autenticar conta no Mercado Livre via OAuth">
                                     <i class="fas fa-key"></i> ${isConnected ? 'Reautorizar' : 'Autorizar Login ML'}
                                 </button>
+                                ${isConnected ? `
+                                <button class="btn btn-small btn-secondary" data-action="refresh-meli-token" data-id="${conn.id}" title="Forçar renovação imediata do token com o refresh_token">
+                                    <i class="fas fa-arrows-rotate"></i> Renovar Token
+                                </button>
+                                ` : ''}
                                 <button class="btn btn-small btn-primary" data-action="nav-goto-meli-ads" title="Ver anúncios desta conta">
                                     <i class="fas fa-rectangle-ad"></i> Anúncios
                                 </button>
@@ -4043,6 +4048,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             } catch (authError) {
                 showToast(`Falha ao iniciar OAuth do Mercado Livre: ${authError.message}`, 'error');
+            } finally {
+                actionButton.classList.remove('loading');
+                actionButton.disabled = false;
+            }
+            return;
+        }
+
+        // 4.1. Renovação Manual do Token do Mercado Livre
+        if (action === 'refresh-meli-token') {
+            actionButton.classList.add('loading');
+            actionButton.disabled = true;
+            try {
+                const res = await api(`/api/marketplace-connections/${id}/refresh-token`, 'POST');
+                showToast(res.mensagem || 'Token do Mercado Livre renovado com sucesso!', 'success');
+                await renderMarketplaceConnections();
+            } catch (refreshErr) {
+                showToast(`Falha ao renovar token: ${refreshErr.message}`, 'error');
             } finally {
                 actionButton.classList.remove('loading');
                 actionButton.disabled = false;

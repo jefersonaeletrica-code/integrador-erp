@@ -16,17 +16,51 @@ const meliAxios = axios.create({
 });
 
 /**
+ * Normaliza os campos de credenciais do Mercado Livre para suportar variações de nomenclatura
+ * (client_id / app_id, client_secret / secret_key, refresh_token / refreshToken, etc.)
+ * @param {object|string} credentials 
+ * @returns {object}
+ */
+export function normalizeMeliCredentials(credentials) {
+    if (!credentials) return {};
+    let parsed = credentials;
+    if (typeof parsed === 'string') {
+        try {
+            parsed = JSON.parse(parsed);
+        } catch {
+            parsed = {};
+        }
+    }
+    if (typeof parsed !== 'object' || parsed === null) parsed = {};
+
+    return {
+        ...parsed,
+        client_id: String(parsed.client_id || parsed.app_id || parsed.clientId || '').trim(),
+        client_secret: String(parsed.client_secret || parsed.secret_key || parsed.clientSecret || '').trim(),
+        redirect_uri: String(parsed.redirect_uri || parsed.redirectUri || '').trim(),
+        access_token: String(parsed.access_token || parsed.accessToken || '').trim(),
+        refresh_token: String(parsed.refresh_token || parsed.refreshToken || '').trim(),
+        user_id: parsed.user_id || parsed.userId || null,
+        expires_at: parsed.expires_at ? Number(parsed.expires_at) : (parsed.expires_in ? Date.now() + (Number(parsed.expires_in) * 1000) : null),
+        expires_in: parsed.expires_in ? Number(parsed.expires_in) : 21600,
+        nickname: parsed.nickname || '',
+        email: parsed.email || '',
+        site_id: parsed.site_id || 'MLB'
+    };
+}
+
+/**
  * Gera a URL de autorização OAuth 2.0 para o Mercado Livre
  * @param {object} connection - Conexão do Mercado Livre
  * @returns {string} URL para redirecionar o usuário
  */
 export function getAuthUrl(connection) {
-    const { client_id, redirect_uri } = connection.credentials || {};
-    if (!client_id || !redirect_uri) {
+    const creds = normalizeMeliCredentials(connection.credentials);
+    if (!creds.client_id || !creds.redirect_uri) {
         throw new Error('Client ID (App ID) e Redirect URI são obrigatórios para autenticação do Mercado Livre.');
     }
     const state = `connId=${connection.id}`;
-    return `${MELI_AUTH_BASE}/authorization?response_type=code&client_id=${client_id}&redirect_uri=${encodeURIComponent(redirect_uri)}&state=${state}`;
+    return `${MELI_AUTH_BASE}/authorization?response_type=code&client_id=${creds.client_id}&redirect_uri=${encodeURIComponent(creds.redirect_uri)}&state=${state}`;
 }
 
 /**
@@ -36,70 +70,77 @@ export function getAuthUrl(connection) {
  * @returns {Promise<object>} Dados de autenticação atualizados
  */
 export async function exchangeCodeForToken(connection, code) {
-    const { client_id, client_secret, redirect_uri } = connection.credentials || {};
-    if (!client_id || !client_secret || !redirect_uri) {
-        throw new Error('Credenciais incompletas (client_id, client_secret, redirect_uri).');
+    const creds = normalizeMeliCredentials(connection.credentials);
+    if (!creds.client_id || !creds.client_secret || !creds.redirect_uri) {
+        throw new Error('Credenciais incompletas (client_id/app_id, client_secret/secret_key, redirect_uri).');
     }
 
     try {
         logger.info(`[MercadoLivreService] Trocando código por token para conexão ID ${connection.id}...`);
         const response = await meliAxios.post('/oauth/token', new URLSearchParams({
             grant_type: 'authorization_code',
-            client_id,
-            client_secret,
-            code,
-            redirect_uri
+            client_id: creds.client_id,
+            client_secret: creds.client_secret,
+            code: String(code).trim(),
+            redirect_uri: creds.redirect_uri
         }), {
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
         });
 
         const { access_token, refresh_token, user_id, expires_in } = response.data;
-        const expires_at = Date.now() + (expires_in * 1000);
+        const expires_at = Date.now() + ((expires_in || 21600) * 1000);
 
         // Busca informações do usuário/vendedor
-        let nickname = '';
-        let email = '';
-        let site_id = 'MLB';
+        let nickname = creds.nickname || '';
+        let email = creds.email || '';
+        let site_id = creds.site_id || 'MLB';
 
         try {
             const userRes = await meliAxios.get('/users/me', {
                 headers: { 'Authorization': `Bearer ${access_token}` }
             });
-            nickname = userRes.data.nickname || '';
-            email = userRes.data.email || '';
-            site_id = userRes.data.site_id || 'MLB';
+            nickname = userRes.data.nickname || nickname;
+            email = userRes.data.email || email;
+            site_id = userRes.data.site_id || site_id;
         } catch (uErr) {
             logger.warn(`[MercadoLivreService] Não foi possível buscar perfil do usuário: ${uErr.message}`);
         }
 
-        return {
-            ...connection.credentials,
+        const updatedCreds = {
+            ...creds,
             access_token,
             refresh_token,
-            user_id,
-            expires_in,
+            user_id: user_id || creds.user_id,
+            expires_in: expires_in || 21600,
             expires_at,
             nickname,
             email,
             site_id
         };
+
+        return updatedCreds;
     } catch (error) {
-        const errorMsg = error.response?.data?.message || error.response?.data?.error || error.message;
+        const errorMsg = error.response?.data?.message || error.response?.data?.error_description || error.response?.data?.error || error.message;
         logger.error(`[MercadoLivreService] Falha ao trocar code por token: ${errorMsg}`, error);
         throw new Error(`Falha na autorização com o Mercado Livre: ${errorMsg}`);
     }
 }
 
 /**
- * Renova o access_token utilizando o refresh_token
+ * Renova o access_token utilizando o refresh_token e persiste imediatamente no MySQL
  * @param {object} connection - Conexão do Mercado Livre
  * @param {object} db - Instância do banco de dados
  * @returns {Promise<string>} Novo access_token
  */
 export async function refreshToken(connection, db) {
-    const { client_id, client_secret, refresh_token } = connection.credentials || {};
+    const creds = normalizeMeliCredentials(connection.credentials);
+    const { client_id, client_secret, refresh_token } = creds;
+
     if (!refresh_token) {
-        throw new Error('Refresh token não encontrado para esta conexão.');
+        throw new Error(`Refresh token não configurado para a conexão ID ${connection.id}. Realize a autorização OAuth oficial na aba Contas ML.`);
+    }
+    if (!client_id || !client_secret) {
+        throw new Error(`Client ID e Client Secret não configurados para a conexão ID ${connection.id}.`);
     }
 
     try {
@@ -114,20 +155,46 @@ export async function refreshToken(connection, db) {
         });
 
         const data = response.data;
-        connection.credentials.access_token = data.access_token;
-        connection.credentials.refresh_token = data.refresh_token;
-        connection.credentials.user_id = data.user_id || connection.credentials.user_id;
-        connection.credentials.expires_in = data.expires_in;
-        connection.credentials.expires_at = Date.now() + (data.expires_in * 1000);
+        const newAccessToken = data.access_token;
+        const newRefreshToken = data.refresh_token || refresh_token;
+        const expiresIn = data.expires_in || 21600;
+        const expiresAt = Date.now() + (expiresIn * 1000);
 
-        if (db && typeof db.updateMarketplaceConnection === 'function') {
-            await db.updateMarketplaceConnection(connection);
+        connection.credentials = {
+            ...creds,
+            access_token: newAccessToken,
+            refresh_token: newRefreshToken,
+            user_id: data.user_id || creds.user_id,
+            expires_in: expiresIn,
+            expires_at: expiresAt
+        };
+
+        // Persistência robusta no MySQL
+        try {
+            if (db && typeof db.updateMarketplaceConnection === 'function') {
+                await db.updateMarketplaceConnection(connection);
+            } else {
+                const dbModule = await import('../database/db.mysql.js');
+                if (typeof dbModule.updateMarketplaceConnection === 'function') {
+                    await dbModule.updateMarketplaceConnection(connection);
+                } else {
+                    const pool = dbModule.getPool ? dbModule.getPool() : (db?.getPool ? db.getPool() : null);
+                    if (pool) {
+                        await pool.execute(
+                            'UPDATE marketplace_connections SET credentials = ? WHERE id = ?',
+                            [JSON.stringify(connection.credentials), connection.id]
+                        );
+                    }
+                }
+            }
+            logger.info(`[MercadoLivreService] Token renovado e persistido no banco de dados com sucesso para conexão ID ${connection.id}. Válido até ${new Date(expiresAt).toLocaleString('pt-BR')}`);
+        } catch (dbErr) {
+            logger.error(`[MercadoLivreService] Token renovado via API do Mercado Livre, mas falhou ao salvar no MySQL: ${dbErr.message}`, dbErr);
         }
 
-        logger.info(`[MercadoLivreService] Token renovado com sucesso para conexão ID ${connection.id}.`);
-        return data.access_token;
+        return newAccessToken;
     } catch (error) {
-        const errorMsg = error.response?.data?.message || error.response?.data?.error || error.message;
+        const errorMsg = error.response?.data?.message || error.response?.data?.error_description || error.response?.data?.error || error.message;
         logger.error(`[MercadoLivreService] Falha ao renovar token para conexão ${connection.id}: ${errorMsg}`, error);
         throw new Error(`Falha ao renovar autenticação com Mercado Livre: ${errorMsg}`);
     }
@@ -140,10 +207,18 @@ export async function refreshToken(connection, db) {
  * @returns {Promise<string>} Access token válido
  */
 export async function ensureValidToken(connection, db) {
-    const { access_token, expires_at, refresh_token } = connection.credentials || {};
+    const creds = normalizeMeliCredentials(connection.credentials);
+    connection.credentials = creds;
+
+    const { access_token, expires_at, refresh_token } = creds;
 
     if (!access_token && !refresh_token) {
-        throw new Error('Conexão não autenticada com o Mercado Livre. Realize a autorização OAuth.');
+        throw new Error('Conexão não autenticada com o Mercado Livre. Realize a autorização OAuth na aba Mercado Livre > Contas ML.');
+    }
+
+    // Se não tem access_token mas tem refresh_token, renova imediatamente
+    if (!access_token && refresh_token) {
+        return await refreshToken(connection, db);
     }
 
     // Se o token estiver perto de expirar (menos de 5 minutos) ou já expirou, renova
@@ -169,7 +244,7 @@ export function isMeliTokenError(error) {
 
     if (status === 401) return true;
     if (status === 400 || status === 403) {
-        if (msg.includes('token') || msg.includes('unauthorized') || msg.includes('access_token') || msg.includes('invalid access token') || msg.includes('expired')) {
+        if (msg.includes('token') || msg.includes('unauthorized') || msg.includes('access_token') || msg.includes('invalid access token') || msg.includes('expired') || msg.includes('invalid_grant')) {
             return true;
         }
     }
@@ -189,9 +264,12 @@ export async function executeMeliRequest(connection, db, requestFn) {
         return await requestFn(token);
     } catch (error) {
         if (isMeliTokenError(error)) {
-            const hasRefreshToken = !!connection.credentials?.refresh_token;
+            const creds = normalizeMeliCredentials(connection.credentials);
+            connection.credentials = creds;
+            const hasRefreshToken = !!creds.refresh_token;
+
             if (hasRefreshToken) {
-                logger.warn(`[MercadoLivreService] Token expirado ou inválido ("${error.response?.data?.message || error.message}") para conexão ID ${connection.id}. Renovando token automaticamente...`);
+                logger.warn(`[MercadoLivreService] Token expirado ou rejeitado ("${error.response?.data?.message || error.message}") para conexão ID ${connection.id}. Renovando token automaticamente e re-executando...`);
                 try {
                     token = await refreshToken(connection, db);
                     return await requestFn(token);
@@ -200,7 +278,7 @@ export async function executeMeliRequest(connection, db, requestFn) {
                     throw error;
                 }
             } else {
-                logger.warn(`[MercadoLivreService] Conexão ID ${connection.id} sem refresh_token configurado. Re-autorização necessária.`);
+                logger.warn(`[MercadoLivreService] Conexão ID ${connection.id} sem refresh_token configurado. Re-autorização necessária na tela Contas ML.`);
             }
         }
         throw error;
@@ -214,8 +292,10 @@ export async function executeMeliRequest(connection, db, requestFn) {
  * @returns {Promise<string>} Status: 'connected', 'requires_auth', 'error'
  */
 export async function getMarketplaceConnectionStatus(connection, db) {
-    const { credentials } = connection;
-    if (!credentials?.access_token && !credentials?.refresh_token) {
+    const creds = normalizeMeliCredentials(connection.credentials);
+    connection.credentials = creds;
+
+    if (!creds.access_token && !creds.refresh_token) {
         return 'requires_auth';
     }
 
@@ -1875,9 +1955,9 @@ export async function getSellerOrders(connection, db, options = {}) {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
             } catch (pageErr) {
-                // Se a API do ML rejeitar com 400 devido a filtro de data, remove o filtro e tenta novamente
-                if (params['order.date_created.from']) {
-                    logger.warn(`[MercadoLivreService:Orders] Falha com filtro de data (${pageErr.message}). Tentando novamente sem restrição de data...`);
+                // Se a API do ML rejeitar com 400 devido a filtro de data inválido, remove o filtro e tenta novamente
+                if (pageErr.response?.status === 400 && params['order.date_created.from']) {
+                    logger.warn(`[MercadoLivreService:Orders] Falha 400 com filtro de data (${pageErr.message}). Tentando novamente sem restrição de data...`);
                     delete params['order.date_created.from'];
                     dateFrom = null;
                     response = await meliAxios.get('/orders/search', {
