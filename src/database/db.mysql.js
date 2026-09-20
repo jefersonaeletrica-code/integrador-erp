@@ -399,6 +399,105 @@ Regras de atuação:
     ]);
     await connection.query('UPDATE ai_agents SET allowed_tools = ? WHERE allowed_tools IS NULL OR allowed_tools = "" OR allowed_tools NOT LIKE "%consultar_vendas_e_pedidos_ml%"', [allToolsJson]);
 
+    // =========================================================================
+    // TABELAS DO MÓDULO POWER BI & GESTÃO EMPRESARIAL ("A ELÉTRICA")
+    // =========================================================================
+
+    // 1. Empresas / Filiais
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS bi_empresas (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        codigo_erp VARCHAR(50) NOT NULL UNIQUE,
+        nome_fantasia VARCHAR(100) NOT NULL,
+        razao_social VARCHAR(150) DEFAULT NULL,
+        cnpj VARCHAR(20) DEFAULT NULL,
+        cidade_uf VARCHAR(100) DEFAULT 'Jussara de Freitas - RS',
+        ativo BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // Inserção das 2 empresas padrão de A Elétrica se ainda não existirem
+    const [empresaRows] = await connection.query('SELECT id FROM bi_empresas LIMIT 1');
+    if (empresaRows.length === 0) {
+      await connection.query(`
+        INSERT INTO bi_empresas (codigo_erp, nome_fantasia, razao_social, cidade_uf, ativo)
+        VALUES 
+          ('1', '1 - A Elétrica', 'A Elétrica Materiais Elétricos Ltda - Matriz', 'Jussara de Freitas - RS', TRUE),
+          ('2', '2 - A Elétrica', 'A Elétrica Materiais Elétricos Ltda - Filial 2', 'Jussara de Freitas - RS', TRUE);
+      `);
+      console.log('Empresas padrão (1 - A Elétrica e 2 - A Elétrica) cadastradas no BI!');
+    }
+
+    // 2. Vendas e Faturamento Diarizado (Cupons, NFC-e, NF-e)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS bi_vendas (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        empresa_id INT NOT NULL,
+        numero_documento VARCHAR(50) NOT NULL,
+        tipo_documento VARCHAR(20) DEFAULT 'NFCE',
+        data_emissao DATE NOT NULL,
+        data_hora DATETIME NOT NULL,
+        dia_semana VARCHAR(20) NOT NULL,
+        valor_bruto DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        valor_desconto DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        valor_liquido DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        custo_total DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        lucro_bruto DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        margem_lucratividade_pct DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+        canal_venda VARCHAR(50) DEFAULT 'Loja Física',
+        vendedor_codigo VARCHAR(50) DEFAULT NULL,
+        vendedor_nome VARCHAR(100) DEFAULT NULL,
+        cliente_codigo VARCHAR(50) DEFAULT NULL,
+        cliente_nome VARCHAR(150) DEFAULT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'concluida',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_empresa_data (empresa_id, data_emissao),
+        INDEX idx_data (data_emissao),
+        INDEX idx_doc (numero_documento)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 3. Itens das Vendas
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS bi_vendas_itens (
+        id BIGINT AUTO_INCREMENT PRIMARY KEY,
+        venda_id BIGINT NOT NULL,
+        empresa_id INT NOT NULL,
+        data_emissao DATE NOT NULL,
+        codigo_produto VARCHAR(50) NOT NULL,
+        descricao_produto VARCHAR(255) NOT NULL,
+        categoria VARCHAR(100) DEFAULT NULL,
+        marca VARCHAR(100) DEFAULT NULL,
+        quantidade DECIMAL(10,3) NOT NULL DEFAULT 1.000,
+        preco_unitario DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        custo_unitario DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        valor_total DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        lucro_total DECIMAL(12,2) NOT NULL DEFAULT 0.00,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_venda (venda_id),
+        INDEX idx_produto_data (codigo_produto, data_emissao),
+        INDEX idx_categoria (categoria)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    // 4. Metas de Vendas
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS bi_metas_vendas (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        empresa_id INT DEFAULT NULL,
+        ano INT NOT NULL,
+        mes INT NOT NULL,
+        meta_faturamento DECIMAL(14,2) NOT NULL DEFAULT 0.00,
+        meta_lucratividade_pct DECIMAL(5,2) NOT NULL DEFAULT 0.00,
+        meta_ticket_medio DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+        meta_tickets_qtd INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uk_empresa_ano_mes (empresa_id, ano, mes)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
+    console.log('Tabelas do Módulo Power BI prontas.');
     console.log('Banco de dados MySQL pronto.');
   } finally {
     connection.release();

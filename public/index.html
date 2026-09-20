@@ -3,22 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Integrador ERP & Fornecedores</title>
+    <title>A Elétrica - Gestão Empresarial & Power BI</title>
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js para Dashboards Power BI -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- O placeholder __CACHE_BUSTER__ será substituído dinamicamente pelo servidor -->
     <link rel="stylesheet" href="style.css?v=__CACHE_BUSTER__">
 </head>
 <body>
     <div class="sidebar">
         <div class="sidebar-header">
-            <a href="#" id="brand-link" class="brand-link" title="Ir para o Dashboard">
-                <div class="brand-icon"><i class="fas fa-network-wired"></i></div>
-                <h3 class="link-text brand-title">Integrador</h3>
+            <a href="#" id="brand-link" class="brand-link" title="Ir para o Power BI">
+                <div class="brand-icon" style="background: linear-gradient(135deg, #f59e0b, #e11d48); color: white;"><i class="fas fa-bolt-lightning"></i></div>
+                <div class="brand-info">
+                    <h3 class="link-text brand-title" style="margin: 0; line-height: 1.2;">A Elétrica</h3>
+                    <span class="link-text" style="font-size: 0.72rem; color: var(--color-text-offset); font-weight: 500;">Gestão & Power BI</span>
+                </div>
             </a>
             <button class="toggle-btn" aria-label="Alternar Menu Lateral" title="Recolher/Expandir Menu">
                 <i class="fas fa-bars"></i>
@@ -26,43 +31,64 @@
         </div>
         <div class="sidebar-content">
             <ul class="menu-links">
-                <li>
-                    <a href="#" id="nav-dashboard" class="active">
-                        <i class="fas fa-chart-pie"></i>
-                        <span class="link-text">Dashboard</span>
-                    </a>
-                </li>
-                <li>
-                    <a href="#" id="nav-produtos">
-                        <i class="fas fa-boxes-stacked"></i>
-                        <span class="link-text">Produtos</span>
-                    </a>
-                </li>
+                <!-- SEÇÃO POWER BI / GESTÃO EXECUTIVA -->
                 <li class="open">
                     <a href="#" class="submenu-toggle">
-                        <i class="fas fa-plug-circle-bolt"></i>
-                        <span class="link-text">Integrações</span>
+                        <i class="fas fa-chart-simple" style="color: #38bdf8;"></i>
+                        <span class="link-text">Power BI & Gestão</span>
                         <i class="fas fa-chevron-down arrow"></i>
                     </a>
                     <ul class="submenu">
                         <li>
-                            <a href="#" id="nav-conexoes-erp">
-                                <i class="fas fa-server"></i>
-                                <span class="link-text">ERPs</span>
+                            <a href="#" id="nav-bi-vendas-home" class="active">
+                                <i class="fas fa-chart-line"></i>
+                                <span class="link-text">Vendas (Home)</span>
                             </a>
                         </li>
                         <li>
-                            <a href="#" id="nav-conexoes-fornecedores">
-                                <i class="fas fa-truck-fast"></i>
-                                <span class="link-text">Fornecedores</span>
+                            <a href="#" id="nav-bi-vendas-detalhada">
+                                <i class="fas fa-magnifying-glass-chart"></i>
+                                <span class="link-text">Análise Detalhada</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#" id="nav-bi-metas">
+                                <i class="fas fa-bullseye"></i>
+                                <span class="link-text">Gestão de Metas</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#" id="nav-bi-pvm">
+                                <i class="fas fa-scale-balanced"></i>
+                                <span class="link-text">Análise PVM</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#" id="nav-bi-compras">
+                                <i class="fas fa-cart-flatbed"></i>
+                                <span class="link-text">Compras</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#" id="nav-bi-estoque">
+                                <i class="fas fa-warehouse"></i>
+                                <span class="link-text">Estoque</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#" id="nav-bi-financeiro">
+                                <i class="fas fa-sack-dollar"></i>
+                                <span class="link-text">Financeiro</span>
                             </a>
                         </li>
                     </ul>
                 </li>
+
+                <!-- SEÇÃO E-COMMERCE & MARKETPLACES -->
                 <li class="open">
                     <a href="#" class="submenu-toggle">
                         <i class="fas fa-store" style="color: #FFE600;"></i>
-                        <span class="link-text">Mercado Livre</span>
+                        <span class="link-text">E-Commerce & ML</span>
                         <i class="fas fa-chevron-down arrow"></i>
                     </a>
                     <ul class="submenu">
@@ -73,16 +99,30 @@
                             </a>
                         </li>
                         <li>
+                            <a href="#" id="nav-produtos">
+                                <i class="fas fa-boxes-stacked"></i>
+                                <span class="link-text">Catálogo de Produtos</span>
+                            </a>
+                        </li>
+                        <li>
                             <a href="#" id="nav-meli-conexoes">
                                 <i class="fas fa-key"></i>
                                 <span class="link-text">Contas ML</span>
                             </a>
                         </li>
+                        <li>
+                            <a href="#" id="nav-dashboard">
+                                <i class="fas fa-network-wired"></i>
+                                <span class="link-text">Visão E-Commerce</span>
+                            </a>
+                        </li>
                     </ul>
                 </li>
+
+                <!-- SEÇÃO AGENTES IA & COPILOT -->
                 <li class="open">
                     <a href="#" class="submenu-toggle">
-                        <i class="fas fa-brain" style="color: #60a5fa;"></i>
+                        <i class="fas fa-brain" style="color: #a78bfa;"></i>
                         <span class="link-text">Agentes IA (Gemini)</span>
                         <i class="fas fa-chevron-down arrow"></i>
                     </a>
@@ -109,6 +149,29 @@
                             <a href="#" id="nav-ai-logs">
                                 <i class="fas fa-list-check"></i>
                                 <span class="link-text">Auditoria de Ações</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+
+                <!-- SEÇÃO INTEGRAÇÕES -->
+                <li>
+                    <a href="#" class="submenu-toggle">
+                        <i class="fas fa-plug-circle-bolt" style="color: #34d399;"></i>
+                        <span class="link-text">Integrações</span>
+                        <i class="fas fa-chevron-down arrow"></i>
+                    </a>
+                    <ul class="submenu">
+                        <li>
+                            <a href="#" id="nav-conexoes-erp">
+                                <i class="fas fa-server"></i>
+                                <span class="link-text">ERPs (CISS / Bling)</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="#" id="nav-conexoes-fornecedores">
+                                <i class="fas fa-truck-fast"></i>
+                                <span class="link-text">Fornecedores (Dismatal)</span>
                             </a>
                         </li>
                     </ul>

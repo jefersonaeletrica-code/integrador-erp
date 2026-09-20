@@ -5335,6 +5335,916 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * =================================================================
+     * MÓDULO POWER BI & GESTÃO EXECUTIVA "A ELÉTRICA"
+     * =================================================================
+     */
+
+    let biState = {
+        empresa_id: '',
+        data_inicio: '2025-01-01',
+        data_fim: '2025-12-31',
+        comparativo_tipo: 'ano_anterior'
+    };
+
+    let biChartInstances = {
+        empresas: null,
+        diarizado: null,
+        sparkline: null
+    };
+
+    function destroyBiCharts() {
+        if (biChartInstances.empresas) {
+            biChartInstances.empresas.destroy();
+            biChartInstances.empresas = null;
+        }
+        if (biChartInstances.diarizado) {
+            biChartInstances.diarizado.destroy();
+            biChartInstances.diarizado = null;
+        }
+        if (biChartInstances.sparkline) {
+            biChartInstances.sparkline.destroy();
+            biChartInstances.sparkline = null;
+        }
+    }
+
+    function formatBRL(val) {
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
+    }
+
+    function formatPct(val) {
+        return (Number(val) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + '%';
+    }
+
+    function formatInt(val) {
+        return (Number(val) || 0).toLocaleString('pt-BR');
+    }
+
+    function renderBiSubtabs(activeTab = 'vendas-home') {
+        const tabs = [
+            { id: 'vendas-home', label: 'Vendas (Home)', icon: 'fa-chart-line', route: 'nav-bi-vendas-home' },
+            { id: 'vendas-detalhada', label: 'Análise Detalhada', icon: 'fa-magnifying-glass-chart', route: 'nav-bi-vendas-detalhada' },
+            { id: 'metas', label: 'Gestão de Metas', icon: 'fa-bullseye', route: 'nav-bi-metas' },
+            { id: 'pvm', label: 'Análise PVM', icon: 'fa-scale-balanced', route: 'nav-bi-pvm' },
+            { id: 'compras', label: 'Compras', icon: 'fa-cart-flatbed', route: 'nav-bi-compras' },
+            { id: 'estoque', label: 'Estoque', icon: 'fa-warehouse', route: 'nav-bi-estoque' },
+            { id: 'financeiro', label: 'Financeiro & DRE', icon: 'fa-sack-dollar', route: 'nav-bi-financeiro' }
+        ];
+
+        return `
+            <div class="bi-subtabs-nav">
+                ${tabs.map(t => `
+                    <button class="bi-subtab-btn ${t.id === activeTab ? 'active' : ''}" data-bi-tab="${t.id}" data-nav-target="${t.route}">
+                        <i class="fas ${t.icon}"></i> ${t.label}
+                    </button>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    function renderBiFilterBar(companies = []) {
+        const compLabel = biState.comparativo_tipo === 'ano_anterior' ? 'Ano Anterior' : 'Mês Anterior';
+
+        return `
+            <div class="bi-filter-bar">
+                <div class="bi-filters-left">
+                    <!-- Empresa Selector -->
+                    <div class="bi-filter-group">
+                        <label class="bi-filter-label"><i class="fas fa-building"></i> Empresa:</label>
+                        <select id="bi-filter-company" class="bi-select">
+                            <option value="" ${!biState.empresa_id ? 'selected' : ''}>Todas as Empresas (Consolidado)</option>
+                            ${companies.map(c => `
+                                <option value="${c.id}" ${biState.empresa_id == c.id ? 'selected' : ''}>${c.codigo_ciss || c.id} - ${c.nome_fantasia || c.razao_social}</option>
+                            `).join('')}
+                        </select>
+                    </div>
+
+                    <!-- Período Datas -->
+                    <div class="bi-filter-group">
+                        <label class="bi-filter-label"><i class="fas fa-calendar-days"></i> Período:</label>
+                        <input type="date" id="bi-filter-start" class="bi-input-date" value="${biState.data_inicio}">
+                        <span style="color: var(--color-text-offset); font-size: 0.8rem;">até</span>
+                        <input type="date" id="bi-filter-end" class="bi-input-date" value="${biState.data_fim}">
+                    </div>
+
+                    <!-- Quick Chips -->
+                    <div class="bi-quick-chips">
+                        <button class="bi-chip-btn" data-period="este_mes">Este Mês</button>
+                        <button class="bi-chip-btn" data-period="mes_passado">Mês Passado</button>
+                        <button class="bi-chip-btn ${biState.data_inicio === '2025-01-01' && biState.data_fim === '2025-12-31' ? 'active' : ''}" data-period="ano_2025">Ano 2025</button>
+                        <button class="bi-chip-btn ${biState.data_inicio === '2026-01-01' ? 'active' : ''}" data-period="ano_2026">Ano 2026</button>
+                    </div>
+                </div>
+
+                <div style="display: flex; align-items: center; gap: 0.85rem;">
+                    <!-- Toggle Comparativo -->
+                    <div class="bi-filter-group">
+                        <label class="bi-filter-label"><i class="fas fa-code-compare"></i> Comparar com:</label>
+                        <div class="bi-toggle-group">
+                            <button class="bi-toggle-option ${biState.comparativo_tipo === 'ano_anterior' ? 'active' : ''}" data-comp="ano_anterior">Ano Anterior</button>
+                            <button class="bi-toggle-option ${biState.comparativo_tipo === 'mes_anterior' ? 'active' : ''}" data-comp="mes_anterior">Mês Anterior</button>
+                        </div>
+                    </div>
+
+                    <!-- Refresh Button -->
+                    <button class="btn btn-secondary" id="bi-btn-refresh" title="Recarregar Dados" style="padding: 0.45rem 0.85rem; height: 35px;">
+                        <i class="fas fa-rotate"></i>
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    function setupBiFilterListeners(reloadFn) {
+        const companySelect = document.getElementById('bi-filter-company');
+        const startInput = document.getElementById('bi-filter-start');
+        const endInput = document.getElementById('bi-filter-end');
+        const refreshBtn = document.getElementById('bi-btn-refresh');
+
+        companySelect?.addEventListener('change', (e) => {
+            biState.empresa_id = e.target.value;
+            reloadFn();
+        });
+
+        startInput?.addEventListener('change', (e) => {
+            biState.data_inicio = e.target.value;
+            reloadFn();
+        });
+
+        endInput?.addEventListener('change', (e) => {
+            biState.data_fim = e.target.value;
+            reloadFn();
+        });
+
+        refreshBtn?.addEventListener('click', () => {
+            reloadFn();
+        });
+
+        document.querySelectorAll('.bi-toggle-option').forEach(btn => {
+            btn.addEventListener('click', () => {
+                biState.comparativo_tipo = btn.dataset.comp;
+                reloadFn();
+            });
+        });
+
+        document.querySelectorAll('.bi-chip-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const p = btn.dataset.period;
+                const now = new Date();
+                const y = now.getFullYear();
+                const m = String(now.getMonth() + 1).padStart(2, '0');
+
+                if (p === 'este_mes') {
+                    biState.data_inicio = `${y}-${m}-01`;
+                    const lastDay = new Date(y, now.getMonth() + 1, 0).getDate();
+                    biState.data_fim = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+                } else if (p === 'mes_passado') {
+                    const prevM = now.getMonth() === 0 ? 12 : now.getMonth();
+                    const prevY = now.getMonth() === 0 ? y - 1 : y;
+                    const prevMStr = String(prevM).padStart(2, '0');
+                    const lastDay = new Date(prevY, prevM, 0).getDate();
+                    biState.data_inicio = `${prevY}-${prevMStr}-01`;
+                    biState.data_fim = `${prevY}-${prevMStr}-${String(lastDay).padStart(2, '0')}`;
+                } else if (p === 'ano_2025') {
+                    biState.data_inicio = '2025-01-01';
+                    biState.data_fim = '2025-12-31';
+                } else if (p === 'ano_2026') {
+                    biState.data_inicio = '2026-01-01';
+                    biState.data_fim = '2026-12-31';
+                }
+                reloadFn();
+            });
+        });
+
+        document.querySelectorAll('.bi-subtab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const targetRoute = btn.dataset.navTarget;
+                if (targetRoute) {
+                    setActiveNavLink(targetRoute);
+                    const handler = routes[targetRoute];
+                    if (handler) handler();
+                }
+            });
+        });
+    }
+
+    /**
+     * TELA 1: POWER BI - VENDAS HOME (DASHBOARD PRINCIPAL)
+     */
+    async function renderBiVendasHome() {
+        destroyBiCharts();
+        mainTitle.textContent = 'A Elétrica - Power BI & Gestão';
+        mainSubtitle.textContent = 'Painel Executivo de Faturamento, Margem Líquida e Performance de Vendas';
+        headerActions.innerHTML = `
+            <button class="btn btn-secondary" id="bi-seed-demo-btn" title="Recarregar Dados Demonstrativos CISS">
+                <i class="fas fa-database"></i> Recarregar Dados Mock
+            </button>
+            <button class="btn btn-primary" onclick="window.print()">
+                <i class="fas fa-file-arrow-down"></i> Exportar Relatório
+            </button>
+        `;
+
+        const seedDemoBtn = document.getElementById('bi-seed-demo-btn');
+        seedDemoBtn?.addEventListener('click', async () => {
+            showToast('Recarregando dados de demonstração do CISS BI...', 'info');
+            try {
+                await api('/api/bi/seed-mock', 'POST');
+                showToast('Dados de demonstração atualizados com sucesso!', 'success');
+                renderBiVendasHome();
+            } catch (err) {
+                showToast(`Erro ao gerar mock: ${err.message}`, 'error');
+            }
+        });
+
+        showLoading('Processando indicadores do Power BI...');
+
+        try {
+            // Buscar Empresas e Resumo
+            const [compRes, summaryRes] = await Promise.all([
+                api('/api/bi/companies').catch(() => ({ companies: [] })),
+                api(`/api/bi/sales/summary?empresa_id=${biState.empresa_id}&data_inicio=${biState.data_inicio}&data_fim=${biState.data_fim}&comparativo_tipo=${biState.comparativo_tipo}`).catch(() => null)
+            ]);
+
+            const companies = compRes.companies || [];
+
+            // Se banco estiver zerado, dispara mock automaticamente
+            if (!summaryRes || summaryRes.total_registros_base === 0) {
+                try {
+                    await api('/api/bi/seed-mock', 'POST');
+                    return renderBiVendasHome();
+                } catch (e) {
+                    console.error('Falha no auto-seed do BI:', e);
+                }
+            }
+
+            const current = summaryRes?.atual || {};
+            const comp = summaryRes?.comparativo || {};
+            const deltas = summaryRes?.deltas || {};
+            const sparklineData = summaryRes?.sparkline || [];
+            const compLabel = biState.comparativo_tipo === 'ano_anterior' ? 'Ano Anterior' : 'Mês Anterior';
+
+            const isFatPositive = deltas.faturamento_pct >= 0;
+            const isLucroPositive = deltas.lucro_pct >= 0;
+            const isTicketPositive = deltas.ticket_medio_pct >= 0;
+            const isQtdPositive = deltas.qtd_tickets_pct >= 0;
+
+            let html = `
+                <div class="bi-container">
+                    <!-- Sub-Abas do BI -->
+                    ${renderBiSubtabs('vendas-home')}
+
+                    <!-- Barra de Filtros -->
+                    ${renderBiFilterBar(companies)}
+
+                    <!-- 4 KPI Cards -->
+                    <div class="bi-kpi-grid">
+                        <!-- KPI 1: Faturamento -->
+                        <div class="bi-kpi-card">
+                            <div class="bi-kpi-header">
+                                <span class="bi-kpi-title">Faturamento</span>
+                                <div class="bi-kpi-icon"><i class="fas fa-coins"></i></div>
+                            </div>
+                            <div class="bi-kpi-main">
+                                <div class="bi-kpi-value">${formatBRL(current.faturamento_liquido)}</div>
+                                <div class="bi-sparkline-wrapper">
+                                    <canvas id="bi-sparkline-fat"></canvas>
+                                </div>
+                            </div>
+                            <div class="bi-kpi-footer">
+                                <span class="bi-delta-badge ${isFatPositive ? 'positive' : 'negative'}">
+                                    <i class="fas ${isFatPositive ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'}"></i>
+                                    ${formatPct(Math.abs(deltas.faturamento_pct))}
+                                </span>
+                                <span class="bi-kpi-comp-label">${formatBRL(comp.faturamento_liquido)} (${compLabel})</span>
+                            </div>
+                        </div>
+
+                        <!-- KPI 2: % Lucratividade -->
+                        <div class="bi-kpi-card kpi-profit">
+                            <div class="bi-kpi-header">
+                                <span class="bi-kpi-title">% Lucratividade</span>
+                                <div class="bi-kpi-icon" style="background: rgba(16, 185, 129, 0.12); color: #059669;"><i class="fas fa-percent"></i></div>
+                            </div>
+                            <div class="bi-kpi-main">
+                                <div class="bi-kpi-value">${formatPct(current.margem_lucro_pct)}</div>
+                                <div style="font-size: 0.8rem; color: var(--color-text-offset); margin-top: 0.4rem;">
+                                    Lucro Bruto: <strong style="color: var(--color-text);">${formatBRL(current.lucro_bruto)}</strong>
+                                </div>
+                            </div>
+                            <div class="bi-kpi-footer">
+                                <span class="bi-delta-badge ${isLucroPositive ? 'positive' : 'negative'}">
+                                    <i class="fas ${isLucroPositive ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'}"></i>
+                                    ${formatPct(Math.abs(deltas.lucro_pct))}
+                                </span>
+                                <span class="bi-kpi-comp-label">${formatPct(comp.margem_lucro_pct)} (${compLabel})</span>
+                            </div>
+                        </div>
+
+                        <!-- KPI 3: Ticket Médio -->
+                        <div class="bi-kpi-card kpi-ticket">
+                            <div class="bi-kpi-header">
+                                <span class="bi-kpi-title">Ticket Médio</span>
+                                <div class="bi-kpi-icon" style="background: rgba(245, 158, 11, 0.12); color: #d97706;"><i class="fas fa-receipt"></i></div>
+                            </div>
+                            <div class="bi-kpi-main">
+                                <div class="bi-kpi-value">${formatBRL(current.ticket_medio)}</div>
+                                <div style="font-size: 0.8rem; color: var(--color-text-offset); margin-top: 0.4rem;">
+                                    Descontos Totais: <span style="color: var(--color-danger);">${formatBRL(current.total_descontos)}</span>
+                                </div>
+                            </div>
+                            <div class="bi-kpi-footer">
+                                <span class="bi-delta-badge ${isTicketPositive ? 'positive' : 'negative'}">
+                                    <i class="fas ${isTicketPositive ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'}"></i>
+                                    ${formatPct(Math.abs(deltas.ticket_medio_pct))}
+                                </span>
+                                <span class="bi-kpi-comp-label">${formatBRL(comp.ticket_medio)} (${compLabel})</span>
+                            </div>
+                        </div>
+
+                        <!-- KPI 4: Qtd de Tickets -->
+                        <div class="bi-kpi-card kpi-count">
+                            <div class="bi-kpi-header">
+                                <span class="bi-kpi-title">Qtd de Tickets</span>
+                                <div class="bi-kpi-icon" style="background: rgba(139, 92, 246, 0.12); color: #7c3aed;"><i class="fas fa-cart-shopping"></i></div>
+                            </div>
+                            <div class="bi-kpi-main">
+                                <div class="bi-kpi-value">${formatInt(current.qtd_tickets)}</div>
+                                <div style="font-size: 0.8rem; color: var(--color-text-offset); margin-top: 0.4rem;">
+                                    Cupons & Notas Fiscais emitidas
+                                </div>
+                            </div>
+                            <div class="bi-kpi-footer">
+                                <span class="bi-delta-badge ${isQtdPositive ? 'positive' : 'negative'}">
+                                    <i class="fas ${isQtdPositive ? 'fa-arrow-trend-up' : 'fa-arrow-trend-down'}"></i>
+                                    ${formatPct(Math.abs(deltas.qtd_tickets_pct))}
+                                </span>
+                                <span class="bi-kpi-comp-label">${formatInt(comp.qtd_tickets)} (${compLabel})</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Gráficos Grid (Empresas + Diarizado) -->
+                    <div class="bi-charts-grid">
+                        <!-- Gráfico 1: Faturamento por Empresa -->
+                        <div class="bi-chart-card">
+                            <div class="bi-chart-header">
+                                <span class="bi-chart-title"><i class="fas fa-chart-column" style="color: #38bdf8;"></i> Faturamento por Empresa</span>
+                                <div class="bi-chart-legend-custom">
+                                    <span class="bi-legend-item"><span class="bi-legend-dot" style="background: #0284c7;"></span> Atual</span>
+                                    <span class="bi-legend-item"><span class="bi-legend-dot" style="background: #94a3b8;"></span> ${compLabel}</span>
+                                </div>
+                            </div>
+                            <div class="bi-canvas-container">
+                                <canvas id="bi-chart-empresas-canvas"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Gráfico 2: Faturamento Diarizado -->
+                        <div class="bi-chart-card">
+                            <div class="bi-chart-header">
+                                <span class="bi-chart-title"><i class="fas fa-chart-area" style="color: #38bdf8;"></i> Faturamento Diarizado (Evolução Temporal)</span>
+                                <div class="bi-chart-legend-custom">
+                                    <span class="bi-legend-item"><span class="bi-legend-dot" style="background: #38bdf8;"></span> Período Atual</span>
+                                    <span class="bi-legend-item"><span class="bi-legend-dot" style="background: #94a3b8;"></span> ${compLabel}</span>
+                                </div>
+                            </div>
+                            <div class="bi-canvas-container">
+                                <canvas id="bi-chart-diarizado-canvas"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            pageContent.innerHTML = html;
+            setupBiFilterListeners(renderBiVendasHome);
+
+            // Carregar dados complementares para os gráficos
+            const [byCompanyRes, dailyRes] = await Promise.all([
+                api(`/api/bi/sales/by-company?data_inicio=${biState.data_inicio}&data_fim=${biState.data_fim}&comparativo_tipo=${biState.comparativo_tipo}`).catch(() => ({ companies: [] })),
+                api(`/api/bi/sales/daily?empresa_id=${biState.empresa_id}&data_inicio=${biState.data_inicio}&data_fim=${biState.data_fim}&comparativo_tipo=${biState.comparativo_tipo}`).catch(() => ({ current_daily: [], comparative_daily: [] }))
+            ]);
+
+            // Renderizar Sparkline no KPI 1
+            renderSparklineChart(sparklineData);
+
+            // Renderizar Gráficos Chart.js
+            renderChartByCompany(byCompanyRes.companies || []);
+            renderChartDaily(dailyRes.current_daily || [], dailyRes.comparative_daily || []);
+
+        } catch (error) {
+            renderError(error);
+        }
+    }
+
+    /**
+     * Gráfico Sparkline no KPI de Faturamento
+     */
+    function renderSparklineChart(dataPoints) {
+        const canvas = document.getElementById('bi-sparkline-fat');
+        if (!canvas || !window.Chart) return;
+
+        const ctx = canvas.getContext('2d');
+        const values = dataPoints && dataPoints.length > 0 ? dataPoints.map(p => Number(p.faturamento) || 0) : [10, 15, 12, 18, 22, 28, 25, 32, 38];
+        const labels = values.map((_, i) => i);
+
+        biChartInstances.sparkline = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [{
+                    data: values,
+                    borderColor: '#0284c7',
+                    borderWidth: 2,
+                    pointRadius: 0,
+                    fill: false,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false }, tooltip: { enabled: false } },
+                scales: {
+                    x: { display: false },
+                    y: { display: false }
+                }
+            }
+        });
+    }
+
+    /**
+     * Gráfico 1: Faturamento por Empresa (Horizontal / Bar)
+     */
+    function renderChartByCompany(companiesData) {
+        const canvas = document.getElementById('bi-chart-empresas-canvas');
+        if (!canvas || !window.Chart) return;
+
+        const isDark = document.body.classList.contains('dark-mode');
+        const textColor = isDark ? '#cbd5e1' : '#475569';
+        const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)';
+
+        const labels = companiesData.map(c => c.nome);
+        const currentVals = companiesData.map(c => Number(c.faturamento_atual) || 0);
+        const compVals = companiesData.map(c => Number(c.faturamento_comp) || 0);
+
+        const ctx = canvas.getContext('2d');
+        biChartInstances.empresas = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'Período Atual',
+                        data: currentVals,
+                        backgroundColor: '#0284c7',
+                        borderRadius: 6,
+                        barPercentage: 0.65,
+                        categoryPercentage: 0.7
+                    },
+                    {
+                        label: biState.comparativo_tipo === 'ano_anterior' ? 'Ano Anterior' : 'Mês Anterior',
+                        data: compVals,
+                        backgroundColor: isDark ? '#475569' : '#cbd5e1',
+                        borderRadius: 6,
+                        barPercentage: 0.65,
+                        categoryPercentage: 0.7
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                return ` ${ctx.dataset.label}: ${formatBRL(ctx.raw)}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: textColor, font: { size: 11, weight: '500' } },
+                        grid: { color: gridColor }
+                    },
+                    y: {
+                        ticks: {
+                            color: textColor,
+                            font: { size: 10 },
+                            callback: function(v) {
+                                return 'R$ ' + (v >= 1000000 ? (v / 1000000).toFixed(1) + 'M' : (v / 1000).toFixed(0) + 'k');
+                            }
+                        },
+                        grid: { color: gridColor }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * Gráfico 2: Faturamento Diarizado (Evolução Temporal - Spline Area)
+     */
+    function renderChartDaily(currentDaily, compDaily) {
+        const canvas = document.getElementById('bi-chart-diarizado-canvas');
+        if (!canvas || !window.Chart) return;
+
+        const isDark = document.body.classList.contains('dark-mode');
+        const textColor = isDark ? '#cbd5e1' : '#475569';
+        const gridColor = isDark ? 'rgba(255, 255, 255, 0.06)' : 'rgba(0, 0, 0, 0.05)';
+
+        // Montar labels baseados nas datas
+        const labels = currentDaily.map(d => {
+            const parts = d.data.split('-');
+            return parts.length === 3 ? `${parts[2]}/${parts[1]}` : d.data;
+        });
+
+        const currentVals = currentDaily.map(d => Number(d.faturamento) || 0);
+        const compVals = compDaily.map(d => Number(d.faturamento) || 0);
+
+        const ctx = canvas.getContext('2d');
+        const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+        gradient.addColorStop(0, 'rgba(56, 189, 248, 0.35)');
+        gradient.addColorStop(1, 'rgba(56, 189, 248, 0.0)');
+
+        biChartInstances.diarizado = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: 'Período Atual',
+                        data: currentVals,
+                        borderColor: '#38bdf8',
+                        backgroundColor: gradient,
+                        borderWidth: 2.5,
+                        fill: true,
+                        tension: 0.35,
+                        pointRadius: currentVals.length > 40 ? 0 : 2.5,
+                        pointHoverRadius: 6
+                    },
+                    {
+                        label: biState.comparativo_tipo === 'ano_anterior' ? 'Ano Anterior' : 'Mês Anterior',
+                        data: compVals,
+                        borderColor: isDark ? '#64748b' : '#94a3b8',
+                        borderDash: [5, 5],
+                        borderWidth: 1.8,
+                        fill: false,
+                        tension: 0.35,
+                        pointRadius: 0,
+                        pointHoverRadius: 5
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                return ` ${ctx.dataset.label}: ${formatBRL(ctx.raw)}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: {
+                            color: textColor,
+                            font: { size: 10 },
+                            maxTicksLimit: 15
+                        },
+                        grid: { display: false }
+                    },
+                    y: {
+                        ticks: {
+                            color: textColor,
+                            font: { size: 10 },
+                            callback: function(v) {
+                                return 'R$ ' + (v >= 1000 ? (v / 1000).toFixed(0) + 'k' : v);
+                            }
+                        },
+                        grid: { color: gridColor }
+                    }
+                }
+            }
+        });
+    }
+
+    /**
+     * TELA 2: POWER BI - ANÁLISE DETALHADA (MIX / CATEGORIAS / PRODUTOS)
+     */
+    async function renderBiVendasDetalhada() {
+        destroyBiCharts();
+        mainTitle.textContent = 'Análise Detalhada de Vendas';
+        mainSubtitle.textContent = 'Desdobramento de Faturamento, CMV e Margem por Categorias e Famílias de Produtos';
+        headerActions.innerHTML = '';
+        showLoading('Carregando demonstrativo detalhado...');
+
+        try {
+            const [compRes, summaryRes] = await Promise.all([
+                api('/api/bi/companies').catch(() => ({ companies: [] })),
+                api(`/api/bi/sales/summary?empresa_id=${biState.empresa_id}&data_inicio=${biState.data_inicio}&data_fim=${biState.data_fim}&comparativo_tipo=${biState.comparativo_tipo}`).catch(() => null)
+            ]);
+
+            const companies = compRes.companies || [];
+
+            // Mock de categorias representativas para A Elétrica
+            const categories = [
+                { nome: 'Condutores & Cabos Elétricos', qtd: 4820, fat: 1850400.00, cmv: 1295280.00, margem: 30.0 },
+                { nome: 'Iluminação LED & Luminárias', qtd: 3450, fat: 920500.00, cmv: 625940.00, margem: 32.0 },
+                { nome: 'Disjuntores & Quadros de Distribuição', qtd: 2120, fat: 780300.00, cmv: 546210.00, margem: 30.0 },
+                { nome: 'Interruptores & Tomadas', qtd: 5100, fat: 590000.00, cmv: 401200.00, margem: 32.0 },
+                { nome: 'Eletrodutos, Canaletas & Conexões', qtd: 1980, fat: 340200.00, cmv: 244944.00, margem: 28.0 },
+                { nome: 'Ferramentas & Instrumentos de Medição', qtd: 640, fat: 226804.41, cmv: 161031.13, margem: 29.0 }
+            ];
+
+            const totalFat = categories.reduce((sum, c) => sum + c.fat, 0);
+
+            pageContent.innerHTML = `
+                <div class="bi-container">
+                    ${renderBiSubtabs('vendas-detalhada')}
+                    ${renderBiFilterBar(companies)}
+
+                    <div class="bi-chart-card">
+                        <div class="bi-chart-header">
+                            <span class="bi-chart-title"><i class="fas fa-layer-group" style="color: #38bdf8;"></i> Desempenho por Categoria de Materiais Elétricos</span>
+                            <span style="font-size: 0.8rem; color: var(--color-text-offset);">Total: <strong>${formatBRL(totalFat)}</strong></span>
+                        </div>
+                        <div class="table-container" style="margin: 0; box-shadow: none; border: none;">
+                            <table class="bi-ranking-table">
+                                <thead>
+                                    <tr>
+                                        <th>Categoria</th>
+                                        <th style="text-align: right;">Qtd Itens</th>
+                                        <th style="text-align: right;">Faturamento Líquido</th>
+                                        <th style="text-align: right;">CMV (Custo)</th>
+                                        <th style="text-align: right;">Lucro Bruto</th>
+                                        <th style="text-align: right;">Margem %</th>
+                                        <th style="width: 160px;">Participação</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${categories.map(c => {
+                                        const lucro = c.fat - c.cmv;
+                                        const partPct = totalFat > 0 ? (c.fat / totalFat) * 100 : 0;
+                                        return `
+                                            <tr>
+                                                <td style="font-weight: 600;">${c.nome}</td>
+                                                <td style="text-align: right;">${formatInt(c.qtd)}</td>
+                                                <td style="text-align: right; font-weight: 700;">${formatBRL(c.fat)}</td>
+                                                <td style="text-align: right; color: var(--color-text-offset);">${formatBRL(c.cmv)}</td>
+                                                <td style="text-align: right; color: #10b981; font-weight: 700;">${formatBRL(lucro)}</td>
+                                                <td style="text-align: right;"><span class="badge badge-success">${formatPct(c.margem)}</span></td>
+                                                <td>
+                                                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                                        <div class="bi-progress-bar-bg" style="flex: 1;">
+                                                            <div class="bi-progress-bar-fill" style="width: ${partPct.toFixed(1)}%;"></div>
+                                                        </div>
+                                                        <span style="font-size: 0.75rem; font-weight: 600; min-width: 38px;">${partPct.toFixed(1)}%</span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            setupBiFilterListeners(renderBiVendasDetalhada);
+        } catch (error) {
+            renderError(error);
+        }
+    }
+
+    /**
+     * TELA 3: POWER BI - GESTÃO DE METAS
+     */
+    async function renderBiMetas() {
+        destroyBiCharts();
+        mainTitle.textContent = 'Gestão de Metas & Performance';
+        mainSubtitle.textContent = 'Acompanhamento de metas de faturamento, margem e volume por unidade';
+        headerActions.innerHTML = '';
+        showLoading('Carregando metas...');
+
+        try {
+            const compRes = await api('/api/bi/companies').catch(() => ({ companies: [] }));
+            const companies = compRes.companies || [];
+
+            const metas = [
+                { empresa: '1 - A Elétrica (Matriz)', meta_fat: 3000000.00, real_fat: 3060332.87, meta_margem: 29.0, real_margem: 29.5, projecao: 102.0 },
+                { empresa: '2 - A Elétrica (Filial 2)', meta_fat: 1600000.00, real_fat: 1647871.54, meta_margem: 28.5, real_margem: 29.2, projecao: 103.0 }
+            ];
+
+            pageContent.innerHTML = `
+                <div class="bi-container">
+                    ${renderBiSubtabs('metas')}
+                    ${renderBiFilterBar(companies)}
+
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 1.25rem;">
+                        ${metas.map(m => {
+                            const atingimento = (m.real_fat / m.meta_fat) * 100;
+                            const isMetaBated = atingimento >= 100;
+                            return `
+                                <div class="bi-chart-card">
+                                    <div class="bi-chart-header">
+                                        <span class="bi-chart-title"><i class="fas fa-bullseye" style="color: #38bdf8;"></i> ${m.empresa}</span>
+                                        <span class="badge ${isMetaBated ? 'badge-success' : 'badge-warning'}">${isMetaBated ? 'Meta Atingida' : 'Em Andamento'}</span>
+                                    </div>
+                                    <div style="display: flex; flex-direction: column; gap: 1rem;">
+                                        <div>
+                                            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 0.35rem;">
+                                                <span>Faturamento Realizado vs Meta:</span>
+                                                <strong>${atingimento.toFixed(1)}%</strong>
+                                            </div>
+                                            <div class="bi-progress-bar-bg" style="height: 10px;">
+                                                <div class="bi-progress-bar-fill" style="width: ${Math.min(atingimento, 100)}%; background: ${isMetaBated ? 'linear-gradient(90deg, #10b981, #059669)' : 'linear-gradient(90deg, #f59e0b, #d97706)'};"></div>
+                                            </div>
+                                            <div style="display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--color-text-offset); margin-top: 0.35rem;">
+                                                <span>Realizado: <strong>${formatBRL(m.real_fat)}</strong></span>
+                                                <span>Meta: ${formatBRL(m.meta_fat)}</span>
+                                            </div>
+                                        </div>
+
+                                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; background: var(--color-bg-offset); padding: 0.85rem; border-radius: var(--border-radius-sm);">
+                                            <div>
+                                                <span style="font-size: 0.72rem; color: var(--color-text-offset); display: block;">Margem Real vs Meta</span>
+                                                <span style="font-size: 1.1rem; font-weight: 700; color: #10b981;">${formatPct(m.real_margem)}</span>
+                                                <span style="font-size: 0.72rem; color: var(--color-text-offset);"> (Meta: ${formatPct(m.meta_margem)})</span>
+                                            </div>
+                                            <div>
+                                                <span style="font-size: 0.72rem; color: var(--color-text-offset); display: block;">Projeção Fechamento</span>
+                                                <span style="font-size: 1.1rem; font-weight: 700; color: #0284c7;">${m.projecao.toFixed(1)}%</span>
+                                                <span style="font-size: 0.72rem; color: var(--color-text-offset);"> da Meta</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+
+            setupBiFilterListeners(renderBiMetas);
+        } catch (error) {
+            renderError(error);
+        }
+    }
+
+    /**
+     * TELA 4: POWER BI - ANÁLISE PVM (PREÇO x VOLUME x MIX)
+     */
+    async function renderBiPVM() {
+        destroyBiCharts();
+        mainTitle.textContent = 'Análise PVM (Preço x Volume x Mix)';
+        mainSubtitle.textContent = 'Identifique a causa raiz do crescimento: variação de preço unitário, volume ou composição da cesta de compras';
+        headerActions.innerHTML = '';
+        showLoading('Calculando efeitos PVM...');
+
+        try {
+            const compRes = await api('/api/bi/companies').catch(() => ({ companies: [] }));
+            const companies = compRes.companies || [];
+
+            pageContent.innerHTML = `
+                <div class="bi-container">
+                    ${renderBiSubtabs('pvm')}
+                    ${renderBiFilterBar(companies)}
+
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon-wrapper stat-icon-green"><i class="fas fa-tag"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-value">+R$ 184.200,00</span>
+                                <span class="stat-label">Efeito Preço (+3.9%)</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon-wrapper stat-icon-blue"><i class="fas fa-box-open"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-value">+R$ 210.004,41</span>
+                                <span class="stat-label">Efeito Volume (+4.5%)</span>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon-wrapper stat-icon-amber"><i class="fas fa-layer-group"></i></div>
+                            <div class="stat-info">
+                                <span class="stat-value">+R$ 140.000,00</span>
+                                <span class="stat-label">Efeito Mix (+3.0%)</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bi-chart-card">
+                        <div class="bi-chart-header">
+                            <span class="bi-chart-title"><i class="fas fa-circle-info" style="color: #38bdf8;"></i> Mapeamento CISS BI & Fórmula PVM</span>
+                        </div>
+                        <div style="padding: 0.5rem; font-size: 0.88rem; line-height: 1.6; color: var(--color-text-offset);">
+                            <p>A análise PVM isola as 3 forças que compõem o delta de faturamento de <strong>+12.8% (R$ +534.204,41)</strong> entre períodos:</p>
+                            <ul style="margin-left: 1.25rem; margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                                <li><strong>Efeito Preço:</strong> Ganho obtido pelo ajuste nos preços médios unitários de venda mantendo o volume anterior.</li>
+                                <li><strong>Efeito Volume:</strong> Ganho obtido pelo aumento absoluto na quantidade de produtos comercializados.</li>
+                                <li><strong>Efeito Mix:</strong> Ganho gerado pela migração de clientes para produtos e cabos de maior valor agregado.</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            setupBiFilterListeners(renderBiPVM);
+        } catch (error) {
+            renderError(error);
+        }
+    }
+
+    /**
+     * TELA 5: POWER BI - COMPRAS
+     */
+    async function renderBiCompras() {
+        destroyBiCharts();
+        mainTitle.textContent = 'Compras & Aquisições';
+        mainSubtitle.textContent = 'Ordens de compra, condições comerciais e índice de reposição';
+        headerActions.innerHTML = '';
+        const compRes = await api('/api/bi/companies').catch(() => ({ companies: [] }));
+        const companies = compRes.companies || [];
+
+        pageContent.innerHTML = `
+            <div class="bi-container">
+                ${renderBiSubtabs('compras')}
+                ${renderBiFilterBar(companies)}
+                <div class="empty-state" style="padding: 3rem 1rem;">
+                    <div class="empty-state-icon" style="background: rgba(56, 189, 248, 0.15); color: #0284c7;"><i class="fas fa-cart-flatbed"></i></div>
+                    <h3>Módulo de Compras CISS ERP</h3>
+                    <p>Mapeamento dos pedidos de compra, cotações com distribuidores (Dismatal, Prysmian, Schneider) e curva ABC de compras.</p>
+                </div>
+            </div>
+        `;
+        setupBiFilterListeners(renderBiCompras);
+    }
+
+    /**
+     * TELA 6: POWER BI - ESTOQUE
+     */
+    async function renderBiEstoque() {
+        destroyBiCharts();
+        mainTitle.textContent = 'Estoque & Giro';
+        mainSubtitle.textContent = 'Posição física, valorização de estoque a custo médio e cobertura de dias';
+        headerActions.innerHTML = '';
+        const compRes = await api('/api/bi/companies').catch(() => ({ companies: [] }));
+        const companies = compRes.companies || [];
+
+        pageContent.innerHTML = `
+            <div class="bi-container">
+                ${renderBiSubtabs('estoque')}
+                ${renderBiFilterBar(companies)}
+                <div class="empty-state" style="padding: 3rem 1rem;">
+                    <div class="empty-state-icon" style="background: rgba(245, 158, 11, 0.15); color: #d97706;"><i class="fas fa-warehouse"></i></div>
+                    <h3>Módulo de Estoque & Giro CISS ERP</h3>
+                    <p>Controle de ruptura, giro de estoque, cobertura em dias e conciliação de saldo entre lojas 1 (Matriz) e 2 (Filial).</p>
+                </div>
+            </div>
+        `;
+        setupBiFilterListeners(renderBiEstoque);
+    }
+
+    /**
+     * TELA 7: POWER BI - FINANCEIRO
+     */
+    async function renderBiFinanceiro() {
+        destroyBiCharts();
+        mainTitle.textContent = 'Financeiro & DRE Gerencial';
+        mainSubtitle.textContent = 'Fluxo de caixa, recebíveis de cartão, boletos e demonstrativo de resultado';
+        headerActions.innerHTML = '';
+        const compRes = await api('/api/bi/companies').catch(() => ({ companies: [] }));
+        const companies = compRes.companies || [];
+
+        pageContent.innerHTML = `
+            <div class="bi-container">
+                ${renderBiSubtabs('financeiro')}
+                ${renderBiFilterBar(companies)}
+                <div class="empty-state" style="padding: 3rem 1rem;">
+                    <div class="empty-state-icon" style="background: rgba(16, 185, 129, 0.15); color: #059669;"><i class="fas fa-sack-dollar"></i></div>
+                    <h3>Módulo Financeiro & DRE CISS ERP</h3>
+                    <p>Demonstrativo de Resultado do Exercício consolidado por filial com receitas, deduções, CMV e margem de contribuição líquida.</p>
+                </div>
+            </div>
+        `;
+        setupBiFilterListeners(renderBiFinanceiro);
+    }
+
+    /**
+     * =================================================================
      * ROTEAMENTO E CONTROLE DE NAVEGAÇÃO
      * =================================================================
      */
@@ -5351,6 +6261,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const routes = {
+        'nav-bi-vendas-home': renderBiVendasHome,
+        'nav-bi-vendas-detalhada': renderBiVendasDetalhada,
+        'nav-bi-metas': renderBiMetas,
+        'nav-bi-pvm': renderBiPVM,
+        'nav-bi-compras': renderBiCompras,
+        'nav-bi-estoque': renderBiEstoque,
+        'nav-bi-financeiro': renderBiFinanceiro,
         'nav-dashboard': renderWelcomePage,
         'nav-produtos': renderProductsPage,
         'nav-conexoes-erp': renderErpConnections,
@@ -5374,15 +6291,15 @@ document.addEventListener('DOMContentLoaded', () => {
         if (routeHandler) {
             routeHandler();
         } else {
-            renderWelcomePage();
+            renderBiVendasHome();
         }
     });
 
     if (brandLink) {
         brandLink.addEventListener('click', (e) => {
             e.preventDefault();
-            setActiveNavLink('nav-dashboard');
-            renderWelcomePage();
+            setActiveNavLink('nav-bi-vendas-home');
+            renderBiVendasHome();
         });
     }
 
@@ -5404,6 +6321,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
-    // Carregar tela inicial (Dashboard)
-    renderWelcomePage();
+    // Carregar tela inicial (Power BI Vendas Home)
+    setActiveNavLink('nav-bi-vendas-home');
+    renderBiVendasHome();
 });
+
