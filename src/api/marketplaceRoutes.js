@@ -245,6 +245,15 @@ export default (db) => {
             if (!connection) {
                 return res.status(404).json({ sucesso: false, erro: 'Conexão de Marketplace não encontrada.' });
             }
+
+            if (!connection.credentials?.refresh_token) {
+                const expiresAt = connection.credentials?.expires_at ? new Date(connection.credentials.expires_at).toLocaleTimeString('pt-BR') : '6 horas';
+                return res.status(400).json({ 
+                    sucesso: false, 
+                    erro: `A conta possui um Access Token ativo (válido até ${expiresAt}), mas o Mercado Livre não retornou o Refresh Token. Para habilitar a renovação automática permanente, acesse 'Minha Conta > Segurança > Aplicativos Conectados' no Mercado Livre, desvincule o app e clique em 'Autorizar Login ML'.` 
+                });
+            }
+
             const newAccessToken = await meliService.refreshToken(connection, db);
             res.json({ 
                 sucesso: true, 
