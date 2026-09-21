@@ -5,6 +5,40 @@ import { ensureCissPoderTokenIsValid } from './cisspoder.service.js';
 const logger = getLogger();
 const resolvePool = (db) => typeof db?.getPool === 'function' ? db.getPool() : db;
 
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const PAGE_DELAY_MS = 250; // Delay de 250ms entre requisições paginadas para evitar sobrecarga e timeouts
+
+/**
+ * Executa requisição POST com retentativas automáticas (backoff exponencial) e proteção contra timeouts/429
+ */
+async function fetchIntegrimWithRetry(url, payload, headers, maxRetries = 3, initialDelay = 1000) {
+    let attempt = 0;
+    while (attempt <= maxRetries) {
+        try {
+            const response = await axiosInstance.post(url, payload, {
+                headers,
+                timeout: 30000 // 30 segundos por requisição
+            });
+            return response;
+        } catch (error) {
+            attempt++;
+            const isRetryable = error.code === 'ECONNABORTED' 
+                || error.code === 'ETIMEDOUT' 
+                || error.code === 'ECONNRESET' 
+                || (error.response && [429, 500, 502, 503, 504].includes(error.response.status));
+
+            if (!isRetryable || attempt > maxRetries) {
+                logger.error(`[IntegrimSync] Falha definitiva na requisição ${url}:`, error.message);
+                throw error;
+            }
+
+            const backoffTime = initialDelay * Math.pow(2, attempt - 1);
+            logger.warn(`[IntegrimSync] Tentativa ${attempt}/${maxRetries} falhou (${error.message}). Aguardando ${backoffTime}ms antes de retentar...`);
+            await sleep(backoffTime);
+        }
+    }
+}
+
 /**
  * =========================================================================
  * SERVIÇO DE SINCRONIZAÇÃO OTIMIZADA INTEGRIM (CISS PODER)
@@ -42,12 +76,12 @@ export async function syncIntegrimProducts(connection, db, batchLimit = 2000) {
             ordenacoes: [{ campo: "idsubproduto", direcao: "ASC" }]
         };
 
-        const response = await axiosInstance.post(url, payload, {
-            headers: {
-                'Authorization': `Bearer ${connection.credentials.access_token}`,
-                'Content-Type': 'application/json'
-            }
-        });
+        const headers = {
+            'Authorization': `Bearer ${connection.credentials.access_token}`,
+            'Content-Type': 'application/json'
+        };
+
+        const response = await fetchIntegrimWithRetry(url, payload, headers);
 
         const items = Array.isArray(response.data?.data) ? response.data.data : [];
         if (items.length === 0) break;
@@ -116,6 +150,9 @@ export async function syncIntegrimProducts(connection, db, batchLimit = 2000) {
 
         hasNext = !!response.data?.hasNext;
         page++;
+        if (hasNext && totalImportados < batchLimit) {
+            await sleep(PAGE_DELAY_MS);
+        }
     }
 
     logger.info(`[IntegrimSync] CAD_PRODUTOS concluído: ${totalImportados} produtos sincronizados.`);
@@ -187,12 +224,12 @@ export async function syncIntegrimStockBalances(connection, db, batchLimit = 300
             ordenacoes: [{ campo: "idsubproduto", direcao: "ASC" }]
         };
 
-        const response = await axiosInstance.post(url, payload, {
-            headers: {
-                'Authorization': `Bearer ${connection.credentials.access_token}`,
-                'Content-Type': 'application/json'
-            }
-        });
+        const headers = {
+            'Authorization': `Bearer ${connection.credentials.access_token}`,
+            'Content-Type': 'application/json'
+        };
+
+        const response = await fetchIntegrimWithRetry(url, payload, headers);
 
         const items = Array.isArray(response.data?.data) ? response.data.data : [];
         if (items.length === 0) break;
@@ -235,6 +272,9 @@ export async function syncIntegrimStockBalances(connection, db, batchLimit = 300
 
         hasNext = !!response.data?.hasNext;
         page++;
+        if (hasNext && totalImportados < batchLimit) {
+            await sleep(PAGE_DELAY_MS);
+        }
     }
 
     logger.info(`[IntegrimSync] PRODUTOS_SALDO_ESTOQUE_EMPRESA concluído: ${totalImportados} registros oficiais importados.`);
@@ -265,12 +305,12 @@ export async function syncIntegrimCostsAndPrices(connection, db, batchLimit = 30
             ordenacoes: [{ campo: "idsubproduto", direcao: "ASC" }]
         };
 
-        const response = await axiosInstance.post(url, payload, {
-            headers: {
-                'Authorization': `Bearer ${connection.credentials.access_token}`,
-                'Content-Type': 'application/json'
-            }
-        });
+        const headers = {
+            'Authorization': `Bearer ${connection.credentials.access_token}`,
+            'Content-Type': 'application/json'
+        };
+
+        const response = await fetchIntegrimWithRetry(url, payload, headers);
 
         const items = Array.isArray(response.data?.data) ? response.data.data : [];
         if (items.length === 0) break;
@@ -317,6 +357,9 @@ export async function syncIntegrimCostsAndPrices(connection, db, batchLimit = 30
 
         hasNext = !!response.data?.hasNext;
         page++;
+        if (hasNext && totalImportados < batchLimit) {
+            await sleep(PAGE_DELAY_MS);
+        }
     }
 
     logger.info(`[IntegrimSync] PRECOS_CUSTOS_PRODUTOS_EMPRESA concluído: ${totalImportados} registros.`);
