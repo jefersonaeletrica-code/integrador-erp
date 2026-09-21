@@ -124,15 +124,10 @@ export default (db) => {
         }
     });
 
-    // 9. Sincronização ao Vivo com Integrim CISS Poder (CAD_PRODUTOS, SALDO_ESTOQUE, PRECOS_CUSTOS)
+    // 9. Iniciar Sincronização em Segundo Plano com Integrim CISS Poder
     router.post('/bi/stock/sync-integrim', async (req, res) => {
         try {
-            const {
-                syncIntegrimProducts,
-                syncIntegrimStockBalances,
-                syncIntegrimCostsAndPrices,
-                recalculateAbcAndCoverage
-            } = await import('../services/integrimSyncService.js');
+            const { startIntegrimBackgroundSync } = await import('../services/integrimSyncService.js');
 
             // Busca conexão ativa do CISS Poder
             const [erpConns] = await db.getPool().execute("SELECT * FROM erp_connections WHERE type = 'cisspoder' ORDER BY id DESC LIMIT 1");
@@ -145,19 +140,23 @@ export default (db) => {
                 connection.credentials = JSON.parse(connection.credentials);
             }
 
-            // Executa os 3 serviços sequencialmente
-            const resProd = await syncIntegrimProducts(connection, db);
-            const resSaldo = await syncIntegrimStockBalances(connection, db);
-            const resCustos = await syncIntegrimCostsAndPrices(connection, db);
-            await recalculateAbcAndCoverage(db);
-
-            res.json({
-                sucesso: true,
-                mensagem: 'Sincronização com Integrim CISS Poder concluída com sucesso!',
-                detalhes: { produtos: resProd.total, saldos: resSaldo.total, custos: resCustos.total }
-            });
+            // Inicia a sincronização desacoplada em background
+            const result = startIntegrimBackgroundSync(connection, db);
+            res.json(result);
         } catch (error) {
-            logger.error('[BiRoutes] Erro na sincronização com Integrim CISS Poder:', error);
+            logger.error('[BiRoutes] Erro ao disparar sincronização com Integrim CISS Poder:', error);
+            res.status(500).json({ sucesso: false, erro: error.message });
+        }
+    });
+
+    // 9.1. Consultar Status da Sincronização em Segundo Plano
+    router.get('/bi/stock/sync-status', async (req, res) => {
+        try {
+            const { getIntegrimSyncStatus } = await import('../services/integrimSyncService.js');
+            const status = getIntegrimSyncStatus();
+            res.json({ sucesso: true, status });
+        } catch (error) {
+            logger.error('[BiRoutes] Erro ao consultar status da sincronização:', error);
             res.status(500).json({ sucesso: false, erro: error.message });
         }
     });

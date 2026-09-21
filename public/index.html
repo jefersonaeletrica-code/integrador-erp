@@ -203,6 +203,28 @@
                 <!-- Botões de ação dinâmicos do cabeçalho da página -->
             </div>
         </header>
+
+        <!-- Banner Global de Sincronização em Segundo Plano -->
+        <div id="global-integrim-sync-banner" class="global-sync-banner" style="display: none;">
+            <div class="sync-banner-content">
+                <div class="sync-banner-spinner">
+                    <i class="fas fa-rotate fa-spin"></i>
+                </div>
+                <div class="sync-banner-text">
+                    <div class="sync-banner-title">
+                        <strong>Sincronização Ativa em Segundo Plano (CISS Poder)</strong>
+                        <span class="sync-banner-badge" id="global-sync-stage-badge">Importando...</span>
+                    </div>
+                    <span class="sync-banner-desc" id="global-sync-status-text">Conectando aos endpoints da API CISS Poder...</span>
+                </div>
+            </div>
+            <div class="sync-banner-stats" id="global-sync-stats-text">
+                <span><i class="fas fa-box"></i> <strong id="global-sync-count-prod">0</strong> produtos</span>
+                <span><i class="fas fa-warehouse"></i> <strong id="global-sync-count-saldo">0</strong> saldos</span>
+                <span><i class="fas fa-tags"></i> <strong id="global-sync-count-custos">0</strong> custos/preços</span>
+            </div>
+        </div>
+
         <div id="page-content" class="page-content-area">
             <!-- Conteúdo das páginas será carregado aqui -->
         </div>

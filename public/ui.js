@@ -6611,6 +6611,86 @@ document.addEventListener('DOMContentLoaded', () => {
         `;
     }
 
+    // =========================================================================
+    // GERENCIADOR GLOBAL DE SINCRONIZAÇÃO EM SEGUNDO PLANO (INTEGRIM CISS PODER)
+    // =========================================================================
+    let globalSyncPollInterval = null;
+    let lastKnownSyncRunningState = false;
+
+    async function checkGlobalIntegrimSyncStatus() {
+        try {
+            const res = await api('/api/bi/stock/sync-status');
+            if (res && res.sucesso && res.status) {
+                updateGlobalIntegrimSyncUI(res.status);
+            }
+        } catch (err) {
+            // Silencioso caso servidor reinicie
+        }
+    }
+
+    function updateGlobalIntegrimSyncUI(status) {
+        const banner = document.getElementById('global-integrim-sync-banner');
+        const badge = document.getElementById('global-sync-stage-badge');
+        const text = document.getElementById('global-sync-status-text');
+        const countProd = document.getElementById('global-sync-count-prod');
+        const countSaldo = document.getElementById('global-sync-count-saldo');
+        const countCustos = document.getElementById('global-sync-count-custos');
+        const btnSync = document.getElementById('bi-btn-sync-integrim');
+
+        if (status.isRunning) {
+            if (banner) banner.style.display = 'flex';
+            if (badge) {
+                let label = 'Importando';
+                if (status.stage === 'cad_produtos') label = '1/4 PRODUTOS';
+                else if (status.stage === 'produtos_saldo_estoque') label = '2/4 SALDOS';
+                else if (status.stage === 'precos_custos') label = '3/4 CUSTOS';
+                else if (status.stage === 'curva_abc') label = '4/4 CURVA ABC';
+                badge.textContent = label;
+            }
+            if (text) text.textContent = status.stageLabel || status.message || 'Sincronizando dados com CISS Poder...';
+            if (countProd) countProd.textContent = (status.progress?.produtos || 0).toLocaleString('pt-BR');
+            if (countSaldo) countSaldo.textContent = (status.progress?.saldos || 0).toLocaleString('pt-BR');
+            if (countCustos) countCustos.textContent = (status.progress?.custos || 0).toLocaleString('pt-BR');
+
+            if (btnSync) {
+                btnSync.disabled = true;
+                btnSync.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando em 2º plano...';
+            }
+
+            lastKnownSyncRunningState = true;
+        } else {
+            if (banner) banner.style.display = 'none';
+
+            if (btnSync) {
+                btnSync.disabled = false;
+                btnSync.innerHTML = '<i class="fas fa-rotate"></i> Sincronizar Integrim';
+            }
+
+            // Se estava rodando e acabou de terminar
+            if (lastKnownSyncRunningState) {
+                lastKnownSyncRunningState = false;
+                if (status.stage === 'done') {
+                    showToast(status.message || 'Sincronização com Integrim CISS Poder concluída com sucesso!', 'success');
+                    // Se estiver em uma tela de BI / Estoque, recarrega automaticamente
+                    const activeNav = document.querySelector('.menu-links a.active')?.id;
+                    if (activeNav === 'nav-bi-estoque' && typeof renderBiEstoqueHome === 'function') {
+                        renderBiEstoqueHome();
+                    } else if (activeNav === 'nav-bi-estoque-curva-abc' && typeof renderBiEstoqueCurvaABC === 'function') {
+                        renderBiEstoqueCurvaABC();
+                    }
+                } else if (status.stage === 'error') {
+                    showToast(`Falha na sincronização em segundo plano: ${status.error || 'Erro desconhecido'}`, 'error');
+                }
+            }
+        }
+    }
+
+    function startGlobalIntegrimSyncWatcher() {
+        if (globalSyncPollInterval) clearInterval(globalSyncPollInterval);
+        checkGlobalIntegrimSyncStatus();
+        globalSyncPollInterval = setInterval(checkGlobalIntegrimSyncStatus, 2500);
+    }
+
     function setupBiEstoqueListeners(reloadFn) {
         document.getElementById('bi-estoque-filter-company')?.addEventListener('change', (e) => {
             biEstoqueState.empresa_id = e.target.value;
@@ -6634,20 +6714,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const btn = document.getElementById('bi-btn-sync-integrim');
             if (btn) {
                 btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando...';
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Iniciando...';
             }
-            showToast('Conectando ao Integrim CISS Poder (CAD_PRODUTOS, SALDO_ESTOQUE, PRECOS_CUSTOS)...', 'info');
 
             try {
                 const res = await api('/api/bi/stock/sync-integrim', 'POST');
-                showToast(res.mensagem || 'Sincronização com CISS Poder concluída com sucesso!', 'success');
-                reloadFn();
+                showToast(res.mensagem || 'Sincronização iniciada em segundo plano! Você pode navegar pelo sistema livremente.', 'info');
+                await checkGlobalIntegrimSyncStatus();
             } catch (err) {
-                showToast(`Falha na sincronização ao vivo: ${err.message}. Carregando base demonstrativa...`, 'warning');
-                // Se falhar a conexão remota, dispara o mock para nunca deixar a tela vazia
-                await api('/api/bi/stock/seed-mock', 'POST').catch(() => {});
-                reloadFn();
-            } finally {
+                showToast(`Falha ao disparar sincronização: ${err.message}`, 'error');
                 if (btn) {
                     btn.disabled = false;
                     btn.innerHTML = '<i class="fas fa-rotate"></i> Sincronizar Integrim';
@@ -6665,6 +6740,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         });
+
+        // Sincroniza estado visual do botão com o status atual do background sync
+        checkGlobalIntegrimSyncStatus();
     }
 
     /**
@@ -7527,6 +7605,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Inicialização da interface
     initializeThemeSwitcher();
     initializeSidebar();
+    startGlobalIntegrimSyncWatcher();
 
     // Checar se veio de retorno OAuth do Bling ou Mercado Livre
     const urlParams = new URLSearchParams(window.location.search);

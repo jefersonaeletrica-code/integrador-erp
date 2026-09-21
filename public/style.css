@@ -4274,3 +4274,124 @@ body.dark-mode .bi-detail-btn-card i {
     color: var(--color-text);
     word-break: break-word;
 }
+
+/* ==========================================================================
+   Banner Global de Sincronização em Segundo Plano (Integrim CISS Poder)
+   ========================================================================== */
+.global-sync-banner {
+    background: linear-gradient(135deg, rgba(2, 132, 199, 0.08) 0%, rgba(14, 165, 233, 0.16) 100%);
+    border: 1px solid rgba(2, 132, 199, 0.35);
+    border-radius: var(--border-radius-md);
+    padding: 0.75rem 1.25rem;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    box-shadow: 0 4px 12px rgba(2, 132, 199, 0.08);
+    animation: fadeInSlideDown 0.3s ease-out;
+}
+
+body.dark-mode .global-sync-banner {
+    background: linear-gradient(135deg, rgba(2, 132, 199, 0.15) 0%, rgba(14, 165, 233, 0.25) 100%);
+    border-color: rgba(56, 189, 248, 0.45);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+
+.sync-banner-content {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+}
+
+.sync-banner-spinner {
+    font-size: 1.35rem;
+    color: #0284c7;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+body.dark-mode .sync-banner-spinner {
+    color: #38bdf8;
+}
+
+.sync-banner-text {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+}
+
+.sync-banner-title {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.88rem;
+    color: var(--color-text);
+}
+
+.sync-banner-badge {
+    background-color: #0284c7;
+    color: #ffffff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.15rem 0.55rem;
+    border-radius: var(--border-radius-full);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+}
+
+body.dark-mode .sync-banner-badge {
+    background-color: #0ea5e9;
+    color: #0f172a;
+}
+
+.sync-banner-desc {
+    font-size: 0.78rem;
+    color: var(--color-text-offset);
+}
+
+.sync-banner-stats {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    font-size: 0.78rem;
+    color: var(--color-text-offset);
+    background: var(--color-surface);
+    padding: 0.4rem 0.85rem;
+    border-radius: var(--border-radius-sm);
+    border: 1px solid var(--color-border);
+    white-space: nowrap;
+}
+
+.sync-banner-stats strong {
+    color: #0284c7;
+    font-family: var(--font-family-mono);
+    font-weight: 700;
+}
+
+body.dark-mode .sync-banner-stats strong {
+    color: #38bdf8;
+}
+
+@keyframes fadeInSlideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (max-width: 768px) {
+    .global-sync-banner {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .sync-banner-stats {
+        width: 100%;
+        justify-content: space-between;
+    }
+}

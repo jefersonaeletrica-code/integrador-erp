@@ -49,10 +49,119 @@ async function fetchIntegrimWithRetry(url, payload, headers, maxRetries = 3, ini
  * =========================================================================
  */
 
+// Estado global em memória para monitoramento de sincronização em segundo plano
+const integrimSyncStatus = {
+    isRunning: false,
+    startedAt: null,
+    finishedAt: null,
+    stage: 'idle', // 'idle' | 'cad_produtos' | 'produtos_saldo_estoque' | 'precos_custos' | 'curva_abc' | 'done' | 'error'
+    stageLabel: 'Nenhuma sincronização em andamento',
+    progress: {
+        produtos: 0,
+        saldos: 0,
+        custos: 0,
+        currentPage: 0
+    },
+    error: null,
+    message: 'Nenhuma sincronização em andamento'
+};
+
+export function getIntegrimSyncStatus() {
+    return { ...integrimSyncStatus };
+}
+
+/**
+ * Inicia a sincronização completa em segundo plano de forma desacoplada da requisição HTTP
+ */
+export function startIntegrimBackgroundSync(connection, db) {
+    if (integrimSyncStatus.isRunning) {
+        return {
+            sucesso: true,
+            isRunning: true,
+            alreadyRunning: true,
+            mensagem: 'Sincronização com Integrim CISS Poder já está em andamento em segundo plano.'
+        };
+    }
+
+    integrimSyncStatus.isRunning = true;
+    integrimSyncStatus.startedAt = new Date().toISOString();
+    integrimSyncStatus.finishedAt = null;
+    integrimSyncStatus.stage = 'iniciando';
+    integrimSyncStatus.stageLabel = 'Iniciando sincronização completa...';
+    integrimSyncStatus.progress = { produtos: 0, saldos: 0, custos: 0, currentPage: 0 };
+    integrimSyncStatus.error = null;
+    integrimSyncStatus.message = 'Sincronização em andamento em segundo plano...';
+
+    // Dispara a execução assíncrona desacoplada da conexão HTTP do cliente
+    (async () => {
+        try {
+            logger.info('[IntegrimSync Background] Iniciando rotina completa de sincronização em segundo plano (todos os produtos)...');
+
+            // Etapa 1: CAD_PRODUTOS (Todos os produtos sem limite artificial)
+            integrimSyncStatus.stage = 'cad_produtos';
+            integrimSyncStatus.stageLabel = 'Importando cadastro de produtos (CAD_PRODUTOS)...';
+            const resProd = await syncIntegrimProducts(connection, db, null, (prog) => {
+                integrimSyncStatus.progress.produtos = prog.total;
+                integrimSyncStatus.progress.currentPage = prog.page;
+                integrimSyncStatus.stageLabel = `Importando produtos (pág. ${prog.page} - ${prog.total} produtos)...`;
+            });
+            integrimSyncStatus.progress.produtos = resProd.total;
+
+            // Etapa 2: PRODUTOS_SALDO_ESTOQUE_EMPRESA (Todos os saldos das áreas de venda)
+            integrimSyncStatus.stage = 'produtos_saldo_estoque';
+            integrimSyncStatus.stageLabel = 'Importando saldos de estoque (PRODUTOS_SALDO_ESTOQUE_EMPRESA)...';
+            const resSaldo = await syncIntegrimStockBalances(connection, db, null, (prog) => {
+                integrimSyncStatus.progress.saldos = prog.total;
+                integrimSyncStatus.progress.currentPage = prog.page;
+                integrimSyncStatus.stageLabel = `Importando saldos físicos (pág. ${prog.page} - ${prog.total} saldos)...`;
+            });
+            integrimSyncStatus.progress.saldos = resSaldo.total;
+
+            // Etapa 3: PRECOS_CUSTOS_PRODUTOS_EMPRESA (Custos e preços por empresa)
+            integrimSyncStatus.stage = 'precos_custos';
+            integrimSyncStatus.stageLabel = 'Importando custos e preços (PRECOS_CUSTOS_PRODUTOS_EMPRESA)...';
+            const resCustos = await syncIntegrimCostsAndPrices(connection, db, null, (prog) => {
+                integrimSyncStatus.progress.custos = prog.total;
+                integrimSyncStatus.progress.currentPage = prog.page;
+                integrimSyncStatus.stageLabel = `Importando custos e preços (pág. ${prog.page} - ${prog.total} registros)...`;
+            });
+            integrimSyncStatus.progress.custos = resCustos.total;
+
+            // Etapa 4: Recalcular Curva ABC e Cobertura
+            integrimSyncStatus.stage = 'curva_abc';
+            integrimSyncStatus.stageLabel = 'Recalculando Curva ABC e Dias de Cobertura...';
+            await recalculateAbcAndCoverage(db);
+
+            integrimSyncStatus.isRunning = false;
+            integrimSyncStatus.stage = 'done';
+            integrimSyncStatus.stageLabel = 'Sincronização concluída com sucesso!';
+            integrimSyncStatus.finishedAt = new Date().toISOString();
+            integrimSyncStatus.message = `Sincronização concluída: ${resProd.total} produtos, ${resSaldo.total} saldos e ${resCustos.total} custos/preços atualizados.`;
+
+            logger.info(`[IntegrimSync Background] Sincronização concluída com sucesso: ${integrimSyncStatus.message}`);
+        } catch (error) {
+            logger.error('[IntegrimSync Background] Erro durante sincronização em segundo plano:', error);
+            integrimSyncStatus.isRunning = false;
+            integrimSyncStatus.stage = 'error';
+            integrimSyncStatus.stageLabel = `Erro na sincronização: ${error.message}`;
+            integrimSyncStatus.error = error.message;
+            integrimSyncStatus.finishedAt = new Date().toISOString();
+        }
+    })();
+
+    return {
+        sucesso: true,
+        isRunning: true,
+        started: true,
+        mensagem: 'Sincronização com Integrim CISS Poder iniciada em segundo plano.'
+    };
+}
+
 /**
  * 1. Sincroniza Cadastro de Produtos e Estrutura Mercadológica (CAD_PRODUTOS)
+ * Por padrão busca TODOS os produtos (batchLimit = null)
  */
-export async function syncIntegrimProducts(connection, db, batchLimit = 2000) {
+export async function syncIntegrimProducts(connection, db, batchLimit = null, onProgress = null) {
     const pool = resolvePool(db);
     await ensureCissPoderTokenIsValid(connection, db);
 
@@ -66,7 +175,7 @@ export async function syncIntegrimProducts(connection, db, batchLimit = 2000) {
 
     logger.info(`[IntegrimSync] Iniciando sincronização de produtos via CAD_PRODUTOS...`);
 
-    while (hasNext && totalImportados < batchLimit) {
+    while (hasNext && (!batchLimit || totalImportados < batchLimit)) {
         const payload = {
             page,
             clausulas: [
@@ -149,8 +258,12 @@ export async function syncIntegrimProducts(connection, db, batchLimit = 2000) {
         }
 
         hasNext = !!response.data?.hasNext;
+        if (typeof onProgress === 'function') {
+            onProgress({ page, total: totalImportados, hasNext });
+        }
+
         page++;
-        if (hasNext && totalImportados < batchLimit) {
+        if (hasNext && (!batchLimit || totalImportados < batchLimit)) {
             await sleep(PAGE_DELAY_MS);
         }
     }
@@ -200,8 +313,9 @@ export function isOfficialSalesLocation(empresaId, descrLocalEstoque) {
 
 /**
  * 2. Sincroniza Saldos de Estoque por Loja (PRODUTOS_SALDO_ESTOQUE_EMPRESA)
+ * Por padrão busca TODOS os saldos das áreas de vendas oficiais (batchLimit = null)
  */
-export async function syncIntegrimStockBalances(connection, db, batchLimit = 3000) {
+export async function syncIntegrimStockBalances(connection, db, batchLimit = null, onProgress = null) {
     const pool = resolvePool(db);
     await ensureCissPoderTokenIsValid(connection, db);
 
@@ -215,7 +329,7 @@ export async function syncIntegrimStockBalances(connection, db, batchLimit = 300
 
     logger.info(`[IntegrimSync] Sincronizando saldos físicos via PRODUTOS_SALDO_ESTOQUE_EMPRESA com filtro de Área de Venda...`);
 
-    while (hasNext && totalImportados < batchLimit) {
+    while (hasNext && (!batchLimit || totalImportados < batchLimit)) {
         const payload = {
             page,
             clausulas: [
@@ -271,8 +385,12 @@ export async function syncIntegrimStockBalances(connection, db, batchLimit = 300
         }
 
         hasNext = !!response.data?.hasNext;
+        if (typeof onProgress === 'function') {
+            onProgress({ page, total: totalImportados, hasNext });
+        }
+
         page++;
-        if (hasNext && totalImportados < batchLimit) {
+        if (hasNext && (!batchLimit || totalImportados < batchLimit)) {
             await sleep(PAGE_DELAY_MS);
         }
     }
@@ -283,8 +401,9 @@ export async function syncIntegrimStockBalances(connection, db, batchLimit = 300
 
 /**
  * 3. Sincroniza Custos e Preços por Loja (PRECOS_CUSTOS_PRODUTOS_EMPRESA)
+ * Por padrão busca TODOS os custos e preços (batchLimit = null)
  */
-export async function syncIntegrimCostsAndPrices(connection, db, batchLimit = 3000) {
+export async function syncIntegrimCostsAndPrices(connection, db, batchLimit = null, onProgress = null) {
     const pool = resolvePool(db);
     await ensureCissPoderTokenIsValid(connection, db);
 
@@ -298,7 +417,7 @@ export async function syncIntegrimCostsAndPrices(connection, db, batchLimit = 30
 
     logger.info(`[IntegrimSync] Sincronizando custos e preços via PRECOS_CUSTOS_PRODUTOS_EMPRESA...`);
 
-    while (hasNext && totalImportados < batchLimit) {
+    while (hasNext && (!batchLimit || totalImportados < batchLimit)) {
         const payload = {
             page,
             clausulas: [],
@@ -356,8 +475,12 @@ export async function syncIntegrimCostsAndPrices(connection, db, batchLimit = 30
         }
 
         hasNext = !!response.data?.hasNext;
+        if (typeof onProgress === 'function') {
+            onProgress({ page, total: totalImportados, hasNext });
+        }
+
         page++;
-        if (hasNext && totalImportados < batchLimit) {
+        if (hasNext && (!batchLimit || totalImportados < batchLimit)) {
             await sleep(PAGE_DELAY_MS);
         }
     }
