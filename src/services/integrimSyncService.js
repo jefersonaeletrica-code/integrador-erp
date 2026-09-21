@@ -620,37 +620,60 @@ export async function syncIntegrimCostsAndPrices(connection, db, batchLimit = nu
                 continue;
             }
 
-            const custoReposicao = parseFloat(item.valcustorepos) || 0;
-            const custoGerencial = parseFloat(item.custogerencial) || 0;
-            const custoNotaFiscal = parseFloat(item.custonotafiscal) || 0;
-            const custoMedio = custoNotaFiscal > 0 ? custoNotaFiscal : custoReposicao;
-            const custoMedioFiscal = custoMedio;
+            const custoReposicao = parseFloat(item.valcustorepos || item.custoreposicao) || 0;
+            const custoGerencial = parseFloat(item.custogerencial || item.valcustogerencial) || 0;
+            const custoNotaFiscal = parseFloat(item.custonotafiscal || item.valcustonotafiscal) || 0;
+            const custoMedioFiscal = parseFloat(item.valcustomediofiscal || item.customediofiscal) 
+                || (custoNotaFiscal > 0 ? custoNotaFiscal : (custoReposicao > 0 ? custoReposicao : custoGerencial));
+            const custoMedio = parseFloat(item.valcustomedio || item.customedio) 
+                || (custoMedioFiscal > 0 ? custoMedioFiscal : (custoNotaFiscal > 0 ? custoNotaFiscal : custoReposicao));
 
             const precoVenda = parseFloat(item.valprecovarejo) || 0;
             const precoPromocao = parseFloat(item.valpromvarejo) || 0;
             const precoAtacado = parseFloat(item.valprecoatacado) || 0;
 
             const upsertPriceAndCost = async (empId, locId, locName) => {
-                await pool.execute(`
-                    INSERT INTO bi_estoque_saldos (
-                        empresa_id, idproduto, idsubproduto, id_local_estoque, local_estoque,
-                        custo_medio, custo_medio_fiscal, custo_gerencial, custo_reposicao, custo_nota_fiscal,
-                        preco_venda_varejo, preco_promocao_varejo, preco_venda_atacado
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE
-                        custo_medio = VALUES(custo_medio),
-                        custo_medio_fiscal = VALUES(custo_medio_fiscal),
-                        custo_gerencial = VALUES(custo_gerencial),
-                        custo_reposicao = VALUES(custo_reposicao),
-                        custo_nota_fiscal = VALUES(custo_nota_fiscal),
-                        preco_venda_varejo = VALUES(preco_venda_varejo),
-                        preco_promocao_varejo = VALUES(preco_promocao_varejo),
-                        preco_venda_atacado = VALUES(preco_venda_atacado)
+                // Tenta atualizar primeiro o registro existente para a empresa e produto
+                const [updateRes] = await pool.execute(`
+                    UPDATE bi_estoque_saldos
+                    SET custo_medio = ?,
+                        custo_medio_fiscal = ?,
+                        custo_gerencial = ?,
+                        custo_reposicao = ?,
+                        custo_nota_fiscal = ?,
+                        preco_venda_varejo = ?,
+                        preco_promocao_varejo = ?,
+                        preco_venda_atacado = ?
+                    WHERE empresa_id = ? AND idsubproduto = ?
                 `, [
-                    empId, idproduto, idsubproduto, locId, locName,
                     custoMedio, custoMedioFiscal, custoGerencial, custoReposicao, custoNotaFiscal,
-                    precoVenda, precoPromocao, precoAtacado
+                    precoVenda, precoPromocao, precoAtacado,
+                    empId, idsubproduto
                 ]);
+
+                // Se ainda não existia registro para esta empresa e produto, cria a linha oficial com saldo 0
+                if (updateRes.affectedRows === 0) {
+                    await pool.execute(`
+                        INSERT INTO bi_estoque_saldos (
+                            empresa_id, idproduto, idsubproduto, id_local_estoque, local_estoque,
+                            custo_medio, custo_medio_fiscal, custo_gerencial, custo_reposicao, custo_nota_fiscal,
+                            preco_venda_varejo, preco_promocao_varejo, preco_venda_atacado, saldo_atual
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0.000)
+                        ON DUPLICATE KEY UPDATE
+                            custo_medio = VALUES(custo_medio),
+                            custo_medio_fiscal = VALUES(custo_medio_fiscal),
+                            custo_gerencial = VALUES(custo_gerencial),
+                            custo_reposicao = VALUES(custo_reposicao),
+                            custo_nota_fiscal = VALUES(custo_nota_fiscal),
+                            preco_venda_varejo = VALUES(preco_venda_varejo),
+                            preco_promocao_varejo = VALUES(preco_promocao_varejo),
+                            preco_venda_atacado = VALUES(preco_venda_atacado)
+                    `, [
+                        empId, idproduto, idsubproduto, locId, locName,
+                        custoMedio, custoMedioFiscal, custoGerencial, custoReposicao, custoNotaFiscal,
+                        precoVenda, precoPromocao, precoAtacado
+                    ]);
+                }
             };
 
             if (isFirstSync) {
@@ -689,23 +712,78 @@ export async function syncIntegrimCostsAndPrices(connection, db, batchLimit = nu
 export async function recalculateAbcAndCoverage(db) {
     const pool = resolvePool(db);
 
-    // Limpeza preventiva de registros órfãos ou de empresas/produtos não ativos
+    // 1. Limpeza preventiva de registros órfãos ou de empresas/produtos não ativos
     await pool.execute(`
         DELETE FROM bi_estoque_saldos 
         WHERE idsubproduto NOT IN (SELECT idsubproduto FROM bi_produtos WHERE inativo = FALSE AND bloqueia_venda = FALSE)
            OR empresa_id NOT IN (1, 2)
     `);
 
+    // 2. Unificação e consolidação de eventuais registros fragmentados por (empresa_id, idsubproduto)
+    // Assegura que custos e saldos fiquem na linha do local oficial da loja
+    try {
+        await pool.execute(`
+            UPDATE bi_estoque_saldos s1
+            JOIN bi_estoque_saldos s2 ON s1.empresa_id = s2.empresa_id 
+                AND s1.idsubproduto = s2.idsubproduto 
+                AND s1.id != s2.id
+            SET 
+                s1.custo_medio = GREATEST(s1.custo_medio, s2.custo_medio),
+                s1.custo_medio_fiscal = GREATEST(s1.custo_medio_fiscal, s2.custo_medio_fiscal),
+                s1.custo_gerencial = GREATEST(s1.custo_gerencial, s2.custo_gerencial),
+                s1.custo_reposicao = GREATEST(s1.custo_reposicao, s2.custo_reposicao),
+                s1.custo_nota_fiscal = GREATEST(s1.custo_nota_fiscal, s2.custo_nota_fiscal),
+                s1.preco_venda_varejo = GREATEST(s1.preco_venda_varejo, s2.preco_venda_varejo),
+                s1.saldo_atual = GREATEST(s1.saldo_atual, s2.saldo_atual),
+                s1.saldo_disponivel = GREATEST(s1.saldo_disponivel, s2.saldo_disponivel)
+            WHERE (s1.empresa_id = 1 AND s1.id_local_estoque = 1)
+               OR (s1.empresa_id = 2 AND s1.id_local_estoque = 2)
+        `);
+
+        await pool.execute(`
+            DELETE s2 FROM bi_estoque_saldos s2
+            JOIN bi_estoque_saldos s1 ON s1.empresa_id = s2.empresa_id 
+                AND s1.idsubproduto = s2.idsubproduto 
+                AND s1.id != s2.id
+            WHERE (s1.empresa_id = 1 AND s1.id_local_estoque = 1 AND s2.id_local_estoque != 1)
+               OR (s1.empresa_id = 2 AND s1.id_local_estoque = 2 AND s2.id_local_estoque != 2)
+        `);
+    } catch (e) {
+        logger.warn(`[IntegrimSync] Aviso ao consolidar duplicidades de saldos: ${e.message}`);
+    }
+
+    // 3. Atualiza média de venda diária a partir de bi_vendas_itens (últimos 60 dias) se houver vendas registradas
+    try {
+        await pool.execute(`
+            UPDATE bi_estoque_saldos s
+            JOIN (
+                SELECT 
+                    v.empresa_id,
+                    p.idsubproduto,
+                    COALESCE(SUM(vi.quantidade), 0) / 60.0 as media_diaria
+                FROM bi_vendas_itens vi
+                JOIN bi_vendas v ON v.id = vi.venda_id
+                JOIN bi_produtos p ON (p.codigo_barras = vi.codigo_produto OR p.idsubproduto = CAST(vi.codigo_produto AS UNSIGNED))
+                WHERE vi.data_emissao >= DATE_SUB(CURDATE(), INTERVAL 60 DAY)
+                GROUP BY v.empresa_id, p.idsubproduto
+            ) sales ON sales.empresa_id = s.empresa_id AND sales.idsubproduto = s.idsubproduto
+            SET s.media_venda_diaria = sales.media_diaria
+        `);
+    } catch (e) {
+        // Tabela de vendas vazia ou sem correlação recente
+    }
+
+    // 4. Recalcula Curva ABC (Princípio de Pareto) e Cobertura para cada empresa
     const [empresas] = await pool.execute('SELECT id FROM bi_empresas WHERE ativo = TRUE');
 
     for (const emp of empresas) {
         const empresaId = emp.id;
 
-        // Busca itens ordenados por valor total a custo fiscal DESC
+        // Busca itens ordenados por valor total a custo fiscal DESC (apenas itens com saldo e custo positivos)
         const [rows] = await pool.execute(`
             SELECT id, saldo_atual, custo_medio_fiscal, (saldo_atual * custo_medio_fiscal) as valor_total, media_venda_diaria
             FROM bi_estoque_saldos
-            WHERE empresa_id = ? AND saldo_atual > 0
+            WHERE empresa_id = ? AND saldo_atual > 0 AND custo_medio_fiscal > 0
             ORDER BY valor_total DESC
         `, [empresaId]);
 
@@ -717,16 +795,22 @@ export async function recalculateAbcAndCoverage(db) {
             acumulado += val;
             const pctAcumulado = totalEstoqueValor > 0 ? (acumulado / totalEstoqueValor) * 100 : 100;
 
+            // Princípio de Pareto canônico para estoques:
+            // Curva A: até 80% do valor acumulado (alta representatividade financeira)
+            // Curva B: de 80.01% a 95% do valor acumulado (média representatividade)
+            // Curva C: acima de 95% do valor acumulado (cauda longa)
             let curva = 'C';
-            if (pctAcumulado <= 20) {
+            if (pctAcumulado <= 80.0001) {
                 curva = 'A';
-            } else if (pctAcumulado <= 50) {
+            } else if (pctAcumulado <= 95.0001) {
                 curva = 'B';
+            } else {
+                curva = 'C';
             }
 
             const mediaDiaria = parseFloat(row.media_venda_diaria) || 0;
             const saldoAtual = parseFloat(row.saldo_atual) || 0;
-            const diasCobertura = mediaDiaria > 0 ? Math.round(saldoAtual / mediaDiaria) : 180;
+            const diasCobertura = mediaDiaria > 0 ? Math.round(saldoAtual / mediaDiaria) : 0;
 
             await pool.execute(`
                 UPDATE bi_estoque_saldos 
@@ -734,9 +818,16 @@ export async function recalculateAbcAndCoverage(db) {
                 WHERE id = ?
             `, [curva, diasCobertura, row.id]);
         }
+
+        // Zera explicitamente itens sem saldo ou com custo zerado como Curva C e Cobertura 0
+        await pool.execute(`
+            UPDATE bi_estoque_saldos 
+            SET curva_abc = 'C', dias_cobertura = 0
+            WHERE empresa_id = ? AND (saldo_atual <= 0 OR custo_medio_fiscal <= 0)
+        `, [empresaId]);
     }
 
-    logger.info(`[IntegrimSync] Curva ABC e Cobertura recalculadas com sucesso.`);
+    logger.info(`[IntegrimSync] Curva ABC Pareto e Cobertura recalculadas com sucesso.`);
     return { sucesso: true };
 }
 
@@ -1063,11 +1154,13 @@ export async function testSyncSingleProduct(connection, db, { idsubproduto = nul
             results.endpoints.precos_custos_produtos_empresa.sucesso = true;
 
             results.endpoints.precos_custos_produtos_empresa.dados_formatados = custoItems.map(c => {
-                const custoReposicao = parseFloat(c.valcustorepos) || 0;
-                const custoGerencial = parseFloat(c.custogerencial) || 0;
-                const custoNotaFiscal = parseFloat(c.custonotafiscal) || 0;
-                const custoMedio = custoNotaFiscal > 0 ? custoNotaFiscal : custoReposicao;
-                const custoMedioFiscal = custoMedio;
+                const custoReposicao = parseFloat(c.valcustorepos || c.custoreposicao) || 0;
+                const custoGerencial = parseFloat(c.custogerencial || c.valcustogerencial) || 0;
+                const custoNotaFiscal = parseFloat(c.custonotafiscal || c.valcustonotafiscal) || 0;
+                const custoMedioFiscal = parseFloat(c.valcustomediofiscal || c.customediofiscal) 
+                    || (custoNotaFiscal > 0 ? custoNotaFiscal : (custoReposicao > 0 ? custoReposicao : custoGerencial));
+                const custoMedio = parseFloat(c.valcustomedio || c.customedio) 
+                    || (custoMedioFiscal > 0 ? custoMedioFiscal : (custoNotaFiscal > 0 ? custoNotaFiscal : custoReposicao));
                 const precoVenda = parseFloat(c.valprecovarejo) || 0;
                 const precoPromocao = parseFloat(c.valpromvarejo) || 0;
                 const precoAtacado = parseFloat(c.valprecoatacado) || 0;

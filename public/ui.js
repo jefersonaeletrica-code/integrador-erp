@@ -6899,10 +6899,10 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <div class="bi-kpi-icon" style="background: rgba(14, 165, 233, 0.12); color: #0284c7;"><i class="fas fa-calendar-check"></i></div>
                             </div>
                             <div class="bi-kpi-main">
-                                <div class="bi-kpi-value">${kpi.dias_cobertura || 179} dias</div>
+                                <div class="bi-kpi-value">${kpi.dias_cobertura !== undefined ? kpi.dias_cobertura : 0} dias</div>
                             </div>
                             <div class="bi-kpi-footer">
-                                <span style="font-size: 0.75rem; color: var(--color-text-offset);">Média de Giro por Qtd</span>
+                                <span style="font-size: 0.75rem; color: var(--color-text-offset);">Giro Médio Ponderado</span>
                             </div>
                         </div>
 
@@ -7510,11 +7510,14 @@ document.addEventListener('DOMContentLoaded', () => {
                                         const isRuptura = p.saldo_atual <= 0;
                                         const isBaixo = !isRuptura && p.saldo_atual <= p.estoque_minimo;
                                         const statusBadge = isRuptura ? '<span class="badge badge-danger">Ruptura</span>' : (isBaixo ? '<span class="badge badge-warning">Baixo</span>' : '<span class="badge badge-success">OK</span>');
+                                        const empresaBadge = (!biEstoqueState.empresa_id || biEstoqueState.empresa_id === 'all')
+                                            ? `<span class="badge" style="font-size: 0.68rem; margin-left: 6px; padding: 2px 6px; background: rgba(99, 102, 241, 0.12); color: #4f46e5; border-radius: 4px;">${p.empresa_id === 1 ? 'Matriz' : (p.empresa_id === 2 ? 'Filial 2' : 'Lj ' + p.empresa_id)}</span>`
+                                            : '';
 
                                         return `
                                             <tr>
                                                 <td><span class="badge-curva ${badgeClass}">${p.curva_abc}</span></td>
-                                                <td><code>${p.idsubproduto}</code></td>
+                                                <td><code>${p.idsubproduto}</code>${empresaBadge}</td>
                                                 <td style="font-weight: 600;" title="${p.descricao}">${p.descricao}</td>
                                                 <td>${p.marca || '-'}</td>
                                                 <td style="font-size: 0.78rem; color: var(--color-text-offset);">${p.subgrupo || p.grupo || '-'}</td>
