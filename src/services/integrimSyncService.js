@@ -258,6 +258,16 @@ export async function startIntegrimBackgroundSync(connection, db, { forceFull = 
         try {
             logger.info(`[IntegrimSync Background] Iniciando rotina de sincronização (${syncType}) em segundo plano (Fuso -03:00)...`);
 
+            if (!isDelta) {
+                // Na sincronização completa (Full Sync), remove os registros demonstrativos de mock para não colidir com o catálogo real
+                try {
+                    await pool.execute('DELETE FROM bi_estoque_saldos WHERE idproduto <= 1250 AND idsubproduto BETWEEN 10001 AND 10250');
+                    await pool.execute('DELETE FROM bi_produtos WHERE idproduto <= 1250 AND idsubproduto BETWEEN 10001 AND 10250');
+                } catch (e) {
+                    logger.warn('[IntegrimSync Background] Aviso ao limpar dados de mock:', e.message);
+                }
+            }
+
             // Etapa 1: CAD_PRODUTOS
             integrimSyncStatus.stage = 'cad_produtos';
             integrimSyncStatus.stageLabel = isDelta 
@@ -406,11 +416,6 @@ export async function syncIntegrimProducts(connection, db, batchLimit = null, on
             const bloqueiaVenda = item.flagbloqueiavenda === 'T';
             const inativo = (item.flaginativo === 'T') || bloqueiaVenda;
 
-            // Desconsidera produtos inativos ou bloqueados para venda
-            if (inativo || bloqueiaVenda) {
-                continue;
-            }
-
             const idproduto = parseInt(item.idproduto, 10) || idsubproduto;
             const codBarras = item.nrcodbarprod ? String(item.nrcodbarprod) : null;
             const codBarrasCx = item.idcodbarcx ? String(item.idcodbarcx) : null;
@@ -438,14 +443,21 @@ export async function syncIntegrimProducts(connection, db, batchLimit = null, on
                     ncm, unidade_medida, inativo, bloqueia_venda
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
+                    idproduto = VALUES(idproduto),
                     codigo_barras = VALUES(codigo_barras),
+                    codigo_barras_cx = VALUES(codigo_barras_cx),
                     descricao = VALUES(descricao),
                     descricao_resumida = VALUES(descricao_resumida),
                     marca = VALUES(marca),
+                    id_marca = VALUES(id_marca),
                     divisao = VALUES(divisao),
+                    id_divisao = VALUES(id_divisao),
                     secao = VALUES(secao),
+                    id_secao = VALUES(id_secao),
                     grupo = VALUES(grupo),
+                    id_grupo = VALUES(id_grupo),
                     subgrupo = VALUES(subgrupo),
+                    id_subgrupo = VALUES(id_subgrupo),
                     ncm = VALUES(ncm),
                     unidade_medida = VALUES(unidade_medida),
                     inativo = VALUES(inativo),
@@ -457,6 +469,11 @@ export async function syncIntegrimProducts(connection, db, batchLimit = null, on
                 grupo, idGrupo, subgrupo, idSubgrupo,
                 ncm, unMedida, inativo, bloqueiaVenda
             ]);
+
+            // Se o produto está inativo ou com venda bloqueada no ERP, remove imediatamente seus saldos para não distorcer o estoque
+            if (inativo || bloqueiaVenda) {
+                await pool.execute('DELETE FROM bi_estoque_saldos WHERE idsubproduto = ?', [idsubproduto]);
+            }
 
             totalImportados++;
         }
@@ -979,8 +996,8 @@ export async function seedRealisticEstoqueMockData(db) {
         { desc: 'Fita Isolante 3M Imperial 19mm x 20m', un: 'UN', preco: 11.90, custoMed: 7.20, grupoIdx: 8, marca: 'Schneider Electric' }
     ];
 
-    let prodIdCounter = 1000;
-    let subprodIdCounter = 10000;
+    let prodIdCounter = 990000;
+    let subprodIdCounter = 990000;
     let totalItems = 0;
 
     // Gerar 250 itens detalhados cobrindo os grupos e fornecedores
@@ -1189,20 +1206,35 @@ export async function testSyncSingleProduct(connection, db, { idsubproduto = nul
             results.endpoints.produtos_saldo_estoque_empresa.raw_data = saldoItems;
             results.endpoints.produtos_saldo_estoque_empresa.sucesso = true;
 
-            results.endpoints.produtos_saldo_estoque_empresa.dados_formatados = saldoItems.map(s => {
-                const isOficial = isValidStoreStockRecord(s.idempresa, s.idlocalestoque, s.descrlocalestoque);
-                return {
-                    empresa_id: parseInt(s.idempresa, 10) || 1,
-                    nome_empresa: parseInt(s.idempresa, 10) === 2 ? '2 - Filial 2' : '1 - Matriz',
-                    id_local_estoque: parseInt(s.idlocalestoque, 10) || 1,
-                    local_estoque: s.descrlocalestoque || 'Geral',
-                    saldo_atual: parseFloat(s.qtdsaldoatual) || 0,
-                    saldo_reserva: parseFloat(s.qtdsaldoreserva) || 0,
-                    saldo_disponivel: parseFloat(s.qtdsaldodisponivel) || ((parseFloat(s.qtdsaldoatual) || 0) - (parseFloat(s.qtdsaldoreserva) || 0)),
-                    dt_alteracao: s.dtalteracao || null,
-                    is_oficial: isOficial
-                };
-            });
+            if (saldoItems.length > 0 && saldoItems.every(s => s.idempresa === undefined)) {
+                // Se a API retornou sem segregação de empresa (ex: item inativo com saldo zero na rede), projeta saldo zero para ambas as lojas
+                results.endpoints.produtos_saldo_estoque_empresa.dados_formatados = [1, 2].map(empId => ({
+                    empresa_id: empId,
+                    nome_empresa: empId === 2 ? '2 - Filial 2' : '1 - Matriz',
+                    id_local_estoque: empId === 1 ? 1 : 2,
+                    local_estoque: empId === 1 ? 'AREA VENDA LOJA01' : 'AREA VENDA LOJA02',
+                    saldo_atual: parseFloat(saldoItems[0]?.qtdsaldoatual) || 0,
+                    saldo_reserva: parseFloat(saldoItems[0]?.qtdsaldoreserva) || 0,
+                    saldo_disponivel: parseFloat(saldoItems[0]?.qtdsaldodisponivel) || 0,
+                    dt_alteracao: saldoItems[0]?.dtalteracao || null,
+                    is_oficial: true
+                }));
+            } else {
+                results.endpoints.produtos_saldo_estoque_empresa.dados_formatados = saldoItems.map(s => {
+                    const isOficial = isValidStoreStockRecord(s.idempresa, s.idlocalestoque, s.descrlocalestoque);
+                    return {
+                        empresa_id: parseInt(s.idempresa, 10) || 1,
+                        nome_empresa: parseInt(s.idempresa, 10) === 2 ? '2 - Filial 2' : '1 - Matriz',
+                        id_local_estoque: parseInt(s.idlocalestoque, 10) || (parseInt(s.idempresa, 10) === 2 ? 2 : 1),
+                        local_estoque: s.descrlocalestoque || (parseInt(s.idempresa, 10) === 2 ? 'AREA VENDA LOJA02' : 'AREA VENDA LOJA01'),
+                        saldo_atual: parseFloat(s.qtdsaldoatual) || 0,
+                        saldo_reserva: parseFloat(s.qtdsaldoreserva) || 0,
+                        saldo_disponivel: parseFloat(s.qtdsaldodisponivel) || ((parseFloat(s.qtdsaldoatual) || 0) - (parseFloat(s.qtdsaldoreserva) || 0)),
+                        dt_alteracao: s.dtalteracao || null,
+                        is_oficial: isOficial
+                    };
+                });
+            }
         } catch (errSaldo) {
             results.endpoints.produtos_saldo_estoque_empresa.sucesso = false;
             results.endpoints.produtos_saldo_estoque_empresa.tempo_ms = Date.now() - t2Start;
@@ -1321,13 +1353,21 @@ export async function testSyncSingleProduct(connection, db, { idsubproduto = nul
                     ncm, unidade_medida, inativo, bloqueia_venda
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
+                    idproduto = VALUES(idproduto),
                     codigo_barras = VALUES(codigo_barras),
+                    codigo_barras_cx = VALUES(codigo_barras_cx),
                     descricao = VALUES(descricao),
+                    descricao_resumida = VALUES(descricao_resumida),
                     marca = VALUES(marca),
+                    id_marca = VALUES(id_marca),
                     divisao = VALUES(divisao),
+                    id_divisao = VALUES(id_divisao),
                     secao = VALUES(secao),
+                    id_secao = VALUES(id_secao),
                     grupo = VALUES(grupo),
+                    id_grupo = VALUES(id_grupo),
                     subgrupo = VALUES(subgrupo),
+                    id_subgrupo = VALUES(id_subgrupo),
                     ncm = VALUES(ncm),
                     unidade_medida = VALUES(unidade_medida),
                     inativo = VALUES(inativo),
@@ -1340,30 +1380,39 @@ export async function testSyncSingleProduct(connection, db, { idsubproduto = nul
                 prod.ncm, prod.unidade_medida, prod.inativo, prod.bloqueia_venda
             ]);
 
-            for (const emp of empresas) {
-                await pool.execute(`
-                    INSERT INTO bi_estoque_saldos (
-                        empresa_id, idproduto, idsubproduto, id_local_estoque, local_estoque,
-                        saldo_atual, saldo_reserva, saldo_disponivel,
-                        custo_medio, custo_medio_fiscal, custo_gerencial, custo_reposicao, custo_nota_fiscal,
-                        preco_venda_varejo, preco_promocao_varejo, preco_venda_atacado
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE
-                        saldo_atual = VALUES(saldo_atual),
-                        saldo_reserva = VALUES(saldo_reserva),
-                        saldo_disponivel = VALUES(saldo_disponivel),
-                        custo_medio = VALUES(custo_medio),
-                        custo_medio_fiscal = VALUES(custo_medio_fiscal),
-                        custo_gerencial = VALUES(custo_gerencial),
-                        custo_reposicao = VALUES(custo_reposicao),
-                        custo_nota_fiscal = VALUES(custo_nota_fiscal),
-                        preco_venda_varejo = VALUES(preco_venda_varejo)
-                `, [
-                    emp.empresa_id, prod.idproduto, prod.idsubproduto, emp.id_local_estoque || 1, emp.local_estoque || 'Geral',
-                    emp.saldo_atual, emp.saldo_reserva, emp.saldo_disponivel,
-                    emp.custo_medio, emp.custo_medio_fiscal, emp.custo_gerencial, emp.custo_reposicao, emp.custo_nota_fiscal,
-                    emp.preco_venda_varejo, emp.preco_promocao_varejo || 0, emp.preco_venda_atacado || 0
-                ]);
+            if (prod.inativo || prod.bloqueia_venda) {
+                // Produto inativo ou bloqueado: remove saldos físicos para não distorcer o BI nem a Curva ABC
+                await pool.execute('DELETE FROM bi_estoque_saldos WHERE idsubproduto = ?', [prod.idsubproduto]);
+            } else {
+                for (const emp of empresas) {
+                    await pool.execute(`
+                        INSERT INTO bi_estoque_saldos (
+                            empresa_id, idproduto, idsubproduto, id_local_estoque, local_estoque,
+                            saldo_atual, saldo_reserva, saldo_disponivel,
+                            custo_medio, custo_medio_fiscal, custo_gerencial, custo_reposicao, custo_nota_fiscal,
+                            preco_venda_varejo, preco_promocao_varejo, preco_venda_atacado
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        ON DUPLICATE KEY UPDATE
+                            idproduto = VALUES(idproduto),
+                            saldo_atual = VALUES(saldo_atual),
+                            saldo_reserva = VALUES(saldo_reserva),
+                            saldo_disponivel = VALUES(saldo_disponivel),
+                            local_estoque = VALUES(local_estoque),
+                            custo_medio = VALUES(custo_medio),
+                            custo_medio_fiscal = VALUES(custo_medio_fiscal),
+                            custo_gerencial = VALUES(custo_gerencial),
+                            custo_reposicao = VALUES(custo_reposicao),
+                            custo_nota_fiscal = VALUES(custo_nota_fiscal),
+                            preco_venda_varejo = VALUES(preco_venda_varejo),
+                            preco_promocao_varejo = VALUES(preco_promocao_varejo),
+                            preco_venda_atacado = VALUES(preco_venda_atacado)
+                    `, [
+                        emp.empresa_id, prod.idproduto, prod.idsubproduto, emp.id_local_estoque || (emp.empresa_id === 1 ? 1 : 2), emp.local_estoque || (emp.empresa_id === 1 ? 'AREA VENDA LOJA01' : 'AREA VENDA LOJA02'),
+                        emp.saldo_atual, emp.saldo_reserva, emp.saldo_disponivel,
+                        emp.custo_medio, emp.custo_medio_fiscal, emp.custo_gerencial, emp.custo_reposicao, emp.custo_nota_fiscal,
+                        emp.preco_venda_varejo, emp.preco_promocao_varejo || 0, emp.preco_venda_atacado || 0
+                    ]);
+                }
             }
         } catch (dbErr) {
             logger.warn(`[IntegrimSync] Não foi possível persistir produto de teste no MySQL:`, dbErr.message);

@@ -589,6 +589,14 @@ Regras de atuação:
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    // Limpeza automática de produtos mock legados que colidiam com a faixa de SKUs reais do CISS Poder
+    try {
+      await connection.query('DELETE FROM bi_estoque_saldos WHERE idproduto <= 1250 AND idsubproduto BETWEEN 10001 AND 10250');
+      await connection.query('DELETE FROM bi_produtos WHERE idproduto <= 1250 AND idsubproduto BETWEEN 10001 AND 10250');
+    } catch (e) {
+      // Ignora caso tabelas estejam vazias
+    }
+
     console.log('Tabelas do Módulo Power BI (Vendas, Estoque e Produtos) prontas.');
     console.log('Banco de dados MySQL pronto.');
   } finally {
