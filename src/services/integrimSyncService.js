@@ -260,7 +260,7 @@ export async function startIntegrimBackgroundSync(connection, db, { forceFull = 
 
             if (!isDelta) {
                 // Na sincronização completa (Full Sync), remove os registros demonstrativos de teste/mock para garantir catálogo 100% real
-                await purgeMockEstoqueData(pool);
+                await purgeMockEstoqueData(db);
             }
 
             // Etapa 1: CAD_PRODUTOS
