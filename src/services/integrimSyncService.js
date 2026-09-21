@@ -313,11 +313,15 @@ export function isOfficialSalesLocation(empresaId, descrLocalEstoque) {
 
 /**
  * 2. Sincroniza Saldos de Estoque por Loja (PRODUTOS_SALDO_ESTOQUE_EMPRESA)
- * Por padrão busca TODOS os saldos das áreas de vendas oficiais (batchLimit = null)
+ * Sincroniza exclusivamente as lojas oficiais (1 e 2) e produtos ativos cadastrados em bi_produtos
  */
 export async function syncIntegrimStockBalances(connection, db, batchLimit = null, onProgress = null) {
     const pool = resolvePool(db);
     await ensureCissPoderTokenIsValid(connection, db);
+
+    // Conjunto de produtos ativos e não bloqueados previamente sincronizados no CAD_PRODUTOS
+    const [activeProds] = await pool.execute('SELECT idsubproduto FROM bi_produtos WHERE inativo = FALSE AND bloqueia_venda = FALSE');
+    const activeProdSet = new Set(activeProds.map(p => p.idsubproduto));
 
     const authUrlObject = new URL(connection.credentials.auth_url);
     authUrlObject.pathname = '/cisspoder-service/produtos_saldo_estoque_empresa';
@@ -327,13 +331,14 @@ export async function syncIntegrimStockBalances(connection, db, batchLimit = nul
     let hasNext = true;
     let totalImportados = 0;
 
-    logger.info(`[IntegrimSync] Sincronizando saldos físicos via PRODUTOS_SALDO_ESTOQUE_EMPRESA com filtro de Área de Venda...`);
+    logger.info(`[IntegrimSync] Sincronizando saldos físicos via PRODUTOS_SALDO_ESTOQUE_EMPRESA (Lojas 1 e 2, Produtos Ativos)...`);
 
     while (hasNext && (!batchLimit || totalImportados < batchLimit)) {
         const payload = {
             page,
             clausulas: [
-                { campo: "descrlocalestoque", valor: "AREA VENDA%", operador: "LIKE", operadorlogico: "AND" }
+                { campo: "descrlocalestoque", valor: "AREA VENDA%", operador: "LIKE", operadorlogico: "AND" },
+                { campo: "flaginativo", valor: "F", operador: "IGUAL", operadorlogico: "AND" }
             ],
             ordenacoes: [{ campo: "idsubproduto", direcao: "ASC" }]
         };
@@ -349,10 +354,19 @@ export async function syncIntegrimStockBalances(connection, db, batchLimit = nul
         if (items.length === 0) break;
 
         for (const item of items) {
-            const empresaId = parseInt(item.idempresa, 10) || 1;
+            const empresaId = parseInt(item.idempresa, 10);
+            if (empresaId !== 1 && empresaId !== 2) continue;
+
             const idsubproduto = parseInt(item.idsubproduto, 10);
             const idproduto = parseInt(item.idproduto, 10) || idsubproduto;
             if (!idsubproduto) continue;
+
+            if (item.flaginativo === 'T') continue;
+
+            // Filtro estrito: somente produtos ativos presentes em bi_produtos
+            if (activeProdSet.size > 0 && !activeProdSet.has(idsubproduto)) {
+                continue;
+            }
 
             const idLocalEstoque = parseInt(item.idlocalestoque, 10) || (empresaId === 1 ? 1 : 2);
             const localEstoque = item.descrlocalestoque || (empresaId === 1 ? 'AREA VENDA LOJA01' : 'AREA VENDA LOJA02');
@@ -401,11 +415,15 @@ export async function syncIntegrimStockBalances(connection, db, batchLimit = nul
 
 /**
  * 3. Sincroniza Custos e Preços por Loja (PRECOS_CUSTOS_PRODUTOS_EMPRESA)
- * Por padrão busca TODOS os custos e preços (batchLimit = null)
+ * Sincroniza exclusivamente as lojas oficiais (1 e 2) e produtos ativos cadastrados em bi_produtos
  */
 export async function syncIntegrimCostsAndPrices(connection, db, batchLimit = null, onProgress = null) {
     const pool = resolvePool(db);
     await ensureCissPoderTokenIsValid(connection, db);
+
+    // Conjunto de produtos ativos e não bloqueados previamente sincronizados no CAD_PRODUTOS
+    const [activeProds] = await pool.execute('SELECT idsubproduto FROM bi_produtos WHERE inativo = FALSE AND bloqueia_venda = FALSE');
+    const activeProdSet = new Set(activeProds.map(p => p.idsubproduto));
 
     const authUrlObject = new URL(connection.credentials.auth_url);
     authUrlObject.pathname = '/cisspoder-service/precos_custos_produtos_empresa';
@@ -415,12 +433,14 @@ export async function syncIntegrimCostsAndPrices(connection, db, batchLimit = nu
     let hasNext = true;
     let totalImportados = 0;
 
-    logger.info(`[IntegrimSync] Sincronizando custos e preços via PRECOS_CUSTOS_PRODUTOS_EMPRESA...`);
+    logger.info(`[IntegrimSync] Sincronizando custos e preços via PRECOS_CUSTOS_PRODUTOS_EMPRESA (Lojas 1 e 2, Produtos Ativos)...`);
 
     while (hasNext && (!batchLimit || totalImportados < batchLimit)) {
         const payload = {
             page,
-            clausulas: [],
+            clausulas: [
+                { campo: "flaginativo", valor: "F", operador: "IGUAL", operadorlogico: "AND" }
+            ],
             ordenacoes: [{ campo: "idsubproduto", direcao: "ASC" }]
         };
 
@@ -435,10 +455,19 @@ export async function syncIntegrimCostsAndPrices(connection, db, batchLimit = nu
         if (items.length === 0) break;
 
         for (const item of items) {
-            const empresaId = parseInt(item.idempresa, 10) || 1;
+            const empresaId = parseInt(item.idempresa, 10);
+            if (empresaId !== 1 && empresaId !== 2) continue;
+
             const idsubproduto = parseInt(item.idsubproduto, 10);
             const idproduto = parseInt(item.idproduto, 10) || idsubproduto;
             if (!idsubproduto) continue;
+
+            if (item.flaginativo === 'T' || item.flagbloqueiavenda === 'T') continue;
+
+            // Filtro estrito: somente produtos ativos presentes em bi_produtos
+            if (activeProdSet.size > 0 && !activeProdSet.has(idsubproduto)) {
+                continue;
+            }
 
             const custoReposicao = parseFloat(item.valcustorepos) || 0;
             const custoGerencial = parseFloat(item.custogerencial) || 0;
@@ -494,6 +523,13 @@ export async function syncIntegrimCostsAndPrices(connection, db, batchLimit = nu
  */
 export async function recalculateAbcAndCoverage(db) {
     const pool = resolvePool(db);
+
+    // Limpeza preventiva de registros órfãos ou de empresas/produtos não ativos
+    await pool.execute(`
+        DELETE FROM bi_estoque_saldos 
+        WHERE idsubproduto NOT IN (SELECT idsubproduto FROM bi_produtos WHERE inativo = FALSE AND bloqueia_venda = FALSE)
+           OR empresa_id NOT IN (1, 2)
+    `);
 
     const [empresas] = await pool.execute('SELECT id FROM bi_empresas WHERE ativo = TRUE');
 
