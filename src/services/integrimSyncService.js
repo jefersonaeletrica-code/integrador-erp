@@ -1009,6 +1009,7 @@ export async function testSyncSingleProduct(connection, db, { idsubproduto = nul
                     saldo_atual: parseFloat(s.qtdsaldoatual) || 0,
                     saldo_reserva: parseFloat(s.qtdsaldoreserva) || 0,
                     saldo_disponivel: parseFloat(s.qtdsaldodisponivel) || ((parseFloat(s.qtdsaldoatual) || 0) - (parseFloat(s.qtdsaldoreserva) || 0)),
+                    dt_alteracao: s.dtalteracao || null,
                     is_oficial: isOficial
                 };
             });
@@ -1058,7 +1059,8 @@ export async function testSyncSingleProduct(connection, db, { idsubproduto = nul
                     custo_nota_fiscal: custoNotaFiscal,
                     preco_venda_varejo: precoVenda,
                     preco_promocao_varejo: precoPromocao,
-                    preco_venda_atacado: precoAtacado
+                    preco_venda_atacado: precoAtacado,
+                    dt_alteracao: c.dtalteracao || null
                 };
             });
         } catch (errCustos) {
@@ -1090,14 +1092,17 @@ export async function testSyncSingleProduct(connection, db, { idsubproduto = nul
                 saldo_reserva: 0, 
                 saldo_disponivel: 0, 
                 local_estoque: targetLocalName,
-                id_local_estoque: targetLocalId
+                id_local_estoque: targetLocalId,
+                dt_alteracao: null
             };
-            const c = custos.find(x => x.empresa_id === empId) || { custo_medio: 0, custo_medio_fiscal: 0, custo_gerencial: 0, custo_reposicao: 0, custo_nota_fiscal: 0, preco_venda_varejo: 0 };
+            const c = custos.find(x => x.empresa_id === empId) || { custo_medio: 0, custo_medio_fiscal: 0, custo_gerencial: 0, custo_reposicao: 0, custo_nota_fiscal: 0, preco_venda_varejo: 0, dt_alteracao: null };
             return {
                 empresa_id: empId,
                 nome_empresa: empId === 1 ? '1 - A Elétrica (Matriz)' : '2 - A Elétrica (Filial 2)',
                 ...s,
-                ...c
+                ...c,
+                dt_alteracao_saldo: s.dt_alteracao,
+                dt_alteracao_custo: c.dt_alteracao
             };
         });
 
