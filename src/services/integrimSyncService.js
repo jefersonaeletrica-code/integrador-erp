@@ -550,12 +550,14 @@ export async function syncIntegrimStockBalances(connection, db, batchLimit = nul
 
 /**
  * 3. Sincroniza Custos e Preços por Loja (PRECOS_CUSTOS_PRODUTOS_EMPRESA)
- * Sincroniza exclusivamente as lojas oficiais (1 e 2) e produtos ativos cadastrados em bi_produtos.
- * Suporta filtro incremental por dtalteracao.
+ * - Na primeira sincronização (Full / !lastSyncDate): Importa preços/custos da Loja 1 (Matriz) e replica/espelha automaticamente para a Loja 2.
+ * - A partir da segunda sincronização (Delta / lastSyncDate): Importa e atualiza separadamente e individualmente por loja com base em dtalteracao.
  */
 export async function syncIntegrimCostsAndPrices(connection, db, batchLimit = null, onProgress = null, lastSyncDate = null) {
     const pool = resolvePool(db);
     await ensureCissPoderTokenIsValid(connection, db);
+
+    const isFirstSync = !lastSyncDate;
 
     // Conjunto de produtos ativos e não bloqueados previamente sincronizados no CAD_PRODUTOS
     const [activeProds] = await pool.execute('SELECT idsubproduto FROM bi_produtos WHERE inativo = FALSE AND bloqueia_venda = FALSE');
@@ -573,11 +575,15 @@ export async function syncIntegrimCostsAndPrices(connection, db, batchLimit = nu
         { campo: "flaginativo", valor: "F", operador: "IGUAL", operadorlogico: "AND" }
     ];
 
-    if (lastSyncDate) {
+    if (isFirstSync) {
+        // Na 1ª sincronização: filtra Loja 1 (Matriz) para gerar o espelho exato para Loja 2
+        clausulas.push({ campo: "idempresa", valor: 1, operador: "IGUAL", operadorlogico: "AND" });
+    } else {
+        // A partir da 2ª sincronização: busca alterações incrementais de todas as lojas
         clausulas.push({ campo: "dtalteracao", valor: lastSyncDate, operador: "MAIOR_IGUAL", operadorlogico: "AND" });
     }
 
-    logger.info(`[IntegrimSync] Sincronizando custos e preços via PRECOS_CUSTOS_PRODUTOS_EMPRESA (Delta: ${lastSyncDate || 'Não'})...`);
+    logger.info(`[IntegrimSync] Sincronizando custos e preços via PRECOS_CUSTOS_PRODUTOS_EMPRESA (Modo: ${isFirstSync ? 'Primeira Sincronização / Espelhamento Loja 1 -> Loja 2' : 'Incremental por Loja desde ' + lastSyncDate})...`);
 
     while (hasNext && (!batchLimit || totalImportados < batchLimit)) {
         const payload = {
@@ -598,7 +604,10 @@ export async function syncIntegrimCostsAndPrices(connection, db, batchLimit = nu
 
         for (const item of items) {
             const empresaId = parseInt(item.idempresa, 10);
-            if (empresaId !== 1 && empresaId !== 2) continue;
+            
+            // Na primeira sinc, processa exclusivamente empresa 1 (que será espelhada para a 2)
+            if (isFirstSync && empresaId !== 1) continue;
+            if (!isFirstSync && empresaId !== 1 && empresaId !== 2) continue;
 
             const idsubproduto = parseInt(item.idsubproduto, 10);
             const idproduto = parseInt(item.idproduto, 10) || idsubproduto;
@@ -621,28 +630,42 @@ export async function syncIntegrimCostsAndPrices(connection, db, batchLimit = nu
             const precoPromocao = parseFloat(item.valpromvarejo) || 0;
             const precoAtacado = parseFloat(item.valprecoatacado) || 0;
 
-            await pool.execute(`
-                INSERT INTO bi_estoque_saldos (
-                    empresa_id, idproduto, idsubproduto,
-                    custo_medio, custo_medio_fiscal, custo_gerencial, custo_reposicao, custo_nota_fiscal,
-                    preco_venda_varejo, preco_promocao_varejo, preco_venda_atacado
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE
-                    custo_medio = VALUES(custo_medio),
-                    custo_medio_fiscal = VALUES(custo_medio_fiscal),
-                    custo_gerencial = VALUES(custo_gerencial),
-                    custo_reposicao = VALUES(custo_reposicao),
-                    custo_nota_fiscal = VALUES(custo_nota_fiscal),
-                    preco_venda_varejo = VALUES(preco_venda_varejo),
-                    preco_promocao_varejo = VALUES(preco_promocao_varejo),
-                    preco_venda_atacado = VALUES(preco_venda_atacado)
-            `, [
-                empresaId, idproduto, idsubproduto,
-                custoMedio, custoMedioFiscal, custoGerencial, custoReposicao, custoNotaFiscal,
-                precoVenda, precoPromocao, precoAtacado
-            ]);
+            const upsertPriceAndCost = async (empId, locId, locName) => {
+                await pool.execute(`
+                    INSERT INTO bi_estoque_saldos (
+                        empresa_id, idproduto, idsubproduto, id_local_estoque, local_estoque,
+                        custo_medio, custo_medio_fiscal, custo_gerencial, custo_reposicao, custo_nota_fiscal,
+                        preco_venda_varejo, preco_promocao_varejo, preco_venda_atacado
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE
+                        custo_medio = VALUES(custo_medio),
+                        custo_medio_fiscal = VALUES(custo_medio_fiscal),
+                        custo_gerencial = VALUES(custo_gerencial),
+                        custo_reposicao = VALUES(custo_reposicao),
+                        custo_nota_fiscal = VALUES(custo_nota_fiscal),
+                        preco_venda_varejo = VALUES(preco_venda_varejo),
+                        preco_promocao_varejo = VALUES(preco_promocao_varejo),
+                        preco_venda_atacado = VALUES(preco_venda_atacado)
+                `, [
+                    empId, idproduto, idsubproduto, locId, locName,
+                    custoMedio, custoMedioFiscal, custoGerencial, custoReposicao, custoNotaFiscal,
+                    precoVenda, precoPromocao, precoAtacado
+                ]);
+            };
 
-            totalImportados++;
+            if (isFirstSync) {
+                // Loja 1 (Matriz)
+                await upsertPriceAndCost(1, 1, 'AREA VENDA LOJA01');
+                // Copia / Espelha os preços e custos exatamente iguais para a Loja 2 (Filial 2)
+                await upsertPriceAndCost(2, 2, 'AREA VENDA LOJA02');
+                totalImportados += 2;
+            } else {
+                // Sincronização incremental individual por loja
+                const locId = empresaId === 1 ? 1 : 2;
+                const locName = empresaId === 1 ? 'AREA VENDA LOJA01' : 'AREA VENDA LOJA02';
+                await upsertPriceAndCost(empresaId, locId, locName);
+                totalImportados++;
+            }
         }
 
         hasNext = !!response.data?.hasNext;
@@ -1095,7 +1118,14 @@ export async function testSyncSingleProduct(connection, db, { idsubproduto = nul
                 id_local_estoque: targetLocalId,
                 dt_alteracao: null
             };
-            const c = custos.find(x => x.empresa_id === empId) || { custo_medio: 0, custo_medio_fiscal: 0, custo_gerencial: 0, custo_reposicao: 0, custo_nota_fiscal: 0, preco_venda_varejo: 0, dt_alteracao: null };
+            let c = custos.find(x => x.empresa_id === empId);
+            // Se for Loja 2 e ainda não tiver precificação própria cadastrada, espelha a precificação da Loja 1 (Matriz)
+            if (!c && empId === 2) {
+                c = custos.find(x => x.empresa_id === 1);
+            }
+            if (!c) {
+                c = { custo_medio: 0, custo_medio_fiscal: 0, custo_gerencial: 0, custo_reposicao: 0, custo_nota_fiscal: 0, preco_venda_varejo: 0, dt_alteracao: null };
+            }
             return {
                 empresa_id: empId,
                 nome_empresa: empId === 1 ? '1 - A Elétrica (Matriz)' : '2 - A Elétrica (Filial 2)',
