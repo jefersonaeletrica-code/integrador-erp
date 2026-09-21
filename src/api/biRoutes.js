@@ -119,7 +119,7 @@ export default (db) => {
             });
             res.json({ sucesso: true, ...data });
         } catch (error) {
-            logger.error('[BiRoutes] Erro ao buscar produtos de estoque:', error);
+            logger.error('[BiRoutes] Erro ao buscar produtos de estoque:', { query: req.query, error: error.message, stack: error.stack });
             res.status(500).json({ sucesso: false, erro: error.message });
         }
     });

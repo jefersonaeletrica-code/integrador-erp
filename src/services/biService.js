@@ -789,21 +789,25 @@ export async function getBiEstoqueCurvaABC(db, { empresa_id = null, tipo_custo =
 export async function getBiEstoqueProducts(db, { empresa_id = null, busca = '', curva_abc = '', situacao = '', page = 1, limit = 50 }) {
     const pool = resolvePool(db);
 
-    let whereClause = `WHERE p.inativo = FALSE AND p.bloqueia_venda = FALSE AND ${getStockLocationCondition()}`;
+    const safeLimit = Math.max(1, Math.min(200, parseInt(limit, 10) || 50));
+    const safePage = Math.max(1, parseInt(page, 10) || 1);
+    const safeOffset = (safePage - 1) * safeLimit;
+
+    let whereClause = `WHERE (p.idsubproduto IS NULL OR (COALESCE(p.inativo, FALSE) = FALSE AND COALESCE(p.bloqueia_venda, FALSE) = FALSE)) AND ${getStockLocationCondition()}`;
     const params = [];
 
     if (empresa_id && empresa_id !== 'all' && empresa_id !== '') {
         whereClause += ' AND s.empresa_id = ?';
-        params.push(empresa_id);
+        params.push(parseInt(empresa_id, 10));
     }
 
     if (busca && busca.trim()) {
-        whereClause += ' AND (p.descricao LIKE ? OR p.codigo_barras LIKE ? OR p.idsubproduto LIKE ? OR p.marca LIKE ?)';
+        whereClause += ' AND (COALESCE(p.descricao, \'\') LIKE ? OR COALESCE(p.codigo_barras, \'\') LIKE ? OR CAST(s.idsubproduto AS CHAR) LIKE ? OR COALESCE(p.marca, \'\') LIKE ?)';
         const b = `%${busca.trim()}%`;
         params.push(b, b, b, b);
     }
 
-    if (curva_abc && curva_abc !== 'all') {
+    if (curva_abc && curva_abc !== 'all' && curva_abc !== '') {
         whereClause += ' AND s.curva_abc = ?';
         params.push(curva_abc);
     }
@@ -820,14 +824,11 @@ export async function getBiEstoqueProducts(db, { empresa_id = null, busca = '', 
     const [countRows] = await pool.execute(`
         SELECT COUNT(DISTINCT s.id) as total
         FROM bi_estoque_saldos s
-        JOIN bi_produtos p ON p.idsubproduto = s.idsubproduto
+        LEFT JOIN bi_produtos p ON p.idsubproduto = s.idsubproduto
         ${whereClause}
     `, params);
 
-    const total = countRows[0]?.total || 0;
-    const offset = (Math.max(1, parseInt(page, 10)) - 1) * parseInt(limit, 10);
-
-    const queryParams = [...params, parseInt(limit, 10), offset];
+    const total = parseInt(countRows[0]?.total, 10) || 0;
 
     const [rows] = await pool.execute(`
         SELECT 
@@ -835,13 +836,13 @@ export async function getBiEstoqueProducts(db, { empresa_id = null, busca = '', 
             s.empresa_id,
             s.idproduto,
             s.idsubproduto,
-            p.descricao,
-            p.marca,
-            p.fornecedor_principal,
-            p.grupo,
-            p.subgrupo,
-            p.unidade_medida,
-            p.codigo_barras,
+            COALESCE(p.descricao, CONCAT('Produto ', s.idsubproduto)) as descricao,
+            COALESCE(p.marca, '-') as marca,
+            COALESCE(p.fornecedor_principal, '-') as fornecedor_principal,
+            COALESCE(p.grupo, '-') as grupo,
+            COALESCE(p.subgrupo, '-') as subgrupo,
+            COALESCE(p.unidade_medida, 'UN') as unidade_medida,
+            COALESCE(p.codigo_barras, '') as codigo_barras,
             s.saldo_atual,
             s.saldo_reserva,
             s.saldo_disponivel,
@@ -851,19 +852,19 @@ export async function getBiEstoqueProducts(db, { empresa_id = null, busca = '', 
             s.preco_venda_varejo,
             s.estoque_minimo,
             s.dias_cobertura,
-            s.curva_abc
+            COALESCE(s.curva_abc, 'C') as curva_abc
         FROM bi_estoque_saldos s
-        JOIN bi_produtos p ON p.idsubproduto = s.idsubproduto
+        LEFT JOIN bi_produtos p ON p.idsubproduto = s.idsubproduto
         ${whereClause}
-        ORDER BY s.curva_abc ASC, s.saldo_atual DESC
-        LIMIT ? OFFSET ?
-    `, queryParams);
+        ORDER BY FIELD(s.curva_abc, 'A', 'B', 'C') ASC, s.saldo_atual DESC
+        LIMIT ${safeLimit} OFFSET ${safeOffset}
+    `, params);
 
     return {
         total,
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-        pages: Math.ceil(total / limit),
+        page: safePage,
+        limit: safeLimit,
+        pages: Math.ceil(total / safeLimit) || 1,
         products: rows.map(r => ({
             id: r.id,
             empresa_id: r.empresa_id,

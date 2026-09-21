@@ -7483,20 +7483,38 @@ document.addEventListener('DOMContentLoaded', () => {
         showLoading('Carregando catálogo de produtos e saldos...');
 
         try {
+            const limit = biEstoqueState.limit || 50;
             const [compRes, prodRes] = await Promise.all([
                 api('/api/bi/companies').catch(() => ({ companies: [] })),
-                api(`/api/bi/stock/products?empresa_id=${biEstoqueState.empresa_id}&busca=${encodeURIComponent(biEstoqueState.busca)}&curva_abc=${biEstoqueState.curva_abc}&situacao=${biEstoqueState.situacao}&page=${biEstoqueState.page}&limit=50`).catch(() => ({ products: [], total: 0, pages: 1 }))
+                api(`/api/bi/stock/products?empresa_id=${biEstoqueState.empresa_id}&busca=${encodeURIComponent(biEstoqueState.busca)}&curva_abc=${biEstoqueState.curva_abc}&situacao=${biEstoqueState.situacao}&page=${biEstoqueState.page}&limit=${limit}`)
+                    .catch(err => {
+                        console.error('[BI Estoque Detalhado] Erro na requisição de produtos:', err);
+                        return { products: [], total: 0, pages: 1, erro: err.message };
+                    })
             ]);
 
             const companies = compRes.companies || [];
             const products = prodRes.products || [];
             const total = prodRes.total || 0;
             const pages = prodRes.pages || 1;
+            const hasActiveFilters = !!(biEstoqueState.busca || biEstoqueState.curva_abc || biEstoqueState.situacao || (biEstoqueState.empresa_id && biEstoqueState.empresa_id !== 'all'));
 
             let html = `
                 <div class="bi-container">
                     ${renderBiEstoqueSubtabs('detalhada')}
                     ${renderBiEstoqueFilterBar(companies)}
+
+                    ${prodRes.erro ? `
+                        <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid var(--color-danger); border-radius: var(--border-radius-md); padding: 0.85rem 1rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: space-between; color: var(--color-danger);">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.88rem;">
+                                <i class="fas fa-exclamation-circle"></i>
+                                <span>Falha ao consultar produtos: <strong>${prodRes.erro}</strong></span>
+                            </div>
+                            <button type="button" class="btn btn-secondary btn-sm" id="bi-prod-retry-btn" style="padding: 0.25rem 0.65rem; font-size: 0.78rem;">
+                                Tentar Novamente
+                            </button>
+                        </div>
+                    ` : ''}
 
                     <!-- Filtros Rápidos da Tabela -->
                     <div style="display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; justify-content: space-between; background: var(--color-card-bg); padding: 0.85rem 1rem; border-radius: var(--border-radius-md); border: 1px solid var(--color-border);">
@@ -7521,6 +7539,12 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <option value="ruptura" ${biEstoqueState.situacao === 'ruptura' ? 'selected' : ''}>🚨 Em Ruptura (Zerado)</option>
                                 <option value="baixo" ${biEstoqueState.situacao === 'baixo' ? 'selected' : ''}>⚠️ Estoque Crítico (<= Mínimo)</option>
                             </select>
+
+                            ${hasActiveFilters ? `
+                                <button type="button" class="btn btn-secondary btn-sm" id="bi-prod-clear-filters-btn" title="Limpar todos os filtros da tabela" style="padding: 0.45rem 0.75rem; font-size: 0.82rem;">
+                                    <i class="fas fa-times"></i> Limpar
+                                </button>
+                            ` : ''}
                         </div>
 
                         <span style="font-size: 0.82rem; color: var(--color-text-offset); white-space: nowrap;">
@@ -7551,8 +7575,28 @@ document.addEventListener('DOMContentLoaded', () => {
                                 <tbody>
                                     ${products.length === 0 ? `
                                         <tr>
-                                            <td colspan="12" style="text-align: center; color: var(--color-text-offset); padding: 2.5rem;">
-                                                 Nenhum produto encontrado com os filtros selecionados.
+                                            <td colspan="12" style="text-align: center; color: var(--color-text-offset); padding: 3rem 1.5rem;">
+                                                ${hasActiveFilters ? `
+                                                    <i class="fas fa-filter" style="font-size: 2rem; margin-bottom: 0.5rem; display: block; opacity: 0.5;"></i>
+                                                    <div style="font-weight: 600; margin-bottom: 0.35rem;">Nenhum produto encontrado com os filtros selecionados.</div>
+                                                    <button type="button" class="btn btn-secondary btn-sm" id="bi-prod-empty-clear-btn" style="margin-top: 0.5rem;">
+                                                        <i class="fas fa-times"></i> Limpar Filtros
+                                                    </button>
+                                                ` : `
+                                                    <i class="fas fa-boxes-stacked" style="font-size: 2.5rem; margin-bottom: 0.75rem; display: block; color: var(--color-primary); opacity: 0.7;"></i>
+                                                    <h4 style="margin-bottom: 0.35rem; color: var(--color-text);">Nenhum produto ou saldo cadastrado no banco</h4>
+                                                    <p style="font-size: 0.85rem; max-width: 480px; margin: 0 auto 1.25rem; color: var(--color-text-offset);">
+                                                        Sincronize os dados diretamente do Integrim CISS Poder ou gere uma base demonstrativa realista para navegar.
+                                                    </p>
+                                                    <div style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
+                                                        <button type="button" class="btn btn-primary" id="bi-prod-empty-sync-btn">
+                                                            <i class="fas fa-rotate"></i> Sincronizar Integrim (CISS)
+                                                        </button>
+                                                        <button type="button" class="btn btn-secondary" id="bi-prod-empty-mock-btn">
+                                                            <i class="fas fa-database"></i> Carregar Base Demonstrativa
+                                                        </button>
+                                                    </div>
+                                                `}
                                             </td>
                                         </tr>
                                     ` : products.map(p => {
@@ -7588,6 +7632,30 @@ document.addEventListener('DOMContentLoaded', () => {
                                 </tbody>
                             </table>
                         </div>
+
+                        <!-- Barra de Paginação -->
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1.25rem; background: var(--color-card-bg); border-top: 1px solid var(--color-border); flex-wrap: wrap; gap: 0.75rem;">
+                            <div style="display: flex; align-items: center; gap: 0.5rem; font-size: 0.82rem; color: var(--color-text-offset);">
+                                <span>Itens por página:</span>
+                                <select id="bi-prod-page-limit" class="bi-select" style="padding: 2px 6px; font-size: 0.8rem;">
+                                    <option value="25" ${limit === 25 ? 'selected' : ''}>25</option>
+                                    <option value="50" ${limit === 50 ? 'selected' : ''}>50</option>
+                                    <option value="100" ${limit === 100 ? 'selected' : ''}>100</option>
+                                    <option value="200" ${limit === 200 ? 'selected' : ''}>200</option>
+                                </select>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                <button type="button" class="btn btn-secondary btn-sm" id="bi-prod-prev-page" ${biEstoqueState.page <= 1 ? 'disabled' : ''} style="padding: 0.35rem 0.75rem;">
+                                    <i class="fas fa-chevron-left"></i> Anterior
+                                </button>
+                                <span style="font-size: 0.85rem; font-weight: 600; padding: 0 0.5rem; color: var(--color-text);">
+                                    ${biEstoqueState.page} de ${pages}
+                                </span>
+                                <button type="button" class="btn btn-secondary btn-sm" id="bi-prod-next-page" ${biEstoqueState.page >= pages ? 'disabled' : ''} style="padding: 0.35rem 0.75rem;">
+                                    Próxima <i class="fas fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             `;
@@ -7617,6 +7685,66 @@ document.addEventListener('DOMContentLoaded', () => {
                 biEstoqueState.situacao = e.target.value;
                 biEstoqueState.page = 1;
                 renderBiEstoqueDetalhado();
+            });
+
+            const clearFiltersHandler = () => {
+                biEstoqueState.busca = '';
+                biEstoqueState.curva_abc = '';
+                biEstoqueState.situacao = '';
+                biEstoqueState.page = 1;
+                renderBiEstoqueDetalhado();
+            };
+            document.getElementById('bi-prod-clear-filters-btn')?.addEventListener('click', clearFiltersHandler);
+            document.getElementById('bi-prod-empty-clear-btn')?.addEventListener('click', clearFiltersHandler);
+            document.getElementById('bi-prod-retry-btn')?.addEventListener('click', () => renderBiEstoqueDetalhado());
+
+            // Paginação
+            document.getElementById('bi-prod-prev-page')?.addEventListener('click', () => {
+                if (biEstoqueState.page > 1) {
+                    biEstoqueState.page--;
+                    renderBiEstoqueDetalhado();
+                }
+            });
+
+            document.getElementById('bi-prod-next-page')?.addEventListener('click', () => {
+                if (biEstoqueState.page < pages) {
+                    biEstoqueState.page++;
+                    renderBiEstoqueDetalhado();
+                }
+            });
+
+            document.getElementById('bi-prod-page-limit')?.addEventListener('change', (e) => {
+                biEstoqueState.limit = parseInt(e.target.value, 10);
+                biEstoqueState.page = 1;
+                renderBiEstoqueDetalhado();
+            });
+
+            // Botões de ação no empty state
+            document.getElementById('bi-prod-empty-sync-btn')?.addEventListener('click', async () => {
+                try {
+                    showLoading('Iniciando sincronização com CISS Poder...');
+                    await api('/api/bi/stock/sync-integrim', 'POST', { force_full: false });
+                    showToast('Sincronização iniciada em segundo plano!', 'info');
+                    checkGlobalIntegrimSyncStatus();
+                    renderBiEstoqueDetalhado();
+                } catch (err) {
+                    showToast(`Erro ao iniciar sincronização: ${err.message}`, 'error');
+                } finally {
+                    hideLoading();
+                }
+            });
+
+            document.getElementById('bi-prod-empty-mock-btn')?.addEventListener('click', async () => {
+                try {
+                    showLoading('Gerando base de dados demonstrativa de estoque...');
+                    await api('/api/bi/stock/seed-mock', 'POST');
+                    showToast('Base de dados demonstrativa gerada com sucesso!', 'success');
+                    renderBiEstoqueDetalhado();
+                } catch (err) {
+                    showToast(`Erro ao gerar mock: ${err.message}`, 'error');
+                } finally {
+                    hideLoading();
+                }
             });
 
         } catch (error) {
