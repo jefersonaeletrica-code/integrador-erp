@@ -593,7 +593,7 @@ export async function getBiEstoqueSummary(db, { empresa_id = null, tipo_custo = 
                    status
             FROM bi_sync_history
             WHERE status = 'success'
-            ORDER BY finished_at DESC
+            ORDER BY started_at DESC
             LIMIT 1
         `);
         if (syncRows[0]) {
@@ -796,28 +796,30 @@ export async function getBiEstoqueProducts(db, { empresa_id = null, busca = '', 
     let whereClause = `WHERE (p.idsubproduto IS NULL OR (COALESCE(p.inativo, FALSE) = FALSE AND COALESCE(p.bloqueia_venda, FALSE) = FALSE)) AND ${getStockLocationCondition()}`;
     const params = [];
 
-    if (empresa_id && empresa_id !== 'all' && empresa_id !== '') {
+    if (empresa_id && empresa_id !== 'all' && empresa_id !== '' && empresa_id !== 'undefined' && empresa_id !== 'null') {
         whereClause += ' AND s.empresa_id = ?';
         params.push(parseInt(empresa_id, 10));
     }
 
-    if (busca && busca.trim()) {
+    if (busca && typeof busca === 'string' && busca.trim() && busca.trim() !== 'undefined' && busca.trim() !== 'null') {
         whereClause += ' AND (COALESCE(p.descricao, \'\') LIKE ? OR COALESCE(p.codigo_barras, \'\') LIKE ? OR CAST(s.idsubproduto AS CHAR) LIKE ? OR COALESCE(p.marca, \'\') LIKE ?)';
         const b = `%${busca.trim()}%`;
         params.push(b, b, b, b);
     }
 
-    if (curva_abc && curva_abc !== 'all' && curva_abc !== '') {
+    if (curva_abc && curva_abc !== 'all' && curva_abc !== '' && curva_abc !== 'undefined' && curva_abc !== 'null') {
         whereClause += ' AND s.curva_abc = ?';
-        params.push(curva_abc);
+        params.push(curva_abc.trim().toUpperCase());
     }
 
-    if (situacao === 'ruptura') {
-        whereClause += ' AND (s.saldo_atual IS NULL OR s.saldo_atual <= 0)';
-    } else if (situacao === 'disponivel') {
-        whereClause += ' AND s.saldo_atual > 0';
-    } else if (situacao === 'baixo') {
-        whereClause += ' AND s.saldo_atual > 0 AND s.saldo_atual <= COALESCE(s.estoque_minimo, 0)';
+    if (situacao && situacao !== 'all' && situacao !== '' && situacao !== 'undefined' && situacao !== 'null') {
+        if (situacao === 'ruptura') {
+            whereClause += ' AND (s.saldo_atual IS NULL OR s.saldo_atual <= 0)';
+        } else if (situacao === 'disponivel') {
+            whereClause += ' AND s.saldo_atual > 0';
+        } else if (situacao === 'baixo') {
+            whereClause += ' AND s.saldo_atual > 0 AND s.saldo_atual <= COALESCE(s.estoque_minimo, 0)';
+        }
     }
 
     // Contagem total
@@ -856,7 +858,7 @@ export async function getBiEstoqueProducts(db, { empresa_id = null, busca = '', 
         FROM bi_estoque_saldos s
         LEFT JOIN bi_produtos p ON p.idsubproduto = s.idsubproduto
         ${whereClause}
-        ORDER BY FIELD(s.curva_abc, 'A', 'B', 'C') ASC, s.saldo_atual DESC
+        ORDER BY FIELD(COALESCE(s.curva_abc, 'C'), 'A', 'B', 'C') ASC, s.saldo_atual DESC
         LIMIT ${safeLimit} OFFSET ${safeOffset}
     `, params);
 

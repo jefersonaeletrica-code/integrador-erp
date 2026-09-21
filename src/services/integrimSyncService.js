@@ -142,7 +142,7 @@ export async function getLastSuccessfulSync(db) {
                    status
             FROM bi_sync_history
             WHERE status = 'success'
-            ORDER BY finished_at DESC
+            ORDER BY started_at DESC
             LIMIT 1
         `);
         const row = rows[0] || null;
@@ -231,9 +231,10 @@ export async function startIntegrimBackgroundSync(connection, db, { forceFull = 
     }
 
     const lastSync = await getLastSuccessfulSync(db);
-    const isDelta = !forceFull && !!lastSync?.finished_at;
-    // Margem de segurança de 2 minutos para evitar perder registros com timestamps ligeiramente defasados
-    const lastSyncDate = isDelta ? formatCissDateTime(lastSync.finished_at, 2) : null;
+    const isDelta = !forceFull && !!lastSync?.started_at;
+    // Margem de segurança de 2 minutos sobre o INÍCIO da sincronização anterior
+    // para capturar alterações realizadas no ERP durante o período de execução da rotina
+    const lastSyncDate = isDelta ? formatCissDateTime(lastSync.started_at, 2) : null;
     const syncType = isDelta ? 'integrim_delta' : 'integrim_full';
 
     const nowBrazil = getBrazilNow();

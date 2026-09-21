@@ -6521,6 +6521,7 @@ document.addEventListener('DOMContentLoaded', () => {
         agrupador: 'subgrupo',
         curva_a: 20,
         curva_b: 30,
+        curva_abc: '',
         situacao: '',
         busca: '',
         page: 1,
@@ -6704,8 +6705,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Atualiza o badge de última sincronização
         if (lastSyncEl) {
-            if (status.lastSuccessfulSync?.finished_at) {
-                const formatted = formatSyncDateBrazil(status.lastSuccessfulSync.finished_at);
+            const syncTime = status.lastSuccessfulSync?.started_at || status.lastSuccessfulSync?.finished_at;
+            if (syncTime) {
+                const formatted = formatSyncDateBrazil(syncTime);
                 const typeBadge = status.lastSuccessfulSync.sync_type === 'integrim_delta' ? ' (Incremental)' : ' (Completa)';
                 lastSyncEl.innerHTML = `Última sinc: <strong>${formatted}</strong>${typeBadge}`;
             } else {
@@ -7484,9 +7486,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             const limit = biEstoqueState.limit || 50;
+            const queryParams = new URLSearchParams();
+            if (biEstoqueState.empresa_id && biEstoqueState.empresa_id !== 'all' && biEstoqueState.empresa_id !== 'undefined') {
+                queryParams.set('empresa_id', biEstoqueState.empresa_id);
+            }
+            if (biEstoqueState.busca && biEstoqueState.busca.trim()) {
+                queryParams.set('busca', biEstoqueState.busca.trim());
+            }
+            if (biEstoqueState.curva_abc && biEstoqueState.curva_abc !== 'all' && biEstoqueState.curva_abc !== 'undefined') {
+                queryParams.set('curva_abc', biEstoqueState.curva_abc);
+            }
+            if (biEstoqueState.situacao && biEstoqueState.situacao !== 'all' && biEstoqueState.situacao !== 'undefined') {
+                queryParams.set('situacao', biEstoqueState.situacao);
+            }
+            queryParams.set('page', biEstoqueState.page || 1);
+            queryParams.set('limit', limit);
+
             const [compRes, prodRes] = await Promise.all([
                 api('/api/bi/companies').catch(() => ({ companies: [] })),
-                api(`/api/bi/stock/products?empresa_id=${biEstoqueState.empresa_id}&busca=${encodeURIComponent(biEstoqueState.busca)}&curva_abc=${biEstoqueState.curva_abc}&situacao=${biEstoqueState.situacao}&page=${biEstoqueState.page}&limit=${limit}`)
+                api(`/api/bi/stock/products?${queryParams.toString()}`)
                     .catch(err => {
                         console.error('[BI Estoque Detalhado] Erro na requisição de produtos:', err);
                         return { products: [], total: 0, pages: 1, erro: err.message };
@@ -7497,7 +7515,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const products = prodRes.products || [];
             const total = prodRes.total || 0;
             const pages = prodRes.pages || 1;
-            const hasActiveFilters = !!(biEstoqueState.busca || biEstoqueState.curva_abc || biEstoqueState.situacao || (biEstoqueState.empresa_id && biEstoqueState.empresa_id !== 'all'));
+            const hasActiveFilters = !!(
+                (biEstoqueState.busca && biEstoqueState.busca.trim()) ||
+                (biEstoqueState.curva_abc && biEstoqueState.curva_abc !== 'all' && biEstoqueState.curva_abc !== 'undefined') ||
+                (biEstoqueState.situacao && biEstoqueState.situacao !== 'all' && biEstoqueState.situacao !== 'undefined') ||
+                (biEstoqueState.empresa_id && biEstoqueState.empresa_id !== 'all' && biEstoqueState.empresa_id !== 'undefined')
+            );
 
             let html = `
                 <div class="bi-container">
