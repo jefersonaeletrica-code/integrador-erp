@@ -35,7 +35,10 @@ export async function syncIntegrimProducts(connection, db, batchLimit = 2000) {
     while (hasNext && totalImportados < batchLimit) {
         const payload = {
             page,
-            clausulas: [],
+            clausulas: [
+                { campo: "flaginativo", valor: "F", operador: "IGUAL", operadorlogico: "AND" },
+                { campo: "flagbloqueiavenda", valor: "F", operador: "IGUAL", operadorlogico: "AND" }
+            ],
             ordenacoes: [{ campo: "idsubproduto", direcao: "ASC" }]
         };
 
@@ -52,6 +55,14 @@ export async function syncIntegrimProducts(connection, db, batchLimit = 2000) {
         for (const item of items) {
             const idsubproduto = parseInt(item.idsubproduto, 10);
             if (!idsubproduto) continue;
+
+            const bloqueiaVenda = item.flagbloqueiavenda === 'T';
+            const inativo = (item.flaginativo === 'T') || bloqueiaVenda;
+
+            // Desconsidera produtos inativos ou bloqueados para venda
+            if (inativo || bloqueiaVenda) {
+                continue;
+            }
 
             const idproduto = parseInt(item.idproduto, 10) || idsubproduto;
             const codBarras = item.nrcodbarprod ? String(item.nrcodbarprod) : null;
@@ -70,8 +81,6 @@ export async function syncIntegrimProducts(connection, db, batchLimit = 2000) {
             const idSubgrupo = parseInt(item.idsubgrupo, 10) || null;
             const ncm = item.ncm ? String(item.ncm) : null;
             const unMedida = item.embalagemsaida || 'UN';
-            const bloqueiaVenda = item.flagbloqueiavenda === 'T';
-            const inativo = (item.flaginativo === 'T') || bloqueiaVenda;
 
             await pool.execute(`
                 INSERT INTO bi_produtos (
