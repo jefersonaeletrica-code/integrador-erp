@@ -596,7 +596,14 @@ export async function getBiEstoqueSummary(db, { empresa_id = null, tipo_custo = 
             ORDER BY finished_at DESC
             LIMIT 1
         `);
-        lastSync = syncRows[0] || null;
+        if (syncRows[0]) {
+            const { formatCissDateTime } = await import('./integrimSyncService.js');
+            lastSync = {
+                ...syncRows[0],
+                started_at: formatCissDateTime(syncRows[0].started_at),
+                finished_at: formatCissDateTime(syncRows[0].finished_at)
+            };
+        }
     } catch (e) {
         // Silencioso caso tabela ainda não exista
     }

@@ -6639,6 +6639,58 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function formatSyncDateBrazil(dateInput) {
+        if (!dateInput) return 'Pendente';
+        const str = String(dateInput).trim();
+        
+        // Se for string ISO com Z (ex: 2026-09-21T13:49:00Z)
+        if (str.endsWith('Z') || str.includes('+00:00')) {
+            const d = new Date(str);
+            if (!isNaN(d.getTime())) {
+                return new Intl.DateTimeFormat('pt-BR', {
+                    timeZone: 'America/Sao_Paulo',
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit',
+                    hour12: false
+                }).format(d).replace(',', ' às');
+            }
+        }
+
+        // Se for string ISO com offset local (ex: 2026-09-21T10:49:00-03:00)
+        if (/[+-]\d{2}:\d{2}$/.test(str)) {
+            const d = new Date(str);
+            if (!isNaN(d.getTime())) {
+                return new Intl.DateTimeFormat('pt-BR', {
+                    timeZone: 'America/Sao_Paulo',
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit',
+                    hour12: false
+                }).format(d).replace(',', ' às');
+            }
+        }
+        
+        // Se for string SQL 'YYYY-MM-DD HH:mm:ss'
+        const match = str.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/);
+        if (match) {
+            const y = match[1], m = match[2], d = match[3], hh = match[4], mm = match[5];
+            const now = new Date();
+            const clientHour = now.getHours();
+            const itemHour = parseInt(hh, 10);
+            
+            // Se a data for hoje e a hora estiver adiantada em relação ao cliente (ex: UTC gravado no banco), desconta 3 horas
+            const isToday = (parseInt(d, 10) === now.getDate() && parseInt(m, 10) === (now.getMonth() + 1));
+            if (isToday && itemHour > clientHour && (itemHour - clientHour) >= 2 && (itemHour - clientHour) <= 4) {
+                const adjustedDate = new Date(now.getFullYear(), parseInt(m, 10) - 1, parseInt(d, 10), itemHour - 3, parseInt(mm, 10));
+                const pad = (n) => String(n).padStart(2, '0');
+                return `${pad(adjustedDate.getDate())}/${pad(adjustedDate.getMonth() + 1)}/${adjustedDate.getFullYear()} às ${pad(adjustedDate.getHours())}:${pad(adjustedDate.getMinutes())}`;
+            }
+            
+            return `${d}/${m}/${y} às ${hh}:${mm}`;
+        }
+        
+        return str;
+    }
+
     function updateGlobalIntegrimSyncUI(status) {
         const banner = document.getElementById('global-integrim-sync-banner');
         const badge = document.getElementById('global-sync-stage-badge');
@@ -6653,18 +6705,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Atualiza o badge de última sincronização
         if (lastSyncEl) {
             if (status.lastSuccessfulSync?.finished_at) {
-                const raw = String(status.lastSuccessfulSync.finished_at).replace('T', ' ').replace('Z', '');
-                const parts = raw.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/);
-                let formatted = raw;
-                if (parts) {
-                    formatted = `${parts[3]}/${parts[2]}/${parts[1]} às ${parts[4]}:${parts[5]}`;
-                } else {
-                    const d = new Date(status.lastSuccessfulSync.finished_at);
-                    if (!isNaN(d.getTime())) {
-                        const pad = (n) => String(n).padStart(2, '0');
-                        formatted = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} às ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-                    }
-                }
+                const formatted = formatSyncDateBrazil(status.lastSuccessfulSync.finished_at);
                 const typeBadge = status.lastSuccessfulSync.sync_type === 'integrim_delta' ? ' (Incremental)' : ' (Completa)';
                 lastSyncEl.innerHTML = `Última sinc: <strong>${formatted}</strong>${typeBadge}`;
             } else {

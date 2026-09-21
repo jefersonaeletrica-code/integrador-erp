@@ -145,7 +145,15 @@ export async function getLastSuccessfulSync(db) {
             ORDER BY finished_at DESC
             LIMIT 1
         `);
-        return rows[0] || null;
+        const row = rows[0] || null;
+        if (!row) return null;
+
+        // Normaliza as datas retornadas para o horário oficial de Brasília
+        return {
+            ...row,
+            started_at: formatCissDateTime(row.started_at),
+            finished_at: formatCissDateTime(row.finished_at)
+        };
     } catch (err) {
         return null;
     }
