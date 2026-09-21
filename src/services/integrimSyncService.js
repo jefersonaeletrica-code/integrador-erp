@@ -49,11 +49,77 @@ async function fetchIntegrimWithRetry(url, payload, headers, maxRetries = 3, ini
  * =========================================================================
  */
 
+/**
+ * Formata data/hora para o padrão do CISS Poder: "YYYY-MM-DD HH:mm:ss"
+ */
+export function formatCissDateTime(dateInput) {
+    if (!dateInput) return null;
+    const d = new Date(dateInput);
+    if (isNaN(d.getTime())) return null;
+
+    const pad = (n) => String(n).padStart(2, '0');
+    const yyyy = d.getFullYear();
+    const mm = pad(d.getMonth() + 1);
+    const dd = pad(d.getDate());
+    const hh = pad(d.getHours());
+    const min = pad(d.getMinutes());
+    const ss = pad(d.getSeconds());
+
+    return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+}
+
+/**
+ * Consulta a última sincronização concluída com sucesso no MySQL
+ */
+export async function getLastSuccessfulSync(db) {
+    const pool = resolvePool(db);
+    try {
+        const [rows] = await pool.execute(`
+            SELECT id, sync_type, produtos_count, saldos_count, custos_count, started_at, finished_at, status
+            FROM bi_sync_history
+            WHERE status = 'success'
+            ORDER BY finished_at DESC
+            LIMIT 1
+        `);
+        return rows[0] || null;
+    } catch (err) {
+        return null;
+    }
+}
+
+/**
+ * Registra histórico de sincronização no MySQL
+ */
+export async function recordSyncHistory(db, { syncType, produtosCount, saldosCount, custosCount, startedAt, finishedAt, status, errorMessage = null }) {
+    const pool = resolvePool(db);
+    try {
+        await pool.execute(`
+            INSERT INTO bi_sync_history (
+                sync_type, produtos_count, saldos_count, custos_count,
+                started_at, finished_at, status, error_message
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            syncType || 'integrim_full',
+            produtosCount || 0,
+            saldosCount || 0,
+            custosCount || 0,
+            startedAt,
+            finishedAt,
+            status || 'success',
+            errorMessage
+        ]);
+    } catch (err) {
+        logger.error('[IntegrimSync] Erro ao gravar bi_sync_history:', err.message);
+    }
+}
+
 // Estado global em memória para monitoramento de sincronização em segundo plano
 const integrimSyncStatus = {
     isRunning: false,
     startedAt: null,
     finishedAt: null,
+    syncType: 'full', // 'full' | 'delta'
+    lastSyncDate: null,
     stage: 'idle', // 'idle' | 'cad_produtos' | 'produtos_saldo_estoque' | 'precos_custos' | 'curva_abc' | 'done' | 'error'
     stageLabel: 'Nenhuma sincronização em andamento',
     progress: {
@@ -66,14 +132,21 @@ const integrimSyncStatus = {
     message: 'Nenhuma sincronização em andamento'
 };
 
-export function getIntegrimSyncStatus() {
-    return { ...integrimSyncStatus };
+export async function getIntegrimSyncStatus(db = null) {
+    let lastSync = null;
+    if (db) {
+        lastSync = await getLastSuccessfulSync(db);
+    }
+    return {
+        ...integrimSyncStatus,
+        lastSuccessfulSync: lastSync
+    };
 }
 
 /**
- * Inicia a sincronização completa em segundo plano de forma desacoplada da requisição HTTP
+ * Inicia a sincronização em segundo plano (Incremental por padrão se houver sincronização prévia, ou Completa)
  */
-export function startIntegrimBackgroundSync(connection, db) {
+export async function startIntegrimBackgroundSync(connection, db, { forceFull = false } = {}) {
     if (integrimSyncStatus.isRunning) {
         return {
             sucesso: true,
@@ -83,48 +156,66 @@ export function startIntegrimBackgroundSync(connection, db) {
         };
     }
 
+    const lastSync = await getLastSuccessfulSync(db);
+    const isDelta = !forceFull && !!lastSync?.finished_at;
+    const lastSyncDate = isDelta ? formatCissDateTime(lastSync.finished_at) : null;
+    const syncType = isDelta ? 'integrim_delta' : 'integrim_full';
+
     integrimSyncStatus.isRunning = true;
     integrimSyncStatus.startedAt = new Date().toISOString();
     integrimSyncStatus.finishedAt = null;
+    integrimSyncStatus.syncType = isDelta ? 'delta' : 'full';
+    integrimSyncStatus.lastSyncDate = lastSync?.finished_at || null;
     integrimSyncStatus.stage = 'iniciando';
-    integrimSyncStatus.stageLabel = 'Iniciando sincronização completa...';
+    integrimSyncStatus.stageLabel = isDelta 
+        ? `Iniciando sincronização incremental (alterados após ${lastSyncDate})...`
+        : 'Iniciando sincronização completa...';
     integrimSyncStatus.progress = { produtos: 0, saldos: 0, custos: 0, currentPage: 0 };
     integrimSyncStatus.error = null;
-    integrimSyncStatus.message = 'Sincronização em andamento em segundo plano...';
+    integrimSyncStatus.message = isDelta
+        ? `Sincronização incremental em andamento (desde ${lastSyncDate})...`
+        : 'Sincronização completa em andamento...';
 
     // Dispara a execução assíncrona desacoplada da conexão HTTP do cliente
     (async () => {
+        const startedAtDb = new Date();
         try {
-            logger.info('[IntegrimSync Background] Iniciando rotina completa de sincronização em segundo plano (todos os produtos)...');
+            logger.info(`[IntegrimSync Background] Iniciando rotina de sincronização (${syncType}) em segundo plano...`);
 
-            // Etapa 1: CAD_PRODUTOS (Todos os produtos sem limite artificial)
+            // Etapa 1: CAD_PRODUTOS
             integrimSyncStatus.stage = 'cad_produtos';
-            integrimSyncStatus.stageLabel = 'Importando cadastro de produtos (CAD_PRODUTOS)...';
+            integrimSyncStatus.stageLabel = isDelta 
+                ? `Importando produtos alterados após ${lastSyncDate}...`
+                : 'Importando cadastro de produtos (CAD_PRODUTOS)...';
             const resProd = await syncIntegrimProducts(connection, db, null, (prog) => {
                 integrimSyncStatus.progress.produtos = prog.total;
                 integrimSyncStatus.progress.currentPage = prog.page;
                 integrimSyncStatus.stageLabel = `Importando produtos (pág. ${prog.page} - ${prog.total} produtos)...`;
-            });
+            }, lastSyncDate);
             integrimSyncStatus.progress.produtos = resProd.total;
 
-            // Etapa 2: PRODUTOS_SALDO_ESTOQUE_EMPRESA (Todos os saldos das áreas de venda)
+            // Etapa 2: PRODUTOS_SALDO_ESTOQUE_EMPRESA
             integrimSyncStatus.stage = 'produtos_saldo_estoque';
-            integrimSyncStatus.stageLabel = 'Importando saldos de estoque (PRODUTOS_SALDO_ESTOQUE_EMPRESA)...';
+            integrimSyncStatus.stageLabel = isDelta 
+                ? `Importando saldos alterados após ${lastSyncDate}...`
+                : 'Importando saldos de estoque (PRODUTOS_SALDO_ESTOQUE_EMPRESA)...';
             const resSaldo = await syncIntegrimStockBalances(connection, db, null, (prog) => {
                 integrimSyncStatus.progress.saldos = prog.total;
                 integrimSyncStatus.progress.currentPage = prog.page;
                 integrimSyncStatus.stageLabel = `Importando saldos físicos (pág. ${prog.page} - ${prog.total} saldos)...`;
-            });
+            }, lastSyncDate);
             integrimSyncStatus.progress.saldos = resSaldo.total;
 
-            // Etapa 3: PRECOS_CUSTOS_PRODUTOS_EMPRESA (Custos e preços por empresa)
+            // Etapa 3: PRECOS_CUSTOS_PRODUTOS_EMPRESA
             integrimSyncStatus.stage = 'precos_custos';
-            integrimSyncStatus.stageLabel = 'Importando custos e preços (PRECOS_CUSTOS_PRODUTOS_EMPRESA)...';
+            integrimSyncStatus.stageLabel = isDelta 
+                ? `Importando custos e preços alterados após ${lastSyncDate}...`
+                : 'Importando custos e preços (PRECOS_CUSTOS_PRODUTOS_EMPRESA)...';
             const resCustos = await syncIntegrimCostsAndPrices(connection, db, null, (prog) => {
                 integrimSyncStatus.progress.custos = prog.total;
                 integrimSyncStatus.progress.currentPage = prog.page;
                 integrimSyncStatus.stageLabel = `Importando custos e preços (pág. ${prog.page} - ${prog.total} registros)...`;
-            });
+            }, lastSyncDate);
             integrimSyncStatus.progress.custos = resCustos.total;
 
             // Etapa 4: Recalcular Curva ABC e Cobertura
@@ -132,20 +223,47 @@ export function startIntegrimBackgroundSync(connection, db) {
             integrimSyncStatus.stageLabel = 'Recalculando Curva ABC e Dias de Cobertura...';
             await recalculateAbcAndCoverage(db);
 
+            const finishedAtDb = new Date();
             integrimSyncStatus.isRunning = false;
             integrimSyncStatus.stage = 'done';
             integrimSyncStatus.stageLabel = 'Sincronização concluída com sucesso!';
-            integrimSyncStatus.finishedAt = new Date().toISOString();
-            integrimSyncStatus.message = `Sincronização concluída: ${resProd.total} produtos, ${resSaldo.total} saldos e ${resCustos.total} custos/preços atualizados.`;
+            integrimSyncStatus.finishedAt = finishedAtDb.toISOString();
+            integrimSyncStatus.message = isDelta
+                ? `Sincronização incremental concluída: ${resProd.total} produtos, ${resSaldo.total} saldos e ${resCustos.total} custos/preços atualizados (desde ${lastSyncDate}).`
+                : `Sincronização completa concluída: ${resProd.total} produtos, ${resSaldo.total} saldos e ${resCustos.total} custos/preços atualizados.`;
 
-            logger.info(`[IntegrimSync Background] Sincronização concluída com sucesso: ${integrimSyncStatus.message}`);
+            // Grava histórico de sucesso no MySQL
+            await recordSyncHistory(db, {
+                syncType,
+                produtosCount: resProd.total,
+                saldosCount: resSaldo.total,
+                custosCount: resCustos.total,
+                startedAt: startedAtDb,
+                finishedAt: finishedAtDb,
+                status: 'success'
+            });
+
+            logger.info(`[IntegrimSync Background] ${integrimSyncStatus.message}`);
         } catch (error) {
+            const finishedAtDb = new Date();
             logger.error('[IntegrimSync Background] Erro durante sincronização em segundo plano:', error);
             integrimSyncStatus.isRunning = false;
             integrimSyncStatus.stage = 'error';
             integrimSyncStatus.stageLabel = `Erro na sincronização: ${error.message}`;
             integrimSyncStatus.error = error.message;
-            integrimSyncStatus.finishedAt = new Date().toISOString();
+            integrimSyncStatus.finishedAt = finishedAtDb.toISOString();
+
+            // Grava histórico de erro no MySQL
+            await recordSyncHistory(db, {
+                syncType,
+                produtosCount: integrimSyncStatus.progress.produtos || 0,
+                saldosCount: integrimSyncStatus.progress.saldos || 0,
+                custosCount: integrimSyncStatus.progress.custos || 0,
+                startedAt: startedAtDb,
+                finishedAt: finishedAtDb,
+                status: 'error',
+                errorMessage: error.message
+            });
         }
     })();
 
@@ -153,15 +271,19 @@ export function startIntegrimBackgroundSync(connection, db) {
         sucesso: true,
         isRunning: true,
         started: true,
-        mensagem: 'Sincronização com Integrim CISS Poder iniciada em segundo plano.'
+        isDelta,
+        lastSyncDate,
+        mensagem: isDelta
+            ? `Sincronização incremental iniciada (filtrando alterações após ${lastSyncDate}).`
+            : 'Sincronização completa iniciada em segundo plano.'
     };
 }
 
 /**
  * 1. Sincroniza Cadastro de Produtos e Estrutura Mercadológica (CAD_PRODUTOS)
- * Por padrão busca TODOS os produtos (batchLimit = null)
+ * Por padrão busca TODOS os produtos (batchLimit = null). Suporta filtro incremental por dtalteracao.
  */
-export async function syncIntegrimProducts(connection, db, batchLimit = null, onProgress = null) {
+export async function syncIntegrimProducts(connection, db, batchLimit = null, onProgress = null, lastSyncDate = null) {
     const pool = resolvePool(db);
     await ensureCissPoderTokenIsValid(connection, db);
 
@@ -173,15 +295,21 @@ export async function syncIntegrimProducts(connection, db, batchLimit = null, on
     let hasNext = true;
     let totalImportados = 0;
 
-    logger.info(`[IntegrimSync] Iniciando sincronização de produtos via CAD_PRODUTOS...`);
+    const clausulas = [
+        { campo: "flaginativo", valor: "F", operador: "IGUAL", operadorlogico: "AND" },
+        { campo: "flagbloqueiavenda", valor: "F", operador: "IGUAL", operadorlogico: "AND" }
+    ];
+
+    if (lastSyncDate) {
+        clausulas.push({ campo: "dtalteracao", valor: lastSyncDate, operador: "MAIOR_IGUAL", operadorlogico: "AND" });
+    }
+
+    logger.info(`[IntegrimSync] Iniciando sincronização de produtos via CAD_PRODUTOS (Delta: ${lastSyncDate || 'Não'})...`);
 
     while (hasNext && (!batchLimit || totalImportados < batchLimit)) {
         const payload = {
             page,
-            clausulas: [
-                { campo: "flaginativo", valor: "F", operador: "IGUAL", operadorlogico: "AND" },
-                { campo: "flagbloqueiavenda", valor: "F", operador: "IGUAL", operadorlogico: "AND" }
-            ],
+            clausulas,
             ordenacoes: [{ campo: "idsubproduto", direcao: "ASC" }]
         };
 
@@ -313,9 +441,10 @@ export function isOfficialSalesLocation(empresaId, descrLocalEstoque) {
 
 /**
  * 2. Sincroniza Saldos de Estoque por Loja (PRODUTOS_SALDO_ESTOQUE_EMPRESA)
- * Sincroniza exclusivamente as lojas oficiais (1 e 2) e produtos ativos cadastrados em bi_produtos
+ * Sincroniza exclusivamente as lojas oficiais (1 e 2) e produtos ativos cadastrados em bi_produtos.
+ * Suporta filtro incremental por dtalteracao.
  */
-export async function syncIntegrimStockBalances(connection, db, batchLimit = null, onProgress = null) {
+export async function syncIntegrimStockBalances(connection, db, batchLimit = null, onProgress = null, lastSyncDate = null) {
     const pool = resolvePool(db);
     await ensureCissPoderTokenIsValid(connection, db);
 
@@ -331,15 +460,21 @@ export async function syncIntegrimStockBalances(connection, db, batchLimit = nul
     let hasNext = true;
     let totalImportados = 0;
 
-    logger.info(`[IntegrimSync] Sincronizando saldos físicos via PRODUTOS_SALDO_ESTOQUE_EMPRESA (Lojas 1 e 2, Produtos Ativos)...`);
+    const clausulas = [
+        { campo: "descrlocalestoque", valor: "AREA VENDA%", operador: "LIKE", operadorlogico: "AND" },
+        { campo: "flaginativo", valor: "F", operador: "IGUAL", operadorlogico: "AND" }
+    ];
+
+    if (lastSyncDate) {
+        clausulas.push({ campo: "dtalteracao", valor: lastSyncDate, operador: "MAIOR_IGUAL", operadorlogico: "AND" });
+    }
+
+    logger.info(`[IntegrimSync] Sincronizando saldos físicos via PRODUTOS_SALDO_ESTOQUE_EMPRESA (Delta: ${lastSyncDate || 'Não'})...`);
 
     while (hasNext && (!batchLimit || totalImportados < batchLimit)) {
         const payload = {
             page,
-            clausulas: [
-                { campo: "descrlocalestoque", valor: "AREA VENDA%", operador: "LIKE", operadorlogico: "AND" },
-                { campo: "flaginativo", valor: "F", operador: "IGUAL", operadorlogico: "AND" }
-            ],
+            clausulas,
             ordenacoes: [{ campo: "idsubproduto", direcao: "ASC" }]
         };
 
@@ -415,9 +550,10 @@ export async function syncIntegrimStockBalances(connection, db, batchLimit = nul
 
 /**
  * 3. Sincroniza Custos e Preços por Loja (PRECOS_CUSTOS_PRODUTOS_EMPRESA)
- * Sincroniza exclusivamente as lojas oficiais (1 e 2) e produtos ativos cadastrados em bi_produtos
+ * Sincroniza exclusivamente as lojas oficiais (1 e 2) e produtos ativos cadastrados em bi_produtos.
+ * Suporta filtro incremental por dtalteracao.
  */
-export async function syncIntegrimCostsAndPrices(connection, db, batchLimit = null, onProgress = null) {
+export async function syncIntegrimCostsAndPrices(connection, db, batchLimit = null, onProgress = null, lastSyncDate = null) {
     const pool = resolvePool(db);
     await ensureCissPoderTokenIsValid(connection, db);
 
@@ -433,14 +569,20 @@ export async function syncIntegrimCostsAndPrices(connection, db, batchLimit = nu
     let hasNext = true;
     let totalImportados = 0;
 
-    logger.info(`[IntegrimSync] Sincronizando custos e preços via PRECOS_CUSTOS_PRODUTOS_EMPRESA (Lojas 1 e 2, Produtos Ativos)...`);
+    const clausulas = [
+        { campo: "flaginativo", valor: "F", operador: "IGUAL", operadorlogico: "AND" }
+    ];
+
+    if (lastSyncDate) {
+        clausulas.push({ campo: "dtalteracao", valor: lastSyncDate, operador: "MAIOR_IGUAL", operadorlogico: "AND" });
+    }
+
+    logger.info(`[IntegrimSync] Sincronizando custos e preços via PRECOS_CUSTOS_PRODUTOS_EMPRESA (Delta: ${lastSyncDate || 'Não'})...`);
 
     while (hasNext && (!batchLimit || totalImportados < batchLimit)) {
         const payload = {
             page,
-            clausulas: [
-                { campo: "flaginativo", valor: "F", operador: "IGUAL", operadorlogico: "AND" }
-            ],
+            clausulas,
             ordenacoes: [{ campo: "idsubproduto", direcao: "ASC" }]
         };
 

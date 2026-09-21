@@ -569,6 +569,24 @@ Regras de atuação:
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
+    // 7. Histórico e Controle de Sincronizações (Controle de Delta Sync)
+    await connection.query(`
+      CREATE TABLE IF NOT EXISTS bi_sync_history (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        sync_type VARCHAR(50) NOT NULL DEFAULT 'integrim_full',
+        stage VARCHAR(50) NOT NULL DEFAULT 'done',
+        produtos_count INT NOT NULL DEFAULT 0,
+        saldos_count INT NOT NULL DEFAULT 0,
+        custos_count INT NOT NULL DEFAULT 0,
+        started_at DATETIME NOT NULL,
+        finished_at DATETIME NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'success',
+        error_message TEXT DEFAULT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_status_finished (status, finished_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+    `);
+
     console.log('Tabelas do Módulo Power BI (Vendas, Estoque e Produtos) prontas.');
     console.log('Banco de dados MySQL pronto.');
   } finally {

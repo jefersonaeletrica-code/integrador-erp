@@ -522,7 +522,22 @@ export async function getBiEstoqueSummary(db, { empresa_id = null, tipo_custo = 
         LIMIT 12
     `, params);
 
+    let lastSync = null;
+    try {
+        const [syncRows] = await pool.execute(`
+            SELECT sync_type, produtos_count, saldos_count, custos_count, started_at, finished_at, status
+            FROM bi_sync_history
+            WHERE status = 'success'
+            ORDER BY finished_at DESC
+            LIMIT 1
+        `);
+        lastSync = syncRows[0] || null;
+    } catch (e) {
+        // Silencioso caso tabela ainda não exista
+    }
+
     return {
+        last_sync: lastSync,
         kpis: {
             valor_estoque: valorEstoque,
             quantidade_estoque: qtdEstoque,

@@ -6591,15 +6591,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
 
-                <div style="display: flex; align-items: center; gap: 0.75rem;">
-                    <!-- Botão de Teste de 1 Produto (Temporário / Diagnóstico) -->
+                <div style="display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap;">
+                    <!-- Badge de Última Sincronização -->
+                    <div id="bi-last-sync-badge" class="bi-sync-timestamp-badge" style="display: flex; align-items: center; gap: 0.4rem; font-size: 0.76rem; color: var(--color-text-offset); background: var(--color-surface); padding: 0.35rem 0.65rem; border-radius: var(--border-radius-sm); border: 1px solid var(--color-border); white-space: nowrap;">
+                        <i class="fas fa-clock-rotate-left" style="color: #0284c7;"></i>
+                        <span id="bi-last-sync-text">Última sinc: Carregando...</span>
+                    </div>
+
+                    <!-- Botão de Teste de 1 Produto (Diagnóstico) -->
                     <button class="btn" id="bi-btn-test-single-product" data-action="open-integrim-test-modal" title="Testar importação de 1 produto nos 3 endpoints do Integrim (CISS Poder)" style="padding: 0.45rem 0.85rem; height: 35px; font-size: 0.82rem; background: rgba(245, 158, 11, 0.15); color: #d97706; border: 1px solid rgba(245, 158, 11, 0.4); font-weight: 600;">
                         <i class="fas fa-flask"></i> Testar 1 Produto
                     </button>
 
-                    <!-- Botão Sincronizar Integrim -->
-                    <button class="btn btn-primary" id="bi-btn-sync-integrim" title="Sincronizar dados em tempo real com Integrim CISS Poder" style="padding: 0.45rem 0.85rem; height: 35px; font-size: 0.82rem;">
+                    <!-- Botão Sincronizar Integrim (Incremental Inteligente) -->
+                    <button class="btn btn-primary" id="bi-btn-sync-integrim" title="Sincronização inteligente (apenas itens alterados desde a última sincronização)" style="padding: 0.45rem 0.85rem; height: 35px; font-size: 0.82rem;">
                         <i class="fas fa-rotate"></i> Sincronizar Integrim
+                    </button>
+
+                    <!-- Botão Forçar Sincronização Completa -->
+                    <button class="btn btn-secondary" id="bi-btn-sync-full" title="Forçar sincronização de 100% do catálogo (Full Sync)" style="padding: 0.45rem 0.65rem; height: 35px; font-size: 0.78rem;">
+                        <i class="fas fa-arrows-rotate"></i> Forçar Completa
                     </button>
 
                     <!-- Botão Recarregar / Refresh -->
@@ -6636,6 +6647,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const countSaldo = document.getElementById('global-sync-count-saldo');
         const countCustos = document.getElementById('global-sync-count-custos');
         const btnSync = document.getElementById('bi-btn-sync-integrim');
+        const btnFull = document.getElementById('bi-btn-sync-full');
+        const lastSyncEl = document.getElementById('bi-last-sync-text');
+
+        // Atualiza o badge de última sincronização
+        if (lastSyncEl) {
+            if (status.lastSuccessfulSync?.finished_at) {
+                const d = new Date(status.lastSuccessfulSync.finished_at);
+                const pad = (n) => String(n).padStart(2, '0');
+                const formatted = `${pad(d.getDate())}/${pad(d.getMonth()+1)}/${d.getFullYear()} às ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+                const typeBadge = status.lastSuccessfulSync.sync_type === 'integrim_delta' ? ' (Incremental)' : ' (Completa)';
+                lastSyncEl.innerHTML = `Última sinc: <strong>${formatted}</strong>${typeBadge}`;
+            } else {
+                lastSyncEl.innerHTML = `Última sinc: <span style="color: var(--color-text-muted);">Pendente</span>`;
+            }
+        }
 
         if (status.isRunning) {
             if (banner) banner.style.display = 'flex';
@@ -6656,6 +6682,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 btnSync.disabled = true;
                 btnSync.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sincronizando em 2º plano...';
             }
+            if (btnFull) {
+                btnFull.disabled = true;
+            }
 
             lastKnownSyncRunningState = true;
         } else {
@@ -6664,6 +6693,9 @@ document.addEventListener('DOMContentLoaded', () => {
             if (btnSync) {
                 btnSync.disabled = false;
                 btnSync.innerHTML = '<i class="fas fa-rotate"></i> Sincronizar Integrim';
+            }
+            if (btnFull) {
+                btnFull.disabled = false;
             }
 
             // Se estava rodando e acabou de terminar
@@ -6710,6 +6742,7 @@ document.addEventListener('DOMContentLoaded', () => {
             openIntegrimSingleProductTestModal();
         });
 
+        // Sincronização Inteligente (Incremental se houver data anterior)
         document.getElementById('bi-btn-sync-integrim')?.addEventListener('click', async () => {
             const btn = document.getElementById('bi-btn-sync-integrim');
             if (btn) {
@@ -6718,7 +6751,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             try {
-                const res = await api('/api/bi/stock/sync-integrim', 'POST');
+                const res = await api('/api/bi/stock/sync-integrim', 'POST', { force_full: false });
                 showToast(res.mensagem || 'Sincronização iniciada em segundo plano! Você pode navegar pelo sistema livremente.', 'info');
                 await checkGlobalIntegrimSyncStatus();
             } catch (err) {
@@ -6726,6 +6759,30 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (btn) {
                     btn.disabled = false;
                     btn.innerHTML = '<i class="fas fa-rotate"></i> Sincronizar Integrim';
+                }
+            }
+        });
+
+        // Forçar Sincronização Completa
+        document.getElementById('bi-btn-sync-full')?.addEventListener('click', async () => {
+            if (!confirm('Deseja forçar a sincronização de 100% de todo o catálogo (Sincronização Completa)?')) {
+                return;
+            }
+            const btn = document.getElementById('bi-btn-sync-full');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Iniciando...';
+            }
+
+            try {
+                const res = await api('/api/bi/stock/sync-integrim', 'POST', { force_full: true });
+                showToast(res.mensagem || 'Sincronização completa iniciada em segundo plano!', 'info');
+                await checkGlobalIntegrimSyncStatus();
+            } catch (err) {
+                showToast(`Falha ao disparar sincronização completa: ${err.message}`, 'error');
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fas fa-arrows-rotate"></i> Forçar Completa';
                 }
             }
         });

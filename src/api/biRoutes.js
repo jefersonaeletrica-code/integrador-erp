@@ -128,6 +128,7 @@ export default (db) => {
     router.post('/bi/stock/sync-integrim', async (req, res) => {
         try {
             const { startIntegrimBackgroundSync } = await import('../services/integrimSyncService.js');
+            const forceFull = req.body?.force_full === true;
 
             // Busca conexão ativa do CISS Poder
             const [erpConns] = await db.getPool().execute("SELECT * FROM erp_connections WHERE type = 'cisspoder' ORDER BY id DESC LIMIT 1");
@@ -140,8 +141,8 @@ export default (db) => {
                 connection.credentials = JSON.parse(connection.credentials);
             }
 
-            // Inicia a sincronização desacoplada em background
-            const result = startIntegrimBackgroundSync(connection, db);
+            // Inicia a sincronização desacoplada em background (Incremental se houver sincronização prévia ou forçada completa)
+            const result = await startIntegrimBackgroundSync(connection, db, { forceFull });
             res.json(result);
         } catch (error) {
             logger.error('[BiRoutes] Erro ao disparar sincronização com Integrim CISS Poder:', error);
@@ -149,11 +150,11 @@ export default (db) => {
         }
     });
 
-    // 9.1. Consultar Status da Sincronização em Segundo Plano
+    // 9.1. Consultar Status da Sincronização em Segundo Plano (e Última Sincronização Concluída)
     router.get('/bi/stock/sync-status', async (req, res) => {
         try {
             const { getIntegrimSyncStatus } = await import('../services/integrimSyncService.js');
-            const status = getIntegrimSyncStatus();
+            const status = await getIntegrimSyncStatus(db);
             res.json({ sucesso: true, status });
         } catch (error) {
             logger.error('[BiRoutes] Erro ao consultar status da sincronização:', error);
