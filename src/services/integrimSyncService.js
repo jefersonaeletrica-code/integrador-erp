@@ -50,32 +50,96 @@ async function fetchIntegrimWithRetry(url, payload, headers, maxRetries = 3, ini
  */
 
 /**
- * Formata data/hora para o padrão do CISS Poder: "YYYY-MM-DD HH:mm:ss"
+ * Retorna a data/hora atual formatada no fuso horário oficial do Brasil (America/Sao_Paulo / UTC-03:00)
+ * Formato: "YYYY-MM-DD HH:mm:ss"
  */
-export function formatCissDateTime(dateInput) {
-    if (!dateInput) return null;
-    const d = new Date(dateInput);
-    if (isNaN(d.getTime())) return null;
-
-    const pad = (n) => String(n).padStart(2, '0');
-    const yyyy = d.getFullYear();
-    const mm = pad(d.getMonth() + 1);
-    const dd = pad(d.getDate());
-    const hh = pad(d.getHours());
-    const min = pad(d.getMinutes());
-    const ss = pad(d.getSeconds());
-
-    return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+export function getBrazilNow() {
+    const d = new Date();
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+    return formatter.format(d).replace(', ', ' ');
 }
 
 /**
- * Consulta a última sincronização concluída com sucesso no MySQL
+ * Formata data/hora para o padrão do CISS Poder: "YYYY-MM-DD HH:mm:ss"
+ * Garante conversão estrita para o fuso horário de Brasília (UTC-03:00).
+ * Corrige automaticamente registros passados armazenados em UTC e aplica margem de segurança opcional.
+ * @param {Date|string} dateInput - Data de entrada
+ * @param {number} bufferMinutes - Minutos de margem de segurança a subtrair (padrão: 0)
+ */
+export function formatCissDateTime(dateInput, bufferMinutes = 0) {
+    if (!dateInput) return null;
+
+    let targetDate = null;
+
+    if (dateInput instanceof Date) {
+        if (isNaN(dateInput.getTime())) return null;
+        targetDate = new Date(dateInput.getTime() - (bufferMinutes * 60 * 1000));
+    } else {
+        let str = String(dateInput).trim();
+        // Se for string ISO com Z ou offset
+        if (str.includes('T') || str.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(str)) {
+            const parsed = new Date(str);
+            if (!isNaN(parsed.getTime())) {
+                targetDate = new Date(parsed.getTime() - (bufferMinutes * 60 * 1000));
+            }
+        } else {
+            const sqlMatch = str.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2}):(\d{2})$/);
+            if (sqlMatch) {
+                const brazilNow = getBrazilNow();
+                // Se a string armazenada é maior que o horário atual do Brasil, foi salva em UTC (+3h)!
+                if (str > brazilNow) {
+                    const parsed = new Date(str.replace(' ', 'T') + 'Z');
+                    targetDate = new Date(parsed.getTime() - (bufferMinutes * 60 * 1000));
+                } else {
+                    // String já está em horário de Brasília: subtrai o buffer se houver
+                    if (bufferMinutes > 0) {
+                        const parsed = new Date(str.replace(' ', 'T') + '-03:00');
+                        targetDate = new Date(parsed.getTime() - (bufferMinutes * 60 * 1000));
+                    } else {
+                        return str;
+                    }
+                }
+            }
+        }
+    }
+
+    if (!targetDate || isNaN(targetDate.getTime())) {
+        targetDate = new Date();
+    }
+
+    const formatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+    });
+    return formatter.format(targetDate).replace(', ', ' ');
+}
+
+/**
+ * Consulta a última sincronização concluída com sucesso no MySQL formatada no fuso de Brasília
  */
 export async function getLastSuccessfulSync(db) {
     const pool = resolvePool(db);
     try {
         const [rows] = await pool.execute(`
-            SELECT id, sync_type, produtos_count, saldos_count, custos_count, started_at, finished_at, status
+            SELECT id, sync_type, produtos_count, saldos_count, custos_count, 
+                   DATE_FORMAT(started_at, '%Y-%m-%d %H:%i:%s') as started_at,
+                   DATE_FORMAT(finished_at, '%Y-%m-%d %H:%i:%s') as finished_at,
+                   status
             FROM bi_sync_history
             WHERE status = 'success'
             ORDER BY finished_at DESC
@@ -88,11 +152,13 @@ export async function getLastSuccessfulSync(db) {
 }
 
 /**
- * Registra histórico de sincronização no MySQL
+ * Registra histórico de sincronização no MySQL com carimbos no horário oficial do Brasil (-03:00)
  */
 export async function recordSyncHistory(db, { syncType, produtosCount, saldosCount, custosCount, startedAt, finishedAt, status, errorMessage = null }) {
     const pool = resolvePool(db);
     try {
+        const startedAtStr = formatCissDateTime(startedAt) || getBrazilNow();
+        const finishedAtStr = formatCissDateTime(finishedAt) || getBrazilNow();
         await pool.execute(`
             INSERT INTO bi_sync_history (
                 sync_type, produtos_count, saldos_count, custos_count,
@@ -103,8 +169,8 @@ export async function recordSyncHistory(db, { syncType, produtosCount, saldosCou
             produtosCount || 0,
             saldosCount || 0,
             custosCount || 0,
-            startedAt,
-            finishedAt,
+            startedAtStr,
+            finishedAtStr,
             status || 'success',
             errorMessage
         ]);
@@ -158,14 +224,16 @@ export async function startIntegrimBackgroundSync(connection, db, { forceFull = 
 
     const lastSync = await getLastSuccessfulSync(db);
     const isDelta = !forceFull && !!lastSync?.finished_at;
-    const lastSyncDate = isDelta ? formatCissDateTime(lastSync.finished_at) : null;
+    // Margem de segurança de 2 minutos para evitar perder registros com timestamps ligeiramente defasados
+    const lastSyncDate = isDelta ? formatCissDateTime(lastSync.finished_at, 2) : null;
     const syncType = isDelta ? 'integrim_delta' : 'integrim_full';
 
+    const nowBrazil = getBrazilNow();
     integrimSyncStatus.isRunning = true;
-    integrimSyncStatus.startedAt = new Date().toISOString();
+    integrimSyncStatus.startedAt = nowBrazil;
     integrimSyncStatus.finishedAt = null;
     integrimSyncStatus.syncType = isDelta ? 'delta' : 'full';
-    integrimSyncStatus.lastSyncDate = lastSync?.finished_at || null;
+    integrimSyncStatus.lastSyncDate = lastSyncDate;
     integrimSyncStatus.stage = 'iniciando';
     integrimSyncStatus.stageLabel = isDelta 
         ? `Iniciando sincronização incremental (alterados após ${lastSyncDate})...`
@@ -178,9 +246,9 @@ export async function startIntegrimBackgroundSync(connection, db, { forceFull = 
 
     // Dispara a execução assíncrona desacoplada da conexão HTTP do cliente
     (async () => {
-        const startedAtDb = new Date();
+        const startedAtDb = getBrazilNow();
         try {
-            logger.info(`[IntegrimSync Background] Iniciando rotina de sincronização (${syncType}) em segundo plano...`);
+            logger.info(`[IntegrimSync Background] Iniciando rotina de sincronização (${syncType}) em segundo plano (Fuso -03:00)...`);
 
             // Etapa 1: CAD_PRODUTOS
             integrimSyncStatus.stage = 'cad_produtos';
@@ -223,16 +291,16 @@ export async function startIntegrimBackgroundSync(connection, db, { forceFull = 
             integrimSyncStatus.stageLabel = 'Recalculando Curva ABC e Dias de Cobertura...';
             await recalculateAbcAndCoverage(db);
 
-            const finishedAtDb = new Date();
+            const finishedAtDb = getBrazilNow();
             integrimSyncStatus.isRunning = false;
             integrimSyncStatus.stage = 'done';
             integrimSyncStatus.stageLabel = 'Sincronização concluída com sucesso!';
-            integrimSyncStatus.finishedAt = finishedAtDb.toISOString();
+            integrimSyncStatus.finishedAt = finishedAtDb;
             integrimSyncStatus.message = isDelta
                 ? `Sincronização incremental concluída: ${resProd.total} produtos, ${resSaldo.total} saldos e ${resCustos.total} custos/preços atualizados (desde ${lastSyncDate}).`
                 : `Sincronização completa concluída: ${resProd.total} produtos, ${resSaldo.total} saldos e ${resCustos.total} custos/preços atualizados.`;
 
-            // Grava histórico de sucesso no MySQL
+            // Grava histórico de sucesso no MySQL no horário de Brasília (-03:00)
             await recordSyncHistory(db, {
                 syncType,
                 produtosCount: resProd.total,
@@ -245,13 +313,13 @@ export async function startIntegrimBackgroundSync(connection, db, { forceFull = 
 
             logger.info(`[IntegrimSync Background] ${integrimSyncStatus.message}`);
         } catch (error) {
-            const finishedAtDb = new Date();
+            const finishedAtDb = getBrazilNow();
             logger.error('[IntegrimSync Background] Erro durante sincronização em segundo plano:', error);
             integrimSyncStatus.isRunning = false;
             integrimSyncStatus.stage = 'error';
             integrimSyncStatus.stageLabel = `Erro na sincronização: ${error.message}`;
             integrimSyncStatus.error = error.message;
-            integrimSyncStatus.finishedAt = finishedAtDb.toISOString();
+            integrimSyncStatus.finishedAt = finishedAtDb;
 
             // Grava histórico de erro no MySQL
             await recordSyncHistory(db, {

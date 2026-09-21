@@ -587,7 +587,10 @@ export async function getBiEstoqueSummary(db, { empresa_id = null, tipo_custo = 
     let lastSync = null;
     try {
         const [syncRows] = await pool.execute(`
-            SELECT sync_type, produtos_count, saldos_count, custos_count, started_at, finished_at, status
+            SELECT sync_type, produtos_count, saldos_count, custos_count, 
+                   DATE_FORMAT(started_at, '%Y-%m-%d %H:%i:%s') as started_at,
+                   DATE_FORMAT(finished_at, '%Y-%m-%d %H:%i:%s') as finished_at,
+                   status
             FROM bi_sync_history
             WHERE status = 'success'
             ORDER BY finished_at DESC

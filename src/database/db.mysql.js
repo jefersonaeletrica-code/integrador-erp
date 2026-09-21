@@ -30,7 +30,9 @@ export const getPool = () => {
         waitForConnections: true,
         connectionLimit: 10,
         queueLimit: 0,
-        ssl: { rejectUnauthorized: false }
+        ssl: { rejectUnauthorized: false },
+        timezone: '-03:00',
+        dateStrings: true
       };
       if (SOCKET_PATH) {
         connectionConfig.socketPath = SOCKET_PATH;
