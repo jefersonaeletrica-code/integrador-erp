@@ -207,6 +207,18 @@ export default (db) => {
         }
     });
 
+    // 12. Limpeza Definitiva de Dados de Demonstração/Teste (Mock) de Estoque
+    router.post('/bi/stock/clear-mock', async (req, res) => {
+        try {
+            const { purgeMockEstoqueData } = await import('../services/integrimSyncService.js');
+            const result = await purgeMockEstoqueData(db);
+            res.json(result);
+        } catch (error) {
+            logger.error('[BiRoutes] Erro ao limpar dados de mock de estoque:', error);
+            res.status(500).json({ sucesso: false, erro: error.message });
+        }
+    });
+
     return router;
 };
 

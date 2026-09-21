@@ -589,10 +589,25 @@ Regras de atuação:
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
     `);
 
-    // Limpeza automática de produtos mock legados que colidiam com a faixa de SKUs reais do CISS Poder
+    // Limpeza automática e definitiva de produtos e saldos de teste/mock
     try {
-      await connection.query('DELETE FROM bi_estoque_saldos WHERE idproduto <= 1250 AND idsubproduto BETWEEN 10001 AND 10250');
-      await connection.query('DELETE FROM bi_produtos WHERE idproduto <= 1250 AND idsubproduto BETWEEN 10001 AND 10250');
+      await connection.query(`
+        DELETE FROM bi_estoque_saldos 
+        WHERE idsubproduto >= 990000 
+           OR local_estoque IN ('Area de venda loja 1', 'Area de venda loja 2')
+           OR idsubproduto IN (
+               SELECT idsubproduto FROM bi_produtos 
+               WHERE idsubproduto >= 990000 
+                  OR codigo_barras LIKE '789100000%'
+                  OR (id_divisao = 1 AND id_secao = 10 AND id_grupo = 100)
+           )
+      `);
+      await connection.query(`
+        DELETE FROM bi_produtos 
+        WHERE idsubproduto >= 990000 
+           OR codigo_barras LIKE '789100000%'
+           OR (id_divisao = 1 AND id_secao = 10 AND id_grupo = 100)
+      `);
     } catch (e) {
       // Ignora caso tabelas estejam vazias
     }

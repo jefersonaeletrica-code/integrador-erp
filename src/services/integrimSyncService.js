@@ -259,13 +259,8 @@ export async function startIntegrimBackgroundSync(connection, db, { forceFull = 
             logger.info(`[IntegrimSync Background] Iniciando rotina de sincronização (${syncType}) em segundo plano (Fuso -03:00)...`);
 
             if (!isDelta) {
-                // Na sincronização completa (Full Sync), remove os registros demonstrativos de mock para não colidir com o catálogo real
-                try {
-                    await pool.execute('DELETE FROM bi_estoque_saldos WHERE idproduto <= 1250 AND idsubproduto BETWEEN 10001 AND 10250');
-                    await pool.execute('DELETE FROM bi_produtos WHERE idproduto <= 1250 AND idsubproduto BETWEEN 10001 AND 10250');
-                } catch (e) {
-                    logger.warn('[IntegrimSync Background] Aviso ao limpar dados de mock:', e.message);
-                }
+                // Na sincronização completa (Full Sync), remove os registros demonstrativos de teste/mock para garantir catálogo 100% real
+                await purgeMockEstoqueData(pool);
             }
 
             // Etapa 1: CAD_PRODUTOS
@@ -922,6 +917,45 @@ export async function recalculateAbcAndCoverage(db) {
 
     logger.info(`[IntegrimSync] Curva ABC Pareto e Cobertura recalculadas com sucesso.`);
     return { sucesso: true };
+}
+
+/**
+ * Remove todos os produtos e saldos de teste/demonstração (mock) do banco de dados,
+ * preservando integralmente os produtos reais sincronizados do ERP CISS Poder.
+ */
+export async function purgeMockEstoqueData(db) {
+    const pool = resolvePool(db);
+    try {
+        // 1. Remove saldos físicos vinculados a dados demonstrativos
+        await pool.execute(`
+            DELETE FROM bi_estoque_saldos 
+            WHERE idsubproduto >= 990000 
+               OR local_estoque IN ('Area de venda loja 1', 'Area de venda loja 2')
+               OR idsubproduto IN (
+                   SELECT idsubproduto FROM bi_produtos 
+                   WHERE idsubproduto >= 990000 
+                      OR codigo_barras LIKE '789100000%'
+                      OR (id_divisao = 1 AND id_secao = 10 AND id_grupo = 100)
+               )
+        `);
+
+        // 2. Remove produtos demonstrativos da tabela bi_produtos
+        const [delResult] = await pool.execute(`
+            DELETE FROM bi_produtos 
+            WHERE idsubproduto >= 990000 
+               OR codigo_barras LIKE '789100000%'
+               OR (id_divisao = 1 AND id_secao = 10 AND id_grupo = 100)
+        `);
+
+        const totalRemovidos = delResult.affectedRows || 0;
+        if (totalRemovidos > 0) {
+            logger.info(`[IntegrimSync] Limpeza de dados de teste concluída: ${totalRemovidos} produtos de mock excluídos.`);
+        }
+        return { sucesso: true, removidos: totalRemovidos };
+    } catch (e) {
+        logger.warn('[IntegrimSync] Aviso ao limpar dados de teste/mock:', e.message);
+        return { sucesso: false, erro: e.message };
+    }
 }
 
 /**
